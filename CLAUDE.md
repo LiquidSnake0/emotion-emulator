@@ -65,8 +65,10 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | 22 µs par message GPU | `ParseHex` et `Scene.ForFamily` sur le chemin chaud | calculer une fois dans `TrackContext` |
 | pire cas à 7,5 ms | pages mappées non matérialisées | pré-toucher l'anneau à l'ouverture |
 | « les éclairs c'est trop chelou » | **128 ms de retard** — deux étages réglés sans additionner leur total | une fenêtre chacun : 43 ms, et la détection s'est *améliorée* |
-| tempo publié sur 4 % des fenêtres | repli d'octave sans point fixe : la plage préférée couvrait 1,57, pas 2 | plage portée à un facteur deux |
-| 133 BPM sur un répertoire à 87 | le swing : le détecteur voit le triolet | repli ternaire ×2/3 vers la zone du répertoire |
+| tempo publié sur 4 % des fenêtres | vote sur les écarts entre attaques consécutives, par cases de 1,4 % | autocorrélation de l'enveloppe |
+| intervalle de mesure à 149 ms | la grille recalculait sa position depuis une origine lointaine : changer la période faisait sauter le rang de seize temps | la phase s'accumule, elle ne se recalcule pas |
+| 0,90 de confiance sur du bruit blanc | confiance mesurée sur la forme de la courbe, dont la moitié vaut zéro par troncature | sur la hauteur de la corrélation, qui est absolue |
+| trois extraits d'un set à 96,2 · 96,8 · 95,2 | la préférence de tempo écrasait la mesure au lieu de la départager | plancher à 0,55 : elle penche, elle ne décide pas |
 | 935 changements d'accord en 2 min | seuil deviné à 0,45, soit le milieu de la distribution | 0,75, la queue — un indice fréquent ne discrimine rien |
 | tension jamais au-dessus de 0,08 | diviseur des pentes à 0,5 quand le maximum réel est 0,149 | 0,12, mesuré à la sonde |
 | 20 ruptures au même instant | l'arc n'avance qu'une fois par temps, son verdict était republié à chaque fenêtre | l'événement ne vaut que pour la fenêtre qui le constate |
@@ -130,31 +132,53 @@ Mesuré, pas supposé — 89 s d'`instamata`, morceau fiché à 87 BPM :
 aval — les greffer sur `aubio` ne corrige rien. Il vient du **prétraitement** : HPSS puis
 ciblage du registre du kick avant détection.
 
+**Et ce tableau flattait.** Il porte sur un morceau isolé dont la fiche donne la vérité.
+Sur un vrai set, la même méthode ne publiait un tempo que sur 4 à 11 % des fenêtres, et
+quand elle en publiait un il était faux de 8 % — `aubiotrack` disait 96,4 là où nous
+disions 88,9, et c'est `aubio` qui avait raison. Un bon chiffre sur un cas choisi ne dit
+rien de la tenue sur la matière réelle.
+
 En .NET il n'existe aucun équivalent d'Essentia ou d'aubio ; `NWaves` couvre le DSP mais
 ni le beat tracking ni le HPSS. Le C++ reste justifié **pour le rendu GPU uniquement** —
 conteneuriser l'analyse ajouterait un runtime et une frontière IPC pour un gain nul,
 l'écriture d'un message coûtant 2,9 µs.
 
-## Le tempo, plafond connu du système
+## Le tempo, par autocorrélation
 
-Il n'est publié que sur **4 à 11 % des fenêtres** d'un vrai set. La grille métrique s'en
-accommode — une fois calée elle garde sa période — mais tout ce qui suit en dépend.
+L'ancienne méthode votait sur les écarts entre attaques **consécutives**. Cette seule
+contrainte la condamnait : une frappe manquée double l'écart, une frappe parasite le
+coupe en deux. Elle regroupait de surcroît par cases de 10 ms, soit 1,4 % d'un temps à
+87 BPM — un jeu humain en sort en permanence.
 
-**Tentative faite et annulée.** Le vote regroupe les écarts par cases de 10 ms, soit
-1,4 % d'un temps à 87 BPM : une frappe humaine en sort en permanence. Regrouper par
-tolérance relative (±4 %) fait effectivement monter la détection de 4 % à 17 % des
-fenêtres — et **dégrade tout le reste** : verrouillage du temps fort de 54 % à 15 %,
-intervalle de mesure de 2688 ms à 11926. Le tempo est trouvé plus souvent mais il saute,
-et la grille le suit.
+`TempoTracker` autocorrèle l'enveloppe du registre du kick. Aucune décision binaire :
+on mesure à quel point l'enveloppe ressemble à elle-même décalée. Trois pièces, chacune
+contre un défaut précis.
 
-> **Un tempo instable est pire qu'un tempo absent.** Absent, la grille garde sa période et
-> continue ; instable, elle court après.
+| Pièce | Ce qu'elle règle |
+|---|---|
+| autocorrélation | supprime la dépendance aux attaques individuelles |
+| fenêtre de Rayleigh | tranche l'octave sans replier à la main |
+| inertie sur la courbe | donne la stabilité que le vote n'avait pas |
 
-Le chantier reste ouvert et il est à traiter pour lui-même, pas en ajustant une constante :
-il demande un lissage du tempo publié, ou une hystérésis, ou de voter sur l'histogramme
-cumulé plutôt que sur les écarts récents.
+**Mesuré sur 100 s de set, avant puis après :**
 
-## Structure
+| Extrait | Tempo publié | Valeur | Intervalle de mesure |
+|---|---|---|---|
+| 300 s | 4 % → **37 %** | 88,9 → **96,4** | 2688 → **2517 ms** |
+| 900 s | 11 % → **94 %** | — → **96,6** | 2837 → **2496 ms** |
+| 1500 s | 8 % → **96 %** | — → **95,1** | 2880 → **2496 ms** |
+
+`aubiotrack` sur les mêmes extraits : **96,4 et 96,1 BPM**. L'ancienne méthode ne se
+contentait pas de se taire, elle **se trompait** — et une référence externe était le seul
+moyen de le savoir. L'intervalle de mesure tombe à 0,2 % de la valeur théorique.
+
+Trois extraits du même set rendent presque le même tempo, ce qui avait d'abord paru
+suspect : c'est au contraire attendu, un set beatmatché a par construction un seul tempo.
+
+**Ce qui reste ouvert :** le verrouillage du temps fort varie de 38 à 74 % selon le
+passage. C'est le vote du downbeat, pas le tempo.
+
+## Structure## Structure
 
 | Projet | Rôle | Dépendances |
 |---|---|---|

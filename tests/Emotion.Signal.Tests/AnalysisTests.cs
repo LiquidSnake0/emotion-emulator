@@ -104,63 +104,6 @@ public class OnsetDetectorTests
     }
 }
 
-public class TempoEstimatorTests
-{
-    [Fact]
-    public void Le_tempo_reste_nul_tant_qu_il_n_est_pas_sur()
-    {
-        // Le renderer doit pouvoir tourner sans tempo : mieux vaut ne rien dire que
-        // dire faux pendant les premieres secondes.
-        var t = new TempoEstimator();
-        t.Mark(0);
-        t.Mark(700);
-        Assert.Null(t.Bpm);
-        Assert.Null(t.Phase(1000));
-    }
-
-    [Fact]
-    public void Des_attaques_regulieres_donnent_leur_tempo()
-    {
-        var t = new TempoEstimator();
-        const int gap = 690;                            // ~87 BPM
-        for (var i = 0; i < 16; i++) t.Mark(i * gap);
-
-        Assert.NotNull(t.Bpm);
-        Assert.InRange(t.Bpm!.Value, 85f, 89f);
-    }
-
-    [Fact]
-    public void Une_attaque_manquee_ne_fausse_pas_le_tempo()
-    {
-        // C'est tout l'interet du vote sur les ecarts plutot qu'une moyenne : un ecart
-        // double se retrouve seul dans son casier pendant que le bon s'accumule.
-        var t = new TempoEstimator();
-        const int gap = 690;
-        var beat = 0;
-        for (var i = 0; i < 20; i++)
-        {
-            beat += (i == 7 || i == 13) ? gap * 2 : gap;   // deux frappes ratees
-            t.Mark(beat);
-        }
-
-        Assert.NotNull(t.Bpm);
-        Assert.InRange(t.Bpm!.Value, 85f, 89f);
-    }
-
-    [Fact]
-    public void La_phase_se_recale_sur_la_derniere_attaque()
-    {
-        // Calculee depuis le demarrage, elle deriverait sur la duree d'un set.
-        var t = new TempoEstimator();
-        const int gap = 690;
-        for (var i = 0; i < 16; i++) t.Mark(i * gap);
-
-        var atBeat = t.Phase(15 * gap);
-        Assert.NotNull(atBeat);
-        Assert.InRange(atBeat!.Value, 0f, 0.02f);
-    }
-}
-
 public class SpectrumAnalyzerTests
 {
     [Fact]

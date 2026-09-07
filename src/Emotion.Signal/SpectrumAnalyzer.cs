@@ -50,7 +50,7 @@ public sealed class SpectrumAnalyzer
     // fenetre a l'autre : y chercher un maximum local revient a compter le bruit. Une
     // moyenne mobile courte en fait une enveloppe ou un sommet veut dire quelque chose.
     private readonly float[] _smooth = new float[3];
-    private readonly TempoEstimator _tempo = new();
+    private readonly TempoTracker _tempo = new();
 
     // L'harmonie travaille sur une fenetre quatre fois plus longue, pour separer les
     // demi-tons. Elle recoit les memes echantillons et se cadence toute seule.
@@ -129,7 +129,7 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>
     /// Reprend le tempo d'un autre analyseur comme point de depart. Voir
-    /// <see cref="TempoEstimator.Adopt"/> : c'est une amorce, pas un verrou, et
+    /// <see cref="TempoTracker.Adopt"/> : c'est une amorce, pas un verrou, et
     /// l'analyse du master continue de chercher a partir de la.
     /// </summary>
     public void AdoptTempo(float bpm, long tMs) => _tempo.Adopt(bpm, tMs);
@@ -237,6 +237,11 @@ public sealed class SpectrumAnalyzer
         var rKick = Smooth(0, BandRise(bands, 0, 3));
         var rClap = Smooth(1, BandRise(bands, 4, 9));
         var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount));
+
+        // Le tempo se mesure sur l'enveloppe du kick, pas sur les frappes qu'on en tire :
+        // l'autocorrelation n'a besoin d'aucune decision binaire, et se moque donc qu'une
+        // frappe ait ete manquee ou inventee.
+        _tempo.Feed(rKick);
 
         var kick = _kick.Feed(rKick);
         var clap = _clap.Feed(rClap);

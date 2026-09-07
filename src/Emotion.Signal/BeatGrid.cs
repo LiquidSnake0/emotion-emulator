@@ -56,9 +56,21 @@ public sealed class BeatGrid
 
     private const float LockedAbove = 0.35f;
 
-    private double _originMs = -1;   // instant du temps de rang zero
+    // LA PHASE S'ACCUMULE, ELLE NE SE RECALCULE PAS DEPUIS UNE ORIGINE.
+    //
+    // La premiere version gardait l'instant du temps zero et refaisait le quotient a
+    // chaque image. C'est juste tant que la periode ne bouge pas — et faux des qu'elle
+    // bouge, parce que l'origine s'eloigne : a cent secondes de la, passer de 690 a
+    // 620 ms fait sauter le rang de seize temps d'un coup. Le defaut dormait tant que le
+    // tempo n'etait publie que sur 4 % des fenetres ; il a saute aux yeux des que
+    // l'autocorrelation l'a rendu vivant, l'intervalle entre mesures tombant a 149 ms.
+    //
+    // En accumulant, un changement de periode ne change que la vitesse a venir. Le passe
+    // reste ce qu'il etait, ce qui est la moindre des choses pour un compteur.
+    private double _phase;
+    private long _lastMs = -1;
     private float _beatMs = 690f;
-    private long _index = -1;        // rang du dernier temps franchi
+    private long _index;             // rang du temps courant
 
     // Les quatre hypotheses de temps fort, en concurrence permanente.
     private readonly float[] _score = new float[4];
@@ -102,19 +114,24 @@ public sealed class BeatGrid
             _beatMs += (target - _beatMs) * 0.05f;
         }
 
-        if (_originMs < 0) { _originMs = tMs; _index = 0; Phase = 0f; return false; }
+        if (_lastMs < 0) { _lastMs = tMs; return false; }
 
-        var beats = (tMs - _originMs) / _beatMs;
-        var idx = (long)Math.Floor(beats);
-        Phase = (float)(beats - idx);
+        var dt = tMs - _lastMs;
+        _lastMs = tMs;
+        if (dt <= 0) return false;
 
-        // La correction de phase peut ramener l'origine en avant et faire reculer le
-        // rang d'une unite. On ne recule jamais : un compteur de mesures qui repasse en
-        // arriere ferait rejouer une transition deja jouee.
-        if (idx <= _index) return false;
+        _phase += dt / _beatMs;
+        if (_phase < 1.0) { Phase = (float)_phase; return false; }
+
+        // Un retard de plusieurs temps — un onglet revenu d'arriere-plan, une source qui
+        // reprend — ne doit pas etre rattrape temps par temps : on rejouerait des
+        // transitions qui n'ont jamais eu lieu. On saute, en n'en comptant qu'une.
+        var crossed = (int)Math.Min(4, Math.Floor(_phase));
+        _phase -= Math.Floor(_phase);
+        Phase = (float)_phase;
 
         Forget();
-        _index = idx;
+        _index += crossed;
 
         if (Beat == 0)
         {
@@ -138,15 +155,16 @@ public sealed class BeatGrid
     /// </summary>
     public void Sync(long tMs)
     {
-        if (_originMs < 0) { _originMs = tMs; return; }
+        if (_lastMs < 0) { _lastMs = tMs; return; }
 
-        var beats = (tMs - _originMs) / _beatMs;
-        var error = beats - Math.Floor(beats);
         // Une detection a 0,95 est en avance de 0,05 sur le temps suivant, pas en retard
         // de 0,95 sur le precedent.
+        var error = _phase;
         if (error > 0.5) error -= 1.0;
 
-        _originMs += error * _beatMs * Pull;
+        _phase -= error * Pull;
+        if (_phase < 0) _phase += 1.0;
+        Phase = (float)_phase;
     }
 
     /// <summary>
@@ -192,8 +210,9 @@ public sealed class BeatGrid
 
     public void Reset()
     {
-        _originMs = -1;
-        _index = -1;
+        _phase = 0;
+        _lastMs = -1;
+        _index = 0;
         Array.Clear(_score);
         Confidence = 0f;
         Bar = 0;
@@ -210,8 +229,7 @@ public sealed class BeatGrid
     /// temps a l'autre au hasard. Le vote se brouillait tout seul. En arrondissant a
     /// l'instant meme de la frappe, la question ne se pose plus.
     /// </summary>
-    private long Near(long tMs) =>
-        _originMs < 0 ? 0 : (long)Math.Round((tMs - _originMs) / _beatMs);
+    private long Near(long tMs) => _index + (_phase >= 0.5 ? 1 : 0);
 
     private void Vote(long beatIndex, float weight)
     {
