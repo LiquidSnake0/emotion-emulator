@@ -106,7 +106,47 @@ public sealed class MockAudioSource : IAudioSource
             Clap: beat && (beatInBar == 1 || beatInBar == 3),
             Hat:  CrossedOffbeat(beats));
 
-        return new VisualFrame(t, rms, bands, beat, phase, _bpm, Hits: hits);
+        // Les instruments tonals, le timbre et la structure. Le mock les avait deja
+        // perdus une fois, et plus aucun effet ne partait en mode simule : il existe pour
+        // regler le visuel sans materiel, et un signal fabrique qui ne remplit pas le
+        // meme contrat qu'un vrai ne simule plus rien. La regle vaut a chaque fois que le
+        // contrat s'etend.
+        var voices = new Voices(
+            Low: Clamp01(0.25f + kick * 0.5f),
+            Mid: Clamp01(0.30f + Pad(t, 5) * 0.6f),
+            High: Clamp01(0.15f + hat * 0.7f),
+            LowHit: beat,
+            MidHit: beat && beatInBar == 2,
+            HighHit: CrossedOffbeat(beats));
+
+        // Le filtre s'ouvre et se ferme lentement, sur seize mesures : c'est le geste que
+        // Selim fera le plus souvent a la table, et il doit pouvoir le regler sans table.
+        var cycle = (float)((t / 1000.0 / (beatMs * 64 / 1000.0)) % 1.0);
+        var openness = 0.45f + 0.55f * (0.5f - 0.5f * MathF.Cos(cycle * MathF.Tau));
+        var timbre = new Timbre(
+            Centroid: Clamp01(0.35f + openness * 0.35f),
+            Rolloff: openness,
+            Openness: openness,
+            Density: Clamp01(0.35f + hat * 0.3f));
+
+        // La structure est fabriquee, pas mesuree : le mock connait sa propre grille, il
+        // n'a donc rien a estimer. La tension suit le meme cycle que le filtre, ce qui
+        // donne une montee toutes les seize mesures et une rupture a son sommet.
+        var bar = (int)((beatIndex / 4) % Structure.PhraseBars);
+        var barStart = beat && beatInBar == 0;
+        var buildup = Clamp01((cycle - 0.55f) / 0.35f);
+        var structure = new Structure(
+            Beat: beatInBar,
+            Bar: bar,
+            PhrasePos: (float)((beatIndex % (Structure.PhraseBars * 4) + inBeat) / (Structure.PhraseBars * 4)),
+            Confidence: 1f,
+            Buildup: buildup,
+            Drop: barStart && buildup > 0.9f,
+            BarStart: barStart,
+            PhraseStart: barStart && bar == 0);
+
+        return new VisualFrame(t, rms, bands, beat, phase, _bpm,
+            Hits: hits, Voices: voices, Timbre: timbre, Structure: structure);
     }
 
     private double _lastOffbeat = -1;

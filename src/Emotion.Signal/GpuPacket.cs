@@ -108,6 +108,31 @@ public struct GpuPacket
     /// <summary>Densite d'evenements, 0 vide, 255 dense.</summary>
     [FieldOffset(102)] public byte Density;
 
+    /// <summary>
+    /// Rang du temps dans la mesure, 0 a 3, ou 255 tant que le temps fort est incertain.
+    /// Zero est le temps fort. Le renderer doit traiter 255 comme « je ne sais pas » et
+    /// non comme une valeur : caler une structure sur un temps invente se voit
+    /// immediatement.
+    /// </summary>
+    [FieldOffset(103)] public byte Beat;
+
+    /// <summary>Rang de la mesure dans la phrase, 0 a 7.</summary>
+    [FieldOffset(104)] public byte Bar;
+
+    /// <summary>
+    /// Position continue dans la phrase. C'est la seule grandeur du paquet qui permette
+    /// d'anticiper : a 240, la phrase se termine, quoi qu'il arrive dans le son.
+    /// </summary>
+    [FieldOffset(105)] public byte PhrasePos;
+
+    /// <summary>Tension qui monte, 0 a 255.</summary>
+    [FieldOffset(106)] public byte Buildup;
+
+    /// <summary>
+    /// Drapeaux de structure : 1 rupture, 2 debut de mesure, 4 debut de phrase.
+    /// </summary>
+    [FieldOffset(107)] public byte StructureBits;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -133,6 +158,13 @@ public struct GpuPacket
     /// Compose un message a partir d'une image du signal et du morceau projete.
     /// Aucune allocation : tout est recopie dans la structure.
     /// </summary>
+    /// <summary>Valeur de <see cref="Beat"/> quand le temps fort n'est pas etabli.</summary>
+    public const byte NoBeat = 255;
+
+    public const byte DropBit = 1;
+    public const byte BarBit = 2;
+    public const byte PhraseBit = 4;
+
     public static GpuPacket From(in VisualFrame f, TrackContext track, uint sequence)
     {
         var p = new GpuPacket
@@ -167,6 +199,16 @@ public struct GpuPacket
         p.Centroid = (byte)Math.Clamp(f.Timbre.Centroid * 255f, 0f, 255f);
         p.Openness = (byte)Math.Clamp(f.Timbre.Openness * 255f, 0f, 255f);
         p.Density = (byte)Math.Clamp(f.Timbre.Density * 255f, 0f, 255f);
+
+        // 255 signifie « temps fort inconnu », et non un rang. Le renderer doit s'abstenir
+        // plutot que caler sa structure sur un temps invente.
+        p.Beat = f.Structure.Beat < 0 ? NoBeat : (byte)f.Structure.Beat;
+        p.Bar = (byte)f.Structure.Bar;
+        p.PhrasePos = (byte)Math.Clamp(f.Structure.PhrasePos * 255f, 0f, 255f);
+        p.Buildup = (byte)Math.Clamp(f.Structure.Buildup * 255f, 0f, 255f);
+        if (f.Structure.Drop) p.StructureBits |= DropBit;
+        if (f.Structure.BarStart) p.StructureBits |= BarBit;
+        if (f.Structure.PhraseStart) p.StructureBits |= PhraseBit;
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;

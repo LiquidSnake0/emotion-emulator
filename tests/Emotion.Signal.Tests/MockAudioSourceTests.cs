@@ -122,4 +122,36 @@ public class MockAudioSourceTests
         Assert.Same(run, finished);
         Assert.True(seen > 0, "aucune image n'a ete emise");
     }
+
+    [Fact]
+    public void Le_mock_remplit_tout_le_contrat_d_un_vrai_signal()
+    {
+        // LE PIEGE QUI S'EST DEJA REFERME DEUX FOIS. Le mock existe pour regler le visuel
+        // sans platines ni table. Chaque fois que le contrat s'etend — les frappes hier,
+        // les registres, le timbre et la structure aujourd'hui — il cesse silencieusement
+        // de le remplir, et l'ecran reste eteint en mode simule sans qu'aucun test ne
+        // proteste. Ce test verifie qu'aucun champ du contrat n'est reste a sa valeur par
+        // defaut sur une seconde entiere.
+        var mock = new MockAudioSource(bpm: 88f);
+        long last = -1;
+
+        var sawVoice = false; var sawTimbre = false; var sawStructure = false;
+        var sawBar = false; var sawHit = false;
+
+        for (long t = 0; t < 4_000; t += 21)
+        {
+            var f = mock.At(t, ref last);
+            if (f.Voices.Mid > 0f || f.Voices.Low > 0f) sawVoice = true;
+            if (f.Timbre.Openness > 0f) sawTimbre = true;
+            if (f.Structure.Confidence > 0f) sawStructure = true;
+            if (f.Structure.BarStart) sawBar = true;
+            if (f.Hits.Any) sawHit = true;
+        }
+
+        Assert.True(sawHit, "aucune frappe");
+        Assert.True(sawVoice, "aucun registre tonal");
+        Assert.True(sawTimbre, "aucune couleur de son");
+        Assert.True(sawStructure, "aucune structure");
+        Assert.True(sawBar, "aucun debut de mesure");
+    }
 }

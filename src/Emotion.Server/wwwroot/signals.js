@@ -22,6 +22,9 @@ const LANES = [
   { key: 'vhigh',     label: 'Voice.High',  color: '#fff176', get: f => f.voices?.high ?? 0 },
   { key: 'open',      label: 'Openness',    color: '#ff7043', get: f => f.timbre?.openness ?? 1 },
   { key: 'bright',    label: 'Centroid',    color: '#26c6da', get: f => f.timbre?.centroid ?? 0 },
+  { key: 'buildup',   label: 'Buildup',     color: '#ffca28', get: f => f.structure?.buildup ?? 0 },
+  { key: 'phrase',    label: 'PhrasePos',   color: '#9575cd', get: f => f.structure?.phrasePos ?? 0 },
+  { key: 'grid',      label: 'BeatConf',    color: '#4db6ac', get: f => f.structure?.confidence ?? 0 },
 ];
 
 const NOTES = ['do','do#','re','mib','mi','fa','fa#','sol','sol#','la','sib','si'];

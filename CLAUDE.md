@@ -47,6 +47,9 @@ générales** — un crate de drum and bass demanderait d'autres valeurs :
 | `OnsetDetector.MinGap` | 20 fenêtres (426 ms) | entre la noire (620-730 ms) et la croche (310-365 ms) |
 | `TempoEstimator.Preferred` | 70–110 BPM | replie l'octave sans lire de fiche |
 | `SpectrumAnalyzer.KickBandLimit` | 5 bandes | le registre du kick |
+| `Structure.PhraseBars` | 8 mesures | le hip-hop se construit en 8, la house en 16 |
+| `TempoEstimator` repli ternaire | ×2/3 | le répertoire est joué en swing |
+| `ChordChangeVote` | 0,75 | p99 de la distribution mesurée, pas une intuition |
 
 ## Ce que le diagnostic a appris
 
@@ -62,6 +65,11 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | 22 µs par message GPU | `ParseHex` et `Scene.ForFamily` sur le chemin chaud | calculer une fois dans `TrackContext` |
 | pire cas à 7,5 ms | pages mappées non matérialisées | pré-toucher l'anneau à l'ouverture |
 | « les éclairs c'est trop chelou » | **128 ms de retard** — deux étages réglés sans additionner leur total | une fenêtre chacun : 43 ms, et la détection s'est *améliorée* |
+| tempo publié sur 4 % des fenêtres | repli d'octave sans point fixe : la plage préférée couvrait 1,57, pas 2 | plage portée à un facteur deux |
+| 133 BPM sur un répertoire à 87 | le swing : le détecteur voit le triolet | repli ternaire ×2/3 vers la zone du répertoire |
+| 935 changements d'accord en 2 min | seuil deviné à 0,45, soit le milieu de la distribution | 0,75, la queue — un indice fréquent ne discrimine rien |
+| tension jamais au-dessus de 0,08 | diviseur des pentes à 0,5 quand le maximum réel est 0,149 | 0,12, mesuré à la sonde |
+| 20 ruptures au même instant | l'arc n'avance qu'une fois par temps, son verdict était republié à chaque fenêtre | l'événement ne vaut que pour la fenêtre qui le constate |
 | filtre passe-bas invisible | rien ne mesurait la *couleur* du son, seulement ses événements | centroïde et rolloff, mesurés sur le spectre entier avant HPSS |
 | 17 messages mixtes sur 200 000 | course latente dans l'anneau, révélée en passant de 96 à 112 octets | vérifier le curseur **après** la copie, pas seulement avant |
 
@@ -92,6 +100,19 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
   défaut dormait depuis le début ; il n'est apparu que le jour où le message a grossi de
   96 à 112 octets, parce qu'une copie plus longue élargit la fenêtre. **Une course ne se
   corrige pas quand on la voit, elle se corrige quand on l'écrit.**
+- **Une preuve unique ne doit pas être diluée par ce qui ne prouve rien.** La confiance
+  du temps fort portait sur l'écart *relatif* au meilleur score. Or un backbeat vote
+  autant pour deux hypothèses opposées : il n'apprend rien mais gonfle le total, et
+  noyait la rupture de section qui, elle, tranchait — cinq centièmes de confiance pour la
+  seule preuve du lot. L'écart absolu entre hypothèses *est* la somme des votes
+  discriminants.
+- **Certaines ambiguïtés ne sont pas des lacunes.** Kick sur 1 et 3 avec clap sur 2 et 4
+  est symétrique par décalage de deux temps : l'information n'existe pas dans le signal.
+  Rendre -1 est la bonne réponse ; tirer à pile ou face donnerait raison une fois sur
+  deux et décalerait toute la structure l'autre fois.
+- **Le mock perd le contrat à chaque fois qu'on l'étend.** Deux fois déjà — les frappes,
+  puis les registres, le timbre et la structure. Un test vérifie désormais qu'aucun champ
+  ne reste à sa valeur par défaut sur quatre secondes.
 - **Ce qui suit en continu paraît toujours calé.** L'orbe des graves n'a jamais été en
   retard parce qu'il ne décide de rien. Ne pas en conclure que le reste va bien.
 
@@ -120,7 +141,8 @@ l'écriture d'un message coûtant 2,9 µs.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources, transport | **aucune** |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 67 tests | xUnit |
+| `Emotion.Signal.Tests` | 79 tests | xUnit |
+| `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**
 
@@ -132,6 +154,13 @@ Signal__Source=pulse Signal__Device=…monitor dotnet run …    # écoute réel
 Signal__CueDevice=alsa_input.…                               # seconde entrée
 Signal__Separate=false                                       # couper HPSS, pour comparer
 ```
+
+```sh
+dotnet run -c Release --project tools/Emotion.Probe -- <set.wav> [début_s] [durée_s]
+```
+
+Regarder l'écran renseigne sur ce qu'on voit, jamais sur ce qui décide. La sonde a
+corrigé quatre constantes devinées dès sa première exécution.
 
 `http://localhost:5299` · `S` cycle visuel / superposé / signaux · `D` diagnostic ·
 `H` masque · `F` plein écran · `/health` pour l'état des tuyaux.

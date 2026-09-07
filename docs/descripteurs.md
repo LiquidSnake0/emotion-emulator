@@ -138,7 +138,15 @@ Par honnetete, et parce qu'un inventaire qui ne dit jamais non ne sert a rien :
 
 ## Ce qu'on fait
 
-Par ordre : **structure metrique**, **stereo**, **ratio harmonique/percussif**.
+Par ordre : ~~structure metrique~~ **faite**, puis **stereo**, puis **ratio
+harmonique/percussif**.
+
+La structure metrique a livre plus que prevu. Elle a surtout mis au jour un defaut du
+tempo qu'aucun test synthetique n'aurait montre : le repli d'octave n'avait pas de point
+fixe, et le repertoire etant joue en swing, le detecteur publiait 133 BPM pour un morceau
+a 89. Un descripteur de plus longue portee sert donc aussi de controle sur ceux qui le
+precedent — mesure a la sonde, tempo 133 puis 88,9, intervalle de mesure a 0,4 % du
+tempo detecte.
 
 Les deux premiers parce qu'ils ouvrent une dimension entiere qui manque — le temps long
 pour l'un, l'espace pour l'autre. Le troisieme parce qu'il est deja calcule et qu'il

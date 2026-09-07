@@ -54,6 +54,17 @@ export class Visual {
     this.level = new Spring(16);
     this.tonal = new Spring(6);        // la texture change lentement
 
+    // LA STRUCTURE NE PORTE PAS DE FORME A ELLE, ELLE GOUVERNE LES AUTRES.
+    //
+    // La regle du fichier est « une source de son, une forme ». Or la mesure et la phrase
+    // ne sont pas des sources : ce sont du temps. Leur donner un dessin propre reviendrait
+    // a poser une interface par-dessus le visuel — une jauge, un compteur — et personne
+    // ne regarde une jauge pendant un set. Elles pilotent donc le <b>comportement</b> des
+    // formes existantes : leur amplitude, leur vitesse, leur accent.
+    this.tension = new Spring(4);      // une montee dure huit mesures, rien ne presse
+    this.drop = new Pulse(3);          // la rupture tient trois temps
+    this.onOne = 0.55;                 // accent du temps fort, applique a l'onde du kick
+
     // Le timbre : la couleur du son, pas ses evenements. Un filtre passe-bas qu'on
     // ferme sur huit mesures ne change ni le tempo, ni les attaques, ni les notes — le
     // visuel restait donc impassible pendant le geste le plus visible d'un set.
@@ -169,6 +180,22 @@ export class Visual {
     if (v.highHit) this.bellHit.fire();
     if (frame.noveltyOnset) this.sweep = 0;
 
+    // La structure. Elle est la seule chose de tout le systeme qu'on lise en avance :
+    // partout ailleurs on constate un evenement et l'on court apres, ici la tension monte
+    // pendant huit mesures et dit ou va le morceau. Une rupture peut donc etre jouee
+    // <i>sur</i> l'instant plutot qu'apres, et la latence de la chaine cesse de compter.
+    const st = frame.structure ?? {};
+    this.tension.step(st.buildup ?? 0, dt);
+    if (st.drop) this.drop.fire();
+    this.drop.step(beatMs, dtMs);
+
+    // Le premier temps de la mesure porte un accent plus large. C'est le seul endroit ou
+    // le rang du temps se voit directement — et il ne se voit que si l'on sait ou il est :
+    // beat vaut -1 tant que la grille n'a pas tranche, et l'on reste alors neutre plutot
+    // que d'accentuer un temps au hasard.
+    if (this.clock.locked ? this.clock.justFired : hit.kick)
+      this.onOne = st.beat === 0 ? 1 : (st.beat > 0 ? 0.5 : 0.62);
+
     for (const p of [this.kick, this.clap, this.hat,
                      this.bassHit, this.voiceHit, this.bellHit])
       p.step(beatMs, dtMs);
@@ -185,7 +212,7 @@ export class Visual {
     this.bright.step(tb.centroid ?? 0.5, dt);
     this.density.step(tb.density ?? 0.5, dt);
 
-    this.spin += dt * (0.06 + this.level.value * 0.22);
+    this.spin += dt * (0.06 + this.level.value * 0.22 + this.tension.value * 0.55);
     if (this.sweep >= 0) {
       this.sweep += dtMs / (beatMs * 4);
       if (this.sweep > 1.3) this.sweep = -1;
@@ -215,7 +242,13 @@ export class Visual {
 
     ctx.save();
     // 1. Contraction : la scene se replie vers son centre.
-    const shrink = 0.72 + open * 0.28;
+    //
+    // La tension joue contre elle : une montee ecarte les formes, une rupture les pousse
+    // d'un coup. Les deux gestes s'opposent volontairement sur le meme axe — c'est ce qui
+    // rend le retour des graves aussi lisible, la scene ayant passe huit mesures a se
+    // gonfler avant d'etre relachee.
+    const swell = 1 + this.tension.value * 0.16 + this.drop.value * 0.14;
+    const shrink = (0.72 + open * 0.28) * swell;
     ctx.translate(cx, cy);
     ctx.scale(shrink, shrink);
     ctx.translate(-cx, -cy);
@@ -224,6 +257,7 @@ export class Visual {
     const blur = (1 - open) * 14;
     if (blur > 0.5) ctx.filter = `blur(${blur.toFixed(1)}px)`;
 
+    this.drawTension(ctx, cx, cy, unit, c);
     this.drawBass(ctx, cx, cy, unit, c);
     this.drawKickWave(ctx, cx, cy, unit, c);
     this.drawVoice(ctx, cx, cy, unit, c, sides);
@@ -243,6 +277,31 @@ export class Visual {
     this.calibrate.draw(ctx, w, h, frame, this.latencyMs);
   }
 
+  // ------------------------------------------------------------- TENSION
+  // Un halo diffus qui enfle pendant la montee, et un eclat bref au relachement.
+  //
+  // C'est la seule chose du rendu qui ne reagisse pas a un evenement mais l'annonce. Un
+  // halo plutot qu'un contour : une montee n'a pas de bord net, elle se sent avant de se
+  // voir, et une forme dessinee donnerait une precision que la mesure n'a pas.
+  drawTension(ctx, cx, cy, unit, c) {
+    const t = this.tension.value;
+    const d = this.drop.value;
+    if (t < 0.02 && d < 0.02) return;
+
+    if (t > 0.02) {
+      const r = unit * (0.20 + t * 0.55);
+      S.disc(ctx, cx, cy, r, S.lighten(c, 0.35), t * 0.16, 0.95);
+    }
+
+    // La rupture : un anneau large qui part du centre, distinct de l'onde du kick par sa
+    // taille et sa lenteur. Elle ne doit se produire que quelques fois par set — un effet
+    // qu'on voit souvent cesse d'etre un evenement.
+    if (d > 0.02) {
+      const r = unit * (0.15 + (1 - d) * 0.75);
+      S.ring(ctx, cx, cy, r, unit * 0.02 * d, S.lighten(c, 0.6), d * 0.5);
+    }
+  }
+
   // ---------------------------------------------------------------- BASSE
   // Un cercle plein au centre, qui respire. C'est la masse du morceau : lourde, lente,
   // toujours au meme endroit. Elle enfle sur chaque note grave et se degonfle seule.
@@ -258,8 +317,12 @@ export class Visual {
   drawKickWave(ctx, cx, cy, unit, c) {
     const k = this.kick.value;
     if (k < 0.02) return;
-    const r = unit * (0.10 + (1 - k) * 0.42);
-    S.ring(ctx, cx, cy, r, Math.max(1.5, unit * 0.012 * k), S.lighten(c, 0.25), k * 0.55);
+    // Le temps fort porte une onde plus large et plus nette. C'est un accent, pas une
+    // forme de plus : la mesure se lit dans le relief du kick, comme a l'oreille.
+    const reach = 0.42 * (0.85 + this.onOne * 0.3);
+    const r = unit * (0.10 + (1 - k) * reach);
+    S.ring(ctx, cx, cy, r, Math.max(1.5, unit * 0.012 * k * (0.7 + this.onOne * 0.6)),
+           S.lighten(c, 0.25), k * this.onOne);
   }
 
   // ------------------------------------------------------------------ VOIX
