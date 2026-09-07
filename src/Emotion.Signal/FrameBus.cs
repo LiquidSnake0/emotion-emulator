@@ -73,7 +73,32 @@ public sealed class FrameBus
     }
 
     private volatile Subscription[] _subscribers = [];
+    private volatile Action<VisualFrame>[] _inline = [];
     private readonly Lock _gate = new();
+
+    /// <summary>
+    /// Abonne un consommateur <b>appele en ligne</b>, dans le fil du producteur, sans
+    /// passer par une file.
+    ///
+    /// C'est le chemin le plus court possible, et il supprime un reveil de tache : une
+    /// file impose au systeme de reveiller un fil, ce qui coute plus cher que l'ecriture
+    /// elle-meme quand celle-ci se compte en microsecondes.
+    ///
+    /// <b>A n'utiliser que pour un consommateur dont on sait qu'il ne bloque jamais.</b>
+    /// L'ecriture dans l'anneau partage remplit cette condition — elle n'attend rien,
+    /// n'alloue rien et ne peut pas echouer. Un consommateur qui prendrait un verrou ou
+    /// ferait une entree-sortie retarderait, lui, toute la chaine.
+    /// </summary>
+    public void AddInlineSink(Action<VisualFrame> sink)
+    {
+        lock (_gate)
+        {
+            var next = new Action<VisualFrame>[_inline.Length + 1];
+            Array.Copy(_inline, next, _inline.Length);
+            next[^1] = sink;
+            _inline = next;
+        }
+    }
 
     /// <summary>
     /// Abonne un consommateur.
@@ -108,6 +133,12 @@ public sealed class FrameBus
     /// </summary>
     public void Publish(in VisualFrame frame)
     {
+        // Les consommateurs en ligne d'abord : ils sont sur le chemin critique, et rien
+        // ne doit s'intercaler entre l'analyse et eux.
+        var inline = _inline;
+        for (var i = 0; i < inline.Length; i++)
+            inline[i](frame);
+
         var subs = _subscribers;              // une seule lecture volatile
         for (var i = 0; i < subs.Length; i++)
             subs[i].Offer(frame);

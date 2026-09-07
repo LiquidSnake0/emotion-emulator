@@ -34,6 +34,18 @@ public sealed class SpectrumAnalyzer
     private readonly OnsetDetector _hat = new(minGap: 4);   // les charleys vont vite
     private readonly float[] _prevBand = new float[VisualFrame.BandCount];
 
+    // Deux jeux de bandes, utilises a tour de role. Un tableau neuf a chaque image
+    // faisait quarante-sept allocations par seconde, donc des collectes regulieres —
+    // et une collecte tombe forcement, un jour, pendant l'ecriture vers l'anneau. Deux
+    // suffisent : le consommateur en ligne a fini d'en lire un avant que le suivant ne
+    // soit reecrit, et les files bornees n'en gardent au plus que deux.
+    private readonly float[][] _bandPool =
+    [
+        new float[VisualFrame.BandCount],
+        new float[VisualFrame.BandCount],
+    ];
+    private int _bandTurn;
+
     // Enveloppes lissees des trois registres. Le flux brut est en dents de scie d'une
     // fenetre a l'autre : y chercher un maximum local revient a compter le bruit. Une
     // moyenne mobile courte en fait une enveloppe ou un sommet veut dire quelque chose.
@@ -143,7 +155,8 @@ public sealed class SpectrumAnalyzer
         var onset = _onsets.Feed(flux);
         if (onset) _tempo.Mark(tMs);
 
-        var bands = new float[VisualFrame.BandCount];
+        var bands = _bandPool[_bandTurn];
+        _bandTurn ^= 1;
         for (var b = 0; b < bands.Length; b++)
         {
             var lo = _edges[b];

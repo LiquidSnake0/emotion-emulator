@@ -81,9 +81,12 @@ export class Signals {
 
     // En surimpression, le fond reste assez transparent pour laisser voir le visuel
     // dessous, et les courbes assez opaques pour rester lisibles par-dessus.
+    // Opaque en mode signaux : a 0,90 le visuel transparaissait encore, et les deux
+    // modes finissaient par se ressembler. En superposition, au contraire, il doit
+    // rester franchement visible dessous.
     const overlay = this.mode === MODE_OVER;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = overlay ? 'rgba(0, 0, 0, 0.42)' : 'rgba(0, 0, 0, 0.90)';
+    ctx.fillStyle = overlay ? 'rgba(0, 0, 0, 0.42)' : '#000';
     ctx.fillRect(0, 0, w, h);
 
     const pad = 28;

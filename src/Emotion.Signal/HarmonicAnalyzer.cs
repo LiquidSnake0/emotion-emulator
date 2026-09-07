@@ -46,6 +46,15 @@ public sealed class HarmonicAnalyzer
 
     private Harmony _last = Harmony.None;
 
+    // Meme raison qu'en percussion : le profil etait clone a chaque calcul. Deux jeux
+    // alternes suffisent, et l'analyse harmonique ne recalcule qu'un saut sur quatre.
+    private readonly float[][] _chromaPool =
+    [
+        new float[Harmony.Classes],
+        new float[Harmony.Classes],
+    ];
+    private int _chromaTurn;
+
     // La meme separation, cote harmonie : on ne garde ici que ce qui dure. Les
     // percussions salissaient le chromagramme en repandant de l'energie sur toutes les
     // classes de hauteur a chaque frappe, ce qui aplatissait le profil et rendait la
@@ -176,7 +185,11 @@ public sealed class HarmonicAnalyzer
         Array.Copy(_chroma, _previous, _chroma.Length);
         _hasPrevious = true;
 
-        return new Harmony((float[])_chroma.Clone(), pitch, strength, change, tonality);
+        var published = _chromaPool[_chromaTurn];
+        _chromaTurn ^= 1;
+        Array.Copy(_chroma, published, _chroma.Length);
+
+        return new Harmony(published, pitch, strength, change, tonality);
     }
 
     /// <summary>

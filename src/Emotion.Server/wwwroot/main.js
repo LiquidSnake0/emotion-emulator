@@ -40,11 +40,50 @@ function setLink(ok, label) {
   hud.state.textContent = label;
 }
 
+// Bandeau rabattable, comme les commandes d'un lecteur video : il disparait quand on
+// ne s'en sert pas, et revient au moindre mouvement.
+//
+// Il ne se rabat que dans le mode visuel : c'est le seul ou l'on regarde le rendu
+// plutot que de le regler. En signaux ou en superposition on est aux manettes, et un
+// bandeau qui s'eclipse ferait perdre l'etat au moment ou il sert.
+let hideTimer = null;
+
+function armAutoHide() {
+  clearTimeout(hideTimer);
+  hud.root.classList.remove('idle');
+  document.body.classList.remove('idle');
+
+  if (manualHide || visual.signals.mode !== 0) return;
+
+  hideTimer = setTimeout(() => {
+    hud.root.classList.add('idle');
+    document.body.classList.add('idle');
+  }, 2500);
+}
+
+// Le rabat est pilote par l'etat, et sur son propre minuteur plutot que dans la boucle
+// de rendu. Deux raisons : quitter le mode visuel doit faire revenir le bandeau quel que
+// soit le chemin emprunte pour changer de mode, et surtout la boucle d'animation est
+// suspendue par le navigateur des que la fenetre n'est pas a l'ecran — un bandeau qui
+// dependrait d'elle resterait fige dans cet etat.
+setInterval(() => {
+  if (visual.signals.mode !== 0) {
+    hud.root.classList.remove('idle');
+    document.body.classList.remove('idle');
+  }
+}, 200);
+
+addEventListener('mousemove', armAutoHide);
+addEventListener('mousedown', armAutoHide);
+addEventListener('touchstart', armAutoHide, { passive: true });
+
+let manualHide = false;
+
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === 'h') hud.root.classList.toggle('off');
+  if (k === 'h') { manualHide = !manualHide; hud.root.classList.toggle('off', manualHide); }
   if (k === 'd') visual.diag.toggle();
-  if (k === 's') { visual.signals.toggle(); refreshModeButton(); }
+  if (k === 's') { visual.signals.toggle(); refreshModeButton(); armAutoHide(); }
   if (k === 'f') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
@@ -64,8 +103,10 @@ modeButton.addEventListener('click', (e) => {
   e.stopPropagation();
   visual.signals.toggle();
   refreshModeButton();
+  armAutoHide();
 });
 refreshModeButton();
+armAutoHide();
 
 // ---------------------------------------------------------------- liaison
 

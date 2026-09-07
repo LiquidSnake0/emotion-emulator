@@ -23,6 +23,12 @@
   #hud .dot { width: .55rem; height: .55rem; border-radius: 50%; display: inline-block; background: #444; }
   #hud.off { display: none; }
 
+  /* Rabattable : il glisse vers le haut au lieu de disparaitre d'un coup, et le
+     curseur suit. Seul le mode visuel le declenche. */
+  #hud { transition: opacity .35s ease, transform .35s ease; }
+  #hud.idle { opacity: 0; transform: translateY(-100%); pointer-events: none; }
+  body.idle { cursor: none; }
+
   /* Le bouton de mode. Assez visible pour se trouver dans le noir d'un club, assez
      sobre pour ne pas attirer l'oeil quand le bandeau reste ouvert par megarde. */
   #mode {

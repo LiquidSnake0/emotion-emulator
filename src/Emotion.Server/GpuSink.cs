@@ -44,7 +44,7 @@ public sealed class GpuSink : BackgroundService
     public (long Written, double MeanUs, double WorstUs, long Over100us, long Over1ms) Stats() =>
         (_written, _written > 0 ? _totalUs / _written : 0, _worstUs, _over100us, _over1ms);
 
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override Task ExecuteAsync(CancellationToken ct)
     {
         SharedRingWriter writer;
         try
@@ -57,30 +57,40 @@ public sealed class GpuSink : BackgroundService
             // tourne exactement pareil. Un serveur qui refuserait de demarrer parce
             // qu'un tuyau optionnel n'a pas pu s'ouvrir serait plus fragile qu'utile.
             _log.LogWarning("anneau partage indisponible ({Path}) : {Message}", _path, e.Message);
-            return;
+            return Task.CompletedTask;
         }
 
-        using (writer)
-        {
-            _log.LogInformation("Anneau partage ouvert : {Path}, {Size} octets par message",
-                                _path, GpuPacket.Size);
+        _writer = writer;
+        _log.LogInformation("Anneau partage ouvert : {Path}, {Size} octets par message, ecriture en ligne",
+                            _path, GpuPacket.Size);
 
-            var sub = _bus.Subscribe("gpu", capacity: 4);
+        // En ligne, et non par une file. L'ecriture ne bloque pas, n'alloue pas et ne
+        // peut pas echouer : elle peut donc se faire dans le fil qui vient d'analyser,
+        // ce qui supprime un reveil de tache. Ce reveil coutait plus cher que l'ecriture
+        // elle-meme, qui se compte en microsecondes.
+        _bus.AddInlineSink(OnFrame);
 
-            await foreach (var frame in sub.ReadAllAsync(ct))
-            {
-                var t0 = Stopwatch.GetTimestamp();
+        ct.Register(() => { _writer?.Dispose(); _writer = null; });
+        return Task.CompletedTask;
+    }
 
-                var packet = GpuPacket.From(frame, _deck.Current.Playing, _sequence++);
-                writer.Write(packet);
+    private SharedRingWriter? _writer;
 
-                var us = Stopwatch.GetElapsedTime(t0).TotalMicroseconds;
-                _written++;
-                _totalUs += us;
-                if (us > _worstUs) _worstUs = us;
-                if (us > 100) _over100us++;
-                if (us > 1000) _over1ms++;
-            }
-        }
+    private void OnFrame(VisualFrame frame)
+    {
+        var w = _writer;
+        if (w is null) return;
+
+        var t0 = Stopwatch.GetTimestamp();
+
+        var packet = GpuPacket.From(frame, _deck.Current.Playing, _sequence++);
+        w.Write(packet);
+
+        var us = Stopwatch.GetElapsedTime(t0).TotalMicroseconds;
+        _written++;
+        _totalUs += us;
+        if (us > _worstUs) _worstUs = us;
+        if (us > 100) _over100us++;
+        if (us > 1000) _over1ms++;
     }
 }
