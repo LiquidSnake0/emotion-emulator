@@ -88,6 +88,11 @@ public sealed class SpectrumAnalyzer
     // autocorrele une enveloppe d'attaque : meme idee, un ordre de grandeur au-dessus.
     private readonly SectionTracker _section = new();
 
+    // Le disque joue-t-il toujours ce qu'on croit qu'il joue. Sans elle, un saut de sillon
+    // laisse la grille decrire pendant plus d'une minute un endroit du disque ou l'on
+    // n'est plus, son oubli etant lent par construction.
+    private readonly ContinuityWatch _continuity = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -112,6 +117,9 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>La separation est-elle active.</summary>
     public bool Separating => _hpss is not null;
+
+    /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
+    public string LastBreak => _continuity.Reason;
 
     /// <summary>L'etat du suivi de structure longue, pour le reglage.</summary>
     public (int Bars, float Best, IReadOnlyList<float> Scores) Section =>
@@ -294,6 +302,17 @@ public sealed class SpectrumAnalyzer
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
         if (_novelty.Onset) _grid.MarkSection(tMs);
 
+        _continuity.Feed(level, hits.Kick, _grid.LastSyncError);
+        if (_continuity.Broken)
+        {
+            // On jette ce qui decrit une position, on garde ce qui decrit une vitesse : un
+            // saut de sillon ne change ni le disque ni son tempo. Un silence, si.
+            _grid.Reset();
+            _section.Reset();
+            _arc.Reset();
+            if (_continuity.WasSilence) _tempo.Reset();
+        }
+
         // La signature de la mesure en cours, close a chaque debut de mesure.
         _section.Feed(bands, timbre.Centroid, timbre.Density);
         if (_grid.BarStart) _section.CloseBar();
@@ -317,7 +336,8 @@ public sealed class SpectrumAnalyzer
             _grid.BarStart && bar == 0,
             bars,
             _section.BarsToBoundary,
-            _section.Confidence);
+            _section.Confidence,
+            _continuity.Trust);
 
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,

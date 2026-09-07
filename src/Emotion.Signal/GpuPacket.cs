@@ -146,6 +146,17 @@ public struct GpuPacket
     /// <summary>Fiabilite de la structure longue, 0 a 255.</summary>
     [FieldOffset(110)] public byte SectionSure;
 
+    /// <summary>
+    /// A quel point le renderer peut se fier a la structure, 0 a 255. Un disque qui saute,
+    /// un calage en cours, un blanc entre deux disques la font tomber.
+    ///
+    /// <b>Elle ne coupe rien.</b> L'analyse continue et le flux ne s'interrompt pas : le
+    /// renderer decide seul de ce qu'il ignore. Lui transmettre un octet coute le prix
+    /// d'un octet ; lui faire redecouvrir la meme chose couterait le retard de toute la
+    /// chaine, ce qu'on passe le projet a supprimer.
+    /// </summary>
+    [FieldOffset(111)] public byte Trust;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -225,6 +236,7 @@ public struct GpuPacket
         p.PhraseBars = (byte)f.Structure.PhraseBars;
         p.BarsToBoundary = (byte)Math.Clamp(f.Structure.BarsToBoundary, 0, 255);
         p.SectionSure = (byte)Math.Clamp(f.Structure.SectionConfidence * 255f, 0f, 255f);
+        p.Trust = (byte)Math.Clamp(f.Structure.Trust * 255f, 0f, 255f);
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;

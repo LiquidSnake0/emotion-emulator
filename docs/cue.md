@@ -120,6 +120,88 @@ puisqu'elle se fait au casque, hors du temps de la salle.
 
 ---
 
+## Le cue n'est pas une lecture, c'est un aller-retour
+
+Une hypothese de ce document etait fausse et il faut la corriger : rien n'est joue
+lineairement au casque.
+
+> Je replace le cue au debut, je lance, je beatmatch. Si le beat n'est physiquement pas
+> matche, j'ai tendance a revenir, et revenir, et revenir.
+
+Le disque preparé est donc rejoué en boucle sur ses premieres mesures, avec des retours
+en arriere constants. **On ne peut pas construire une partition lineaire pendant ce
+geste-la**, et une analyse qui supposerait une lecture continue produirait une carte
+absurde — des sections qui se repetent, un tempo hache par les arrets.
+
+Trois facons de s'en sortir, par ordre de solidite :
+
+| Approche | Ce qu'elle vaut |
+|---|---|
+| **Analyser le disque hors session**, une fois, et garder la carte dans le crate | La plus sure : le disque est lu une fois d'un bout a l'autre, sans geste par-dessus. Un disque joue cent fois n'est analyse qu'une |
+| Accumuler par passages, en reconnaissant ou l'on est | Marche sans preparation prealable, mais demande de savoir se localiser dans un disque a partir de quelques mesures |
+| Analyser au cue en direct | Le plus simple et le moins fiable, pour la raison ci-dessus |
+
+La premiere rejoint une idee deja presente : le crate est la memoire de ce que Selim
+possede. Une carte de morceau y a sa place a cote de la tonalite et de la famille.
+
+## La confiance monte par paliers, et ce sont ceux du metier
+
+> Je laisse toujours quelques echantillons de temps, 2 temps, 4 temps et sur 16 pour
+> confirmer que le beat est matche.
+
+Ces trois paliers ne sont pas arbitraires, et le systeme n'a aucune raison d'etre plus
+presse que l'oreille qui l'emploie :
+
+| Paliers | Ce qu'il confirme |
+|---|---|
+| 2 temps | on ne s'est pas cale d'une croche |
+| 4 temps | on tient la mesure |
+| 16 temps | on tient la phrase, et les deux disques ne derivent pas l'un par rapport a l'autre |
+
+`ContinuityWatch.Trust` rend exactement cette echelle — 0 · 0,35 · 0,7 · 1 — et elle
+voyage jusqu'au GPU dans un octet du paquet.
+
+## Un seuil de rendu, jamais d'ecoute
+
+Quand un disque saute ou qu'un calage est en cours, **on ne coupe rien**. L'analyse
+continue de chercher ; ce qui change est ce que le renderer a le droit d'en faire.
+
+C'est une question de latence autant que de justesse. Transmettre un octet de confiance
+coute le prix d'un octet ; faire redecouvrir la meme chose au renderer couterait le retard
+de toute la chaine — soit exactement ce que ce projet passe son temps a supprimer.
+
+| Confiance | Ce que le renderer fait |
+|---|---|
+| 1 | tout : mesure, phrase, anticipation de la frontiere |
+| 0,7 | mesure et phrase, sans anticiper |
+| 0,35 | le temps seul, aucune structure |
+| 0 | purement reactif — niveau, bandes, frappes constatees |
+
+Le mode a zero n'est pas un mode degrade de secours : **c'est ce que le projet faisait
+avant d'avoir une grille**, et il reste parfaitement regardable.
+
+## Detecter la rupture : seuiller la forme, pas l'ecart
+
+Le reflexe est de seuiller l'ecart de phase — au-dela d'un quart de temps, on decroche.
+**Ce serait faux**, parce que pousser ou retenir le disque pour recaler produit exactement
+cet ecart-la. Un tel seuil decrocherait a chaque beatmatch, c'est-a-dire tout le temps.
+
+Ce qui distingue un accident d'un geste n'est pas l'amplitude, c'est la forme :
+
+| | Ecart a la grille | D'une frappe a la suivante |
+|---|---|---|
+| pitch bend | grand | **peu de changement** — il croit puis revient |
+| saut de sillon | quelconque | **sans aucun rapport** |
+
+Une frappe n'est donc comptee egaree que si elle est **a la fois** loin de la grille et
+loin de la precedente.
+
+Deuxieme piege, trouve par le test : apres un saut, l'ecart n'est plus une erreur mais un
+tirage, et **pres de la moitie des frappes tombent pres de la grille par coincidence**.
+Exiger trois frappes egarees de suite ne se declenchait donc presque jamais. On integre le
+desordre au lieu de le compter, et le cas ambigu — proche de la grille mais sans rapport
+avec la precedente — ne compte ni pour ni contre.
+
 ## Ce qui reste a decider
 
 - **Ou vit la carte.** Calculee a chaque cue, ou mise en cache par disque dans le crate ?

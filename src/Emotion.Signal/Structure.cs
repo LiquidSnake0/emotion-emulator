@@ -32,6 +32,20 @@ namespace Emotion.Signal;
 /// <param name="Drop">La rupture vient de tomber, sur cette fenetre.</param>
 /// <param name="BarStart">Cette fenetre porte un debut de mesure.</param>
 /// <param name="PhraseStart">Cette fenetre porte un debut de phrase.</param>
+/// <param name="PhraseBars">Longueur de phrase mesuree.</param>
+/// <param name="BarsToBoundary">Mesures avant la prochaine frontiere de phrase.</param>
+/// <param name="SectionConfidence">Fiabilite de la structure longue.</param>
+/// <param name="Trust">
+/// A quel point le rendu peut se fier a tout ce qui precede, 0 a 1.
+///
+/// <b>C'est un seuil de rendu, pas d'ecoute.</b> L'analyse ne s'arrete jamais : elle
+/// continue de chercher pendant qu'un disque saute ou qu'un calage se fait. Ce qui change
+/// est ce que le renderer a le droit d'en faire — et le lui dire coute un octet, la ou
+/// lui faire recalculer quoi que ce soit couterait des millisecondes.
+///
+/// Elle monte par paliers, et ce sont ceux du metier : deux temps, quatre temps, seize
+/// temps. Voir <see cref="ContinuityWatch.Trust"/>.
+/// </param>
 public readonly record struct Structure(
     int Beat,
     int Bar,
@@ -44,7 +58,8 @@ public readonly record struct Structure(
     int PhraseBars = 8,   // = DefaultPhraseBars ; une valeur par defaut de parametre
                           // ne peut pas citer une constante declaree dans le corps
     int BarsToBoundary = 0,
-    float SectionConfidence = 0f)
+    float SectionConfidence = 0f,
+    float Trust = 1f)
 {
     /// <summary>
     /// Longueur de phrase supposee tant que <see cref="SectionTracker"/> n'a pas tranche.

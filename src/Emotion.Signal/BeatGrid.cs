@@ -85,6 +85,13 @@ public sealed class BeatGrid
     /// <summary>Position dans le temps courant, 0 a 1.</summary>
     public float Phase { get; private set; }
 
+    /// <summary>
+    /// Ecart de la derniere frappe a la grille, en fraction de temps, dans
+    /// [-0,5 ; 0,5]. C'est sur sa persistance dans le desordre — jamais sur son
+    /// amplitude — que <see cref="ContinuityWatch"/> juge d'une rupture.
+    /// </summary>
+    public float LastSyncError { get; private set; }
+
     /// <summary>Rang du temps dans la mesure, ou -1 tant que le temps fort est incertain.</summary>
     public int Beat => Locked ? Mod4(_index - _offset) : -1;
 
@@ -153,6 +160,7 @@ public sealed class BeatGrid
         var error = _phase;
         if (error > 0.5) error -= 1.0;
 
+        LastSyncError = (float)error;
         _phase -= error * Pull;
         if (_phase < 0) _phase += 1.0;
         Phase = (float)_phase;
