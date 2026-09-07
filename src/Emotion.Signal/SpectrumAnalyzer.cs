@@ -33,7 +33,16 @@ public sealed class SpectrumAnalyzer
     private readonly OnsetDetector _clap = new();
     private readonly OnsetDetector _hat = new(minGap: 4);   // les charleys vont vite
     private readonly float[] _prevBand = new float[VisualFrame.BandCount];
+
+    // Enveloppes lissees des trois registres. Le flux brut est en dents de scie d'une
+    // fenetre a l'autre : y chercher un maximum local revient a compter le bruit. Une
+    // moyenne mobile courte en fait une enveloppe ou un sommet veut dire quelque chose.
+    private readonly float[] _smooth = new float[3];
     private readonly TempoEstimator _tempo = new();
+
+    // L'harmonie travaille sur une fenetre quatre fois plus longue, pour separer les
+    // demi-tons. Elle recoit les memes echantillons et se cadence toute seule.
+    private readonly HarmonicAnalyzer _harmony;
 
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
@@ -44,6 +53,7 @@ public sealed class SpectrumAnalyzer
     {
         _sampleRate = sampleRate;
         _edges = BuildEdges(sampleRate);
+        _harmony = new HarmonicAnalyzer(sampleRate);
     }
 
     /// <summary>Tempo estime, nul tant que la detection n'a pas accroche.</summary>
@@ -57,6 +67,8 @@ public sealed class SpectrumAnalyzer
     {
         if (samples.Length != Window)
             throw new ArgumentException($"fenetre de {Window} echantillons attendue", nameof(samples));
+
+        var harmony = _harmony.Feed(samples);
 
         var sum = 0f;
         for (var i = 0; i < Window; i++)
@@ -124,22 +136,38 @@ public sealed class SpectrumAnalyzer
         // Flux par registre, calcule sur les bandes deja normalisees : chaque detecteur
         // se cale ainsi sur le contraste de sa tranche et non sur son volume absolu,
         // ce qui evite qu'un mix charge en graves eteigne la detection des claps.
-        var hits = new Hits(
-            Kick: _kick.Feed(BandRise(bands, 0, 3)),
-            Clap: _clap.Feed(BandRise(bands, 3, 8)),
-            Hat:  _hat.Feed(BandRise(bands, 9, VisualFrame.BandCount)));
+        //
+        // Les tranches ne se chevauchent plus : la bande 3 appartenait aux deux, et un
+        // kick y bavait assez pour declencher le detecteur de clap. Mesure a l'ecran de
+        // diagnostic : 80 kicks et 81 claps, tombant aux memes instants.
+        var rKick = Smooth(0, BandRise(bands, 0, 3));
+        var rClap = Smooth(1, BandRise(bands, 4, 9));
+        var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount));
+
+        var kick = _kick.Feed(rKick);
+        var clap = _clap.Feed(rClap);
+
+        // Un clap ne compte que si le medium l'emporte franchement sur le grave a cet
+        // instant. Sinon c'est le corps du kick qu'on entend monter dans le medium, et
+        // l'eclair partirait sur le kick — ce qui est exactement ce qu'il ne faut pas.
+        if (clap && rClap < rKick * 1.3f) clap = false;
+
+        var hits = new Hits(kick, clap, _hat.Feed(rHat));
 
         Array.Copy(bands, _prevBand, bands.Length);
 
-        // Flux et seuil sont ramenes sur une echelle commune : ce qui compte a l'ecran
-        // de diagnostic est leur rapport, pas leur valeur absolue.
-        var scale = MathF.Max(_onsets.Threshold * 2f, 1e-6f);
+        // Ce que rapporte le diagnostic est l'enveloppe du <b>kick</b> et son seuil, pas
+        // le flux global : ce sont les enveloppes par registre qui decident des attaques,
+        // et un ecran qui afficherait une autre grandeur ferait regler a cote. Un outil
+        // de reglage qui montre autre chose que ce qui decide est pire qu'aucun outil.
+        var scale = MathF.Max(_kick.Threshold * 2f, 1e-6f);
 
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
-            Flux: Clamp01(flux / scale),
-            Threshold: Clamp01(_onsets.Threshold / scale));
+            Harmony: harmony,
+            Flux: Clamp01(rKick / scale),
+            Threshold: Clamp01(_kick.Threshold / scale));
     }
 
     /// <summary>
@@ -163,6 +191,18 @@ public sealed class SpectrumAnalyzer
             if (edges[i] <= edges[i - 1]) edges[i] = edges[i - 1] + 1;
 
         return edges;
+    }
+
+    /// <summary>
+    /// Moyenne mobile a deux termes sur l'enveloppe d'un registre. Deux et pas plus :
+    /// au-dela, l'attaque s'etale et le sommet se deplace, donc l'effet visuel arrive
+    /// en retard sur ce qu'on entend.
+    /// </summary>
+    private float Smooth(int slot, float v)
+    {
+        var s = (_smooth[slot] + v) * 0.5f;
+        _smooth[slot] = v;
+        return s;
     }
 
     /// <summary>Montee d'energie sur une tranche de bandes, depuis la fenetre precedente.</summary>

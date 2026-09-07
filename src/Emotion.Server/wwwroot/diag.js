@@ -8,6 +8,8 @@
 // Ce n'est pas un joli graphique : c'est l'outil qui permet de choisir la marge du
 // detecteur en connaissance de cause plutot qu'a tatons.
 
+const NOTES = ['do','do#','re','mib','mi','fa','fa#','sol','sol#','la','sib','si'];
+
 const HISTORY = 240;            // ~5 s a 47 images/s
 
 export class Diagnostics {
@@ -32,7 +34,9 @@ export class Diagnostics {
     if (h.clap) this.nClap++;
     if (h.hat) this.nHat++;
 
-    if (f.onset) {
+    // L'ecart se mesure sur le kick et non sur le detecteur global : c'est le kick
+    // qui porte la pulsation, et c'est donc lui qu'il faut comparer au tempo attendu.
+    if (h.kick) {
       if (this.lastOnsetAt) this.gaps.push(f.t - this.lastOnsetAt);
       this.lastOnsetAt = f.t;
       if (this.gaps.length > 16) this.gaps.shift();
@@ -140,9 +144,12 @@ export class Diagnostics {
       `flux ${(f?.flux ?? 0).toFixed(2)}   seuil ${(f?.threshold ?? 0).toFixed(2)}   ` +
       `niveau ${(f?.rms ?? 0).toFixed(2)}   ` +
       `bpm annonce ${f?.bpm != null ? f.bpm.toFixed(1) : '…'}   ` +
-      `bpm des ecarts ${impliedBpm}   ` +
+      `bpm du kick ${impliedBpm}   ` +
       `ecart median ${med ? med + ' ms' : '—'}   ` +
-      `kick ${this.nKick}  clap ${this.nClap}  hat ${this.nHat}`,
+      `kick ${this.nKick}  clap ${this.nClap}  hat ${this.nHat}   ` +
+      `note ${f?.harmony?.pitch != null ? NOTES[f.harmony.pitch] : '—'}   ` +
+      `tonal ${(f?.harmony?.tonality ?? 0).toFixed(2)}   ` +
+      `accord ${(f?.harmony?.change ?? 0).toFixed(2)}`,
       x, y
     );
 

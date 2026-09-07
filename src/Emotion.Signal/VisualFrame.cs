@@ -31,6 +31,11 @@ namespace Emotion.Signal;
 /// Qui a frappe, par registre. C'est ce qui permet d'attribuer un effet visuel a un
 /// instrument plutot qu'a « du son » : l'eclair au clap, l'onde de choc au kick.
 /// </param>
+/// <param name="Harmony">
+/// Ce qui sonne : profil de hauteurs, note dominante, changement d'accord, caractere
+/// tonal. Les attaques donnent le rythme, l'harmonie donne la couleur — sans elle, un
+/// piano joue sans que rien ne lui reponde a l'ecran.
+/// </param>
 /// <param name="Flux">
 /// Montee du spectre depuis la fenetre precedente, normalisee. Diagnostic : c'est la
 /// grandeur qui decide des attaques, et on ne peut pas regler ce qu'on ne voit pas.
@@ -47,6 +52,7 @@ public readonly record struct VisualFrame(
     float? Phase,
     float? Bpm,
     Hits Hits = default,
+    Harmony Harmony = default,
     float Flux = 0f,
     float Threshold = 0f)
 {

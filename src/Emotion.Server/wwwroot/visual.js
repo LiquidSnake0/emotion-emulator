@@ -40,6 +40,11 @@ export class Visual {
     this.spin = 0;
     this.swell = 0;    // avancee des vagues, propre a Waves
 
+    // L'harmonie : ce qui sonne, par opposition a ce qui frappe. Le piano vit ici.
+    this.chord = 0;    // impulsion sur un changement d'accord
+    this.pitch = null; // classe de hauteur dominante, 0 a 11
+    this.tonal = 0;    // 0 bruite, 1 franchement tonal — lisse, il ne doit pas sauter
+
     // Les clips et images deposes par Selim. La bibliotheque se debrouille d'un
     // dossier vide : sans assets, le visuel geometrique tourne seul.
     this.clips = new ClipLibrary();
@@ -80,15 +85,24 @@ export class Visual {
     const { ctx, w, h } = this;
 
     // Sans ces enveloppes, un effet ne durerait qu'une image et ne se verrait pas.
-    const h = f.hits ?? {};
-    if (h.kick) this.shock = 1;
-    if (h.clap) this.flash = 1;
-    if (h.hat)  this.spark = 1;
+    // `hit` et non `h` : dans cette methode, h est deja la hauteur du canvas.
+    const hit = f.hits ?? {};
+    if (hit.kick) this.shock = 1;
+    if (hit.clap) this.flash = 1;
+    if (hit.hat)  this.spark = 1;
 
     // Les clips partent sur le clap : c'est lui qui marque la phrase, le kick est
     // trop regulier pour servir de declencheur d'image.
-    if (h.clap) this.clips.onOnset(this.kind, this.intensity);
+    if (hit.clap) this.clips.onOnset(this.kind, this.intensity);
 
+    // Le changement d'accord a une enveloppe beaucoup plus lente qu'une frappe : une
+    // harmonie s'installe, elle ne claque pas.
+    const ha = f.harmony ?? {};
+    if ((ha.change ?? 0) > 0.35) this.chord = 1;
+    if (ha.pitch != null) this.pitch = ha.pitch;
+    this.tonal += ((ha.tonality ?? 0) - this.tonal) * 0.05;
+
+    this.chord *= 0.965;
     this.shock *= 0.88;
     // Un eclair garde une remanence : a 0.72 il disparaissait en deux dixiemes,
     // trop vite pour que l'oeil le lise comme un eclair plutot qu'un scintillement.
@@ -104,6 +118,8 @@ export class Visual {
     ctx.fillStyle = `rgb(${c.r * 0.06 | 0}, ${c.g * 0.06 | 0}, ${c.b * 0.06 | 0})`;
     ctx.fillRect(0, 0, w, h);
 
+    this.drawHarmony(f);
+
     switch (this.kind) {
       case 'Waves':   this.drawWaves(f);   break;
       case 'Thunder': this.drawThunder(f); break;
@@ -116,6 +132,55 @@ export class Visual {
 
     this.diag.push(f);
     this.diag.draw(ctx, w, h, f);
+  }
+
+  // ------------------------------------------------------- ce qui sonne
+  // Le contenu tonal — piano, nappes, voix tenues — dessine une aureole large et lente
+  // sous la geometrie. Sa teinte suit la note dominante, son ampleur la tonalite, et
+  // elle enfle a chaque changement d'accord.
+  //
+  // Elle passe volontairement sous les percussions : l'harmonie porte, elle ne frappe
+  // pas, et la mettre au-dessus reviendrait a lui donner la place du rythme.
+  drawHarmony(f) {
+    if (this.tonal < 0.04 && this.chord < 0.04) return;
+
+    const { ctx, w, h } = this;
+    const ha = f.harmony ?? {};
+    const cx = w / 2, cy = h / 2;
+    const unit = Math.min(w, h);
+
+    // La note colore : on tourne d'un douzieme de tour par demi-ton autour de la
+    // couleur de la famille, sans jamais la quitter tout a fait.
+    const c = this.color;
+    const turn = this.pitch != null ? this.pitch / 12 : 0;
+    const tint = rotate(c, turn * 0.55);
+
+    const r = unit * (0.25 + this.tonal * 0.30 + this.chord * 0.12);
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    const a = 0.12 + this.tonal * 0.22 + this.chord * 0.20;
+    g.addColorStop(0, `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${a})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    // Le profil de hauteurs en couronne fine : douze secteurs, un par demi-ton. C'est
+    // discret a la projection mais cela rend l'accord lisible.
+    const ch = ha.chroma;
+    if (!ch || !ch.length) return;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-Math.PI / 2 + this.spin * 0.2);
+    for (let i = 0; i < ch.length; i++) {
+      const a0 = (i / ch.length) * TAU;
+      const a1 = ((i + 0.7) / ch.length) * TAU;
+      const rr = unit * (0.40 + ch[i] * 0.05);
+      ctx.strokeStyle = `rgba(${tint.r}, ${tint.g}, ${tint.b}, ${0.06 + ch[i] * 0.30 * this.tonal})`;
+      ctx.lineWidth = Math.max(1, unit * 0.004);
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, a0, a1);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // ------------------------------------------------------------------ M-
@@ -268,6 +333,13 @@ export class Visual {
 function pseudo(n) {
   const x = Math.sin(n * 12.9898) * 43758.5453;
   return x - Math.floor(x);
+}
+
+// Rotation de teinte, en restant dans la famille : on melange vers la couleur
+// complementaire sans jamais l'atteindre.
+function rotate(c, t) {
+  const m = (v, o) => Math.round(v + (o - v) * t);
+  return { r: m(c.r, 255 - c.r), g: m(c.g, 255 - c.g), b: m(c.b, 255 - c.b) };
 }
 
 function hexToRgb(hex) {
