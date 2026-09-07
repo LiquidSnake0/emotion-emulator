@@ -18,7 +18,7 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
-**58 tests** · **zéro dépendance tierce dans le cœur**
+**67 tests** · **zéro dépendance tierce dans le cœur**
 
 ---
 
@@ -503,6 +503,76 @@ Chaque décision sert la latence :
 96 octets à 47 messages par seconde font 4,5 Ko/s : **la bande passante n'est pas le
 sujet, la latence l'est**, et une structure plate se lit d'un bloc.
 
+### L'anneau partagé, sans verrou
+
+Le transport vers le processus CUDA. Un socket coûte 10 à 20 µs par message, en appels
+système et copies à travers le noyau ; ici les deux processus écrivent et lisent **la
+même page physique**.
+
+```
+┌──────────────────────── /dev/shm/emotion-emulator ────────────────────────┐
+│ en-tête 192 o                              │ 256 cases × 96 o            │
+│ magic │ capacity │ slotSize │ … │ write ⏎  │ … │ read ⏎  │ [0][1][2]…[255] │
+│   0       4          8              64          128                       │
+└───────────────────────────────────────────────────────────────────────────┘
+        write et read ont chacun leur ligne de cache (64 o d'écart)
+```
+
+Trois décisions, et chacune répond à un piège précis :
+
+**1. L'ordre des écritures est tout.** On écrit la case, *puis* on avance le curseur,
+avec une barrière entre les deux :
+
+```csharp
+*(GpuPacket*)slot = packet;                              // 1. la donnée
+Volatile.Write(ref *(long*)(_base + 64), w + 1);         // 2. barrière, puis curseur
+```
+
+Sans cette barrière, le processeur ou le compilateur sont libres de publier le curseur
+avant la donnée — et le lecteur voit une case à moitié écrite, dont la moitié appartient
+à l'image précédente. **C'est le genre de défaut qui n'apparaît qu'une fois sur mille et
+jamais sur la machine de celui qui l'a écrit.** Un test le vérifie sur 200 000 messages
+en concurrence, chaque champ étant dérivé du numéro de séquence : zéro incohérence.
+
+**2. Les curseurs sont espacés d'une ligne de cache.** Sans cet espacement, `write` et
+`read` partageraient la même ligne, et chaque écriture de l'un invaliderait le cache de
+l'autre. C'est le **faux partage**, et il coûte plus cher qu'un verrou bien placé.
+
+**3. Le producteur n'attend jamais.** Quand le consommateur prend du retard, on écrase.
+Il s'en aperçoit par un saut du numéro de séquence — une information utile plutôt qu'une
+panne. Un lecteur qui se rebranche en plein set démarre sur l'instant présent, pas sur
+les cinq dernières secondes.
+
+### Ce que la mesure a coûté, et rapporté
+
+`/health` expose le coût réel d'un message. Le premier chiffre était mauvais, et c'est
+en le regardant qu'on a trouvé pourquoi :
+
+| Étape | Moyenne | Ce qui n'allait pas |
+|---|---|---|
+| première mesure | 22,4 µs | `ParseHex` de la couleur **à chaque message** |
+| couleur mise en cache | 14,1 µs | `Scene.ForFamily` = un switch **sur chaîne** à chaque message |
+| scène mise en cache, `Release` | **4,2 µs** | — |
+
+Une valeur qui ne change qu'au changement de face n'a rien à faire sur un chemin
+parcouru 47 fois par seconde. Les deux calculs sont désormais faits une fois, à la
+construction de `TrackContext`.
+
+Le pire cas est passé de 7,5 ms à 3,2 ms en pré-touchant les pages à l'ouverture — une
+mémoire mappée n'est matérialisée qu'au premier accès, et le défaut de page tombait donc
+en plein set.
+
+**Et un maximum brut ne dit rien d'utile** : un seul incident au démarrage le fixe pour
+toute la soirée. On compte donc les dépassements :
+
+```json
+{ "messages": 1822, "ecritureMoyenneUs": 4.22,
+  "ecriturePireUs": 3194.4, "depassements100us": 1, "depassements1ms": 1 }
+```
+
+**Un** dépassement sur 1822 messages, au tout premier passage : c'est le JIT, pas un
+défaut structurel.
+
 ### Le bus de diffusion
 
 Dès qu'il y a deux consommateurs, un seul chemin ne tient plus : le plus lent dicterait
@@ -593,7 +663,7 @@ curl -X POST localhost:5299/deck/take
 ```
 
 ```sh
-dotnet test        # 58 tests
+dotnet test        # 67 tests
 ```
 
 ### Les images et les clips
@@ -620,7 +690,7 @@ inerte et la géométrie tourne seule.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 58 tests | xUnit |
+| `Emotion.Signal.Tests` | 67 tests | xUnit |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans

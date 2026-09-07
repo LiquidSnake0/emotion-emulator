@@ -126,7 +126,8 @@ public struct GpuPacket
         if (f.Hits.Clap) p.Hits |= ClapBit;
         if (f.Hits.Hat) p.Hits |= HatBit;
 
-        var (r, g, b) = ParseHex(track.ColorHex);
+        // Couleur deja decomposee par TrackContext : rien a analyser ici.
+        var (r, g, b) = track.Rgb;
         p.R = r; p.G = g; p.B = b;
 
         var bands = f.Bands;
@@ -135,14 +136,5 @@ public struct GpuPacket
                 p.Bands[i] = bands[i];
 
         return p;
-    }
-
-    private static (byte, byte, byte) ParseHex(string? hex)
-    {
-        var s = (hex ?? "").TrimStart('#');
-        if (s.Length != 6 || !uint.TryParse(s, System.Globalization.NumberStyles.HexNumber,
-                                            null, out var v))
-            return (110, 110, 110);
-        return ((byte)(v >> 16), (byte)(v >> 8), (byte)v);
     }
 }

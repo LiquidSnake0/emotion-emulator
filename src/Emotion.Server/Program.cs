@@ -18,6 +18,10 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters
 
 builder.Services.AddSingleton<DeckState>();
 
+// Le bus de diffusion : un producteur, plusieurs consommateurs, aucun ne pouvant
+// ralentir les autres.
+builder.Services.AddSingleton<FrameBus>();
+
 // La source se choisit par configuration. Aujourd'hui il n'y en a qu'une, mais le
 // jour ou la table est branchee, seule cette ligne change : ni le worker, ni le hub,
 // ni le renderer ne savent d'ou vient le signal.
@@ -45,6 +49,11 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
 });
 
 builder.Services.AddHostedService<SignalWorker>();
+
+// L'unite de rendu externe, s'abonnant au bus comme n'importe quel consommateur.
+// Absente, le visuel web tourne exactement pareil.
+builder.Services.AddSingleton<GpuSink>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GpuSink>());
 
 // Le renderer est servi par le meme processus que le hub : une seule adresse a ouvrir
 // sur la machine du projecteur, et aucune question d'origine croisee.
@@ -77,5 +86,24 @@ app.MapHub<VisualHub>("/hub");
 
 // Les commandes venues du telephone : caler, basculer, renoncer.
 app.MapDeck();
+
+// Etat des tuyaux : ce qui a ete livre, ce qui a ete jete, et le temps d'ecriture dans
+// l'anneau. Sans cette page, un visuel qui saccade reste indebuggable.
+app.MapGet("/health", (FrameBus bus, GpuSink gpu) =>
+{
+    var (written, mean, worst, over100, over1ms) = gpu.Stats();
+    return Results.Ok(new
+    {
+        abonnes = bus.Stats().Select(s => new { s.Name, perdues = s.Dropped }),
+        gpu = new
+        {
+            messages = written,
+            ecritureMoyenneUs = Math.Round(mean, 2),
+            ecriturePireUs = Math.Round(worst, 2),
+            depassements100us = over100,
+            depassements1ms = over1ms,
+        },
+    });
+});
 
 app.Run();

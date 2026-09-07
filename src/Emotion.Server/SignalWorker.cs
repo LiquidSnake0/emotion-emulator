@@ -15,12 +15,15 @@ public sealed class SignalWorker : BackgroundService
 {
     private readonly IAudioSource _source;
     private readonly IHubContext<VisualHub> _hub;
+    private readonly FrameBus _bus;
     private readonly ILogger<SignalWorker> _log;
 
-    public SignalWorker(IAudioSource source, IHubContext<VisualHub> hub, ILogger<SignalWorker> log)
+    public SignalWorker(IAudioSource source, IHubContext<VisualHub> hub,
+                        FrameBus bus, ILogger<SignalWorker> log)
     {
         _source = source;
         _hub = hub;
+        _bus = bus;
         _log = log;
     }
 
@@ -39,8 +42,12 @@ public sealed class SignalWorker : BackgroundService
             if (dual is not null && ++tick % 10 == 0)
                 await _hub.Clients.All.SendAsync("cue", dual.CueFrame, ct);
 
+            // Le bus d'abord, et sans attendre : c'est lui qui alimente l'unite de
+            // rendu externe, dont la latence compte plus que celle du navigateur.
+            _bus.Publish(frame);
+
             // SendAsync et non un flux SignalR : une image perdue n'a aucune valeur,
-            // la suivante arrive dans seize millisecondes. Mieux vaut sauter que
+            // la suivante arrive dans vingt-et-une millisecondes. Mieux vaut sauter que
             // prendre du retard sur le son.
             await _hub.Clients.All.SendAsync("frame", frame, ct);
         }

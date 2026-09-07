@@ -44,12 +44,28 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'h') hud.root.classList.toggle('off');
   if (k === 'd') visual.diag.toggle();
-  if (k === 's') visual.signals.toggle();
+  if (k === 's') { visual.signals.toggle(); refreshModeButton(); }
   if (k === 'f') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
   }
 });
+
+// Le bouton de mode : trois etats, pour verifier a l'oeil qu'un eclair tombe bien sur
+// le trait du clap. C'est l'outil de controle en direct, pas un gadget.
+const modeButton = document.getElementById('mode');
+
+function refreshModeButton() {
+  modeButton.textContent = visual.signals.label;
+  modeButton.dataset.mode = visual.signals.mode;
+}
+
+modeButton.addEventListener('click', (e) => {
+  e.stopPropagation();
+  visual.signals.toggle();
+  refreshModeButton();
+});
+refreshModeButton();
 
 // ---------------------------------------------------------------- liaison
 

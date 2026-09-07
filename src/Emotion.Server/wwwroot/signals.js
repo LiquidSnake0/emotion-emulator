@@ -20,9 +20,17 @@ const LANES = [
 
 const NOTES = ['do','do#','re','mib','mi','fa','fa#','sol','sol#','la','sib','si'];
 
+/// Trois etats plutot qu'un interrupteur : le mode superpose est celui qui sert
+/// vraiment au reglage, puisqu'il permet de voir <b>en meme temps</b> le visuel et le
+/// signal qui le pilote. C'est la seule facon de verifier a l'oeil qu'un eclair tombe
+/// bien sur le trait jaune du clap.
+export const MODE_OFF = 0;      // le visuel seul, ce que verra le public
+export const MODE_OVER = 1;     // les deux : le signal en surimpression
+export const MODE_FULL = 2;     // le signal seul, sur fond opaque
+
 export class Signals {
   constructor() {
-    this.on = false;
+    this.mode = MODE_OFF;
     this.series = {};
     for (const l of LANES) this.series[l.key] = [];
     this.hits = [];              // masque de bits par image, comme le champ Hits
@@ -30,7 +38,16 @@ export class Signals {
     this.lastT = -1;             // horodatage de la derniere image retenue
   }
 
-  toggle() { this.on = !this.on; }
+  /// Passe a l'etat suivant du cycle.
+  toggle() { this.mode = (this.mode + 1) % 3; }
+
+  set(mode) { this.mode = mode; }
+
+  get on() { return this.mode !== MODE_OFF; }
+
+  get label() {
+    return ['visuel', 'visuel + signaux', 'signaux'][this.mode];
+  }
 
   push(f) {
     // L'ecran est cadence par l'affichage, a 60 Hz, alors que les images arrivent a
@@ -57,12 +74,16 @@ export class Signals {
   }
 
   draw(ctx, w, h, f) {
-    if (!this.on) return;
+    if (this.mode === MODE_OFF) return;
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
+
+    // En surimpression, le fond reste assez transparent pour laisser voir le visuel
+    // dessous, et les courbes assez opaques pour rester lisibles par-dessus.
+    const overlay = this.mode === MODE_OVER;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.90)';
+    ctx.fillStyle = overlay ? 'rgba(0, 0, 0, 0.42)' : 'rgba(0, 0, 0, 0.90)';
     ctx.fillRect(0, 0, w, h);
 
     const pad = 28;

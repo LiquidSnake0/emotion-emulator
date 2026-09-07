@@ -4,6 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- L'anneau partage manipule des pointeurs bruts : c'est la seule facon
+         d'ecrire une structure d'un bloc dans de la memoire mappee, et
+         d'ordonner les ecritures comme le lecteur externe l'exige. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 </Project>
