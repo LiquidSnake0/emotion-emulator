@@ -11,11 +11,20 @@ namespace Emotion.Signal;
 public sealed class OnsetDetector
 {
     /// <summary>
-    /// Combien de fenetres on attend avant de conclure. Trois valent 64 ms : assez pour
-    /// distinguer un sommet d'une simple montee, assez peu pour que l'oeil ne voie pas
-    /// le visuel arriver apres le son.
+    /// Combien de fenetres on attend avant de conclure qu'on etait sur un sommet.
+    ///
+    /// <b>Une fenetre, soit 21 ms.</b> La valeur precedente en valait trois, et ce
+    /// choix etait mauvais : additionne aux 64 ms de la separation harmonique, il
+    /// portait le retard total a 128 ms entre le son et l'image. Or l'oeil decroche
+    /// vers 40 ms — un eclair arrivant un huitieme de seconde apres le clap ne parait
+    /// plus lie a lui du tout.
+    ///
+    /// Une seule fenetre de recul suffit a distinguer un sommet d'une montee : il faut
+    /// juste que la valeur suivante soit plus basse. Deux ou trois filtraient un peu
+    /// mieux le bruit, mais un filtrage qu'on paie en desynchronisation n'en vaut pas
+    /// la peine sur un visuel.
     /// </summary>
-    private const int Lookahead = 3;
+    public const int Lookahead = 1;
 
     private readonly float[] _window = new float[Lookahead * 2 + 1];
     private int _filled;

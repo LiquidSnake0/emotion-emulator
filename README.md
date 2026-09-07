@@ -275,11 +275,41 @@ Le piano remplissait les médiums de flux en permanence et brouillait la détect
 percussions salissaient en retour le chromagramme. Séparer nettoie les deux d'un coup,
 au lieu d'ajouter une correction à chacune.
 
-**Le prix est une latence de 64 ms**, et elle est structurelle : pour savoir si un bin
-durait, il faut avoir vu la suite. Elle est annoncée par `LatencyFrames` plutôt que
-subie, et la séparation se coupe par configuration — `Signal__Separate=false` — pour
-pouvoir comparer avec et sans sur le même morceau. C'est ainsi que les chiffres
-ci-dessus ont été obtenus.
+**Le prix est une latence**, et elle est structurelle : pour savoir si un bin durait, il
+faut avoir vu la suite. Elle est annoncée par `LatencyFrames` plutôt que subie, et la
+séparation se coupe par configuration — `Signal__Separate=false` — pour pouvoir comparer
+avec et sans sur le même morceau.
+
+### Le retard, ou la leçon la plus utile du projet
+
+Deux étages retardent la détection, et j'avais réglé chacun sans jamais additionner leur
+total :
+
+| Étage | Version initiale | Corrigée |
+|---|---|---|
+| HPSS — voir si un bin *durait* demande de voir la suite | 3 fenêtres = 64 ms | 1 fenêtre = 21 ms |
+| Détecteur — un sommet ne se reconnaît qu'après | 3 fenêtres = 64 ms | 1 fenêtre = 21 ms |
+| **Total** | **128 ms** | **43 ms** |
+
+L'œil décroche vers 40 ms : un éclair arrivant un huitième de seconde après le clap ne
+paraît plus lié à lui du tout. Le symptôme était formulé ainsi par l'utilisateur — *« l'orbe
+au milieu est le seul truc bien calé, les éclairs c'est trop chelou »* — et il avait
+entièrement raison. L'orbe suit les graves **en continu**, sans aucune détection : il ne
+peut pas être en retard. Tout ce qui passe par une décision l'était.
+
+**Et le raccourcissement a amélioré la détection au lieu de la dégrader :**
+
+| | 128 ms de retard | 43 ms |
+|---|---|---|
+| BPM du kick | 90,6 | **87,6** |
+| Écart médian | 662 ms | **685 ms** |
+| *Cible* | *87 BPM · 690 ms* | |
+
+Des fenêtres plus courtes préservent mieux la netteté temporelle de l'attaque. Le
+filtrage supplémentaire qu'on payait en désynchronisation ne rapportait rien.
+
+Le retard est désormais **affiché** — `retard 43 ms` dans le nom de la source, en rouge
+au-delà de 40 dans l'écran de calage. C'est une grandeur qu'on regarde, pas qu'on subit.
 
 **Fenêtre de Hann.** Sans elle, une note qui ne tombe pas exactement sur un bin fuit sur
 tout le spectre et les bandes graves se remplissent de bruit d'aigu.
@@ -610,6 +640,13 @@ indébogable.
 ![Diagnostic](docs/diagnostic.jpg)
 
 **Touche `D`. On ne règle pas ce qu'on ne voit pas.**
+
+Et **touche `C`** pour l'écran de calage : tout y est immobile **sauf ce que le son
+déclenche** — un disque pour le kick, un carré pour le clap, un trait pour le charley,
+plus la grille du tempo. Dans un visuel où tout bouge en permanence, l'œil ne sait pas
+dire ce qui est déclenché par le son et ce qui dérive tout seul. Là, si une forme
+s'allume en même temps que la frappe s'entend, c'est calé ; si elle traîne, ça se voit
+sans rien mesurer.
 
 Il montre l'enveloppe qui décide vraiment — celle du kick — le seuil adaptatif en vert,
 chaque attaque en trait vertical coloré par registre, les douze bandes, et l'écart médian

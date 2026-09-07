@@ -78,11 +78,25 @@ public sealed class SpectrumAnalyzer
         _sampleRate = sampleRate;
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
-        _hpss = separate ? new Hpss(Window / 2) : null;
+        // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
+        // un peu moins nette, mais elle reste tres suffisante pour empecher le piano de
+        // declencher les claps — et surtout elle cesse de desynchroniser le visuel.
+        _hpss = separate ? new Hpss(Window / 2, timeFrames: 3, freqBins: 17) : null;
     }
 
     /// <summary>La separation est-elle active.</summary>
     public bool Separating => _hpss is not null;
+
+    /// <summary>
+    /// Retard total entre le son et la detection, en millisecondes. La somme des deux
+    /// etages : separation puis recherche de sommet.
+    ///
+    /// Il doit rester sous quarante millisecondes, seuil au-dela duquel l'oeil cesse de
+    /// lier une image au son qui l'a declenchee. C'est une grandeur qu'on affiche, pas
+    /// qu'on subit.
+    /// </summary>
+    public float LatencyMs =>
+        ((_hpss?.LatencyFrames ?? 0) + OnsetDetector.Lookahead) * 1000f / _sampleRate * Window;
 
     /// <summary>Tempo estime, nul tant que la detection n'a pas accroche.</summary>
     public float? Bpm => _tempo.Bpm;

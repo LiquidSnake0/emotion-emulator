@@ -19,6 +19,7 @@
 import { ClipLibrary } from './clips.js';
 import { Diagnostics } from './diag.js';
 import { Signals } from './signals.js';
+import { Calibrate } from './calibrate.js';
 
 const TAU = Math.PI * 2;
 
@@ -62,6 +63,10 @@ export class Visual {
 
     // L'ecran des signaux : ce qui partira a l'unite de rendu. Touche S.
     this.signals = new Signals();
+
+    // L'ecran de calage : tout immobile sauf ce que le son declenche. Touche C.
+    this.calibrate = new Calibrate();
+    this.latencyMs = null;
 
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -176,6 +181,10 @@ export class Visual {
     // le paquet et non le rendu.
     this.signals.push(f);
     this.signals.draw(ctx, w, h, { ...f, sceneName: kind });
+
+    // Le calage passe en dernier et couvre tout : c'est un instrument de mesure, il ne
+    // doit rien avoir d'autre a l'ecran pour que l'oeil puisse juger.
+    this.calibrate.draw(ctx, w, h, f, this.latencyMs);
   }
 
   // ------------------------------------------------------- ce qui sonne

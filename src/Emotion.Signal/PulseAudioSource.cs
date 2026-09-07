@@ -41,7 +41,9 @@ public sealed class PulseAudioSource : IAudioSource
     }
 
     public string Name =>
-        (_device is null ? "entree par defaut" : _device) + (_analyzer.Separating ? " · HPSS" : "");
+        (_device is null ? "entree par defaut" : _device)
+        + (_analyzer.Separating ? " · HPSS" : "")
+        + $" · retard {_analyzer.LatencyMs:0} ms";
 
     /// <summary>Passage de relais : reprend le tempo trouve par un autre analyseur.</summary>
     public void AdoptTempo(float bpm, long tMs) => _analyzer.AdoptTempo(bpm, tMs);

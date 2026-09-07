@@ -84,6 +84,7 @@ addEventListener('keydown', (e) => {
   if (k === 'h') { manualHide = !manualHide; hud.root.classList.toggle('off', manualHide); }
   if (k === 'd') visual.diag.toggle();
   if (k === 's') { visual.signals.toggle(); refreshModeButton(); armAutoHide(); }
+  if (k === 'c') { visual.calibrate.toggle(); armAutoHide(); }
   if (k === 'f') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
@@ -138,7 +139,14 @@ conn.on('deck', (d) => {
   hud.cued.style.color = d.cued ? '#e8eaed' : '#5f6368';
 });
 
-conn.on('source', (name) => { hud.src.textContent = name; });
+conn.on('source', (name) => {
+  hud.src.textContent = name;
+
+  // Le retard annonce par la source alimente l'ecran de calage : c'est le chiffre a
+  // regarder quand le visuel parait decale du son.
+  const m = /retard (\d+) ms/.exec(name);
+  visual.latencyMs = m ? Number(m[1]) : null;
+});
 
 // L'etat de preparation du disque cale au casque. Il ne touche jamais au rendu : c'est
 // un tableau de bord pour Selim, affiche sur son telephone et jamais projete.

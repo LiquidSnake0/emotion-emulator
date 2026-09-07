@@ -61,6 +61,7 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | flux arrêté sans erreur | `parec` bloqué sur une sortie d'erreur jamais lue | drainer stderr, relancer si mort |
 | 22 µs par message GPU | `ParseHex` et `Scene.ForFamily` sur le chemin chaud | calculer une fois dans `TrackContext` |
 | pire cas à 7,5 ms | pages mappées non matérialisées | pré-toucher l'anneau à l'ouverture |
+| « les éclairs c'est trop chelou » | **128 ms de retard** — deux étages réglés sans additionner leur total | une fenêtre chacun : 43 ms, et la détection s'est *améliorée* |
 
 ## Pièges connus
 
@@ -74,6 +75,12 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
   Dédupliquer sur `f.t`, sinon les attaques apparaissent doublées.
 - **Ne pas mesurer un maximum brut.** Un incident unique au démarrage le fixe pour la
   soirée. Compter les dépassements.
+- **Additionner les retards.** Chaque étage d'analyse en ajoute un, et 40 ms est le seuil
+  où l'œil cesse de lier une image au son. `SpectrumAnalyzer.LatencyMs` doit rester
+  affiché et sous ce seuil. Un filtrage payé en désynchronisation ne vaut jamais son prix
+  sur un visuel.
+- **Ce qui suit en continu paraît toujours calé.** L'orbe des graves n'a jamais été en
+  retard parce qu'il ne décide de rien. Ne pas en conclure que le reste va bien.
 
 ## Structure
 
