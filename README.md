@@ -69,6 +69,26 @@ forme de la palette — deux voies parallèles, du clair au foncé — et pas d'
 écrite. Elle se corrige famille par famille, à l'écoute. Seuls `Waves` et `Thunder` sont
 dessinés ; les autres retombent sur une figure géométrique commune.
 
+## Les images et les clips
+
+Le dépôt ne contient **aucune œuvre**. `assets/manifest.json` est versionné, les
+fichiers qu'il décrit ne le sont pas : déposez vos clips dans `assets/clips` et vos
+images dans `assets/stills`, déclarez-les dans le manifeste, et rien ne part sur
+GitHub. Deux raisons, et les deux comptent :
+
+- des vidéos dans un dépôt git le rendent inutilisable en trois commits ;
+- du matériel sous copyright dans un dépôt public devient une pièce à charge plutôt
+  qu'une démonstration.
+
+Chaque entrée dit à quels phénomènes elle appartient (`kinds`), la fréquence de son
+déclenchement (`every`, en nombre d'attaques), son poids de tirage et son mode de
+composition. Le déclenchement suit les attaques, jamais un minuteur : un clip parti
+sur le kick reste calé même si le disque est pitché.
+
+Sans dossier d'assets, la bibliothèque reste inerte et le visuel géométrique tourne
+seul. Pour du matériel réellement libre : archive.org, Pexels, Pixabay, les banques
+de la NASA.
+
 ## Faire tourner
 
 ```sh

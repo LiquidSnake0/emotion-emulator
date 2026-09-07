@@ -1,3 +1,4 @@
+using Microsoft.Extensions.FileProviders;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR;
 using Emotion.Server;
@@ -35,6 +36,27 @@ var app = builder.Build();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Les clips et les images vivent hors du depot : le manifeste est versionne, les
+// oeuvres non. Le dossier est donc servi depuis la racine du projet plutot que depuis
+// wwwroot, et son absence n'empeche pas le serveur de demarrer.
+var assets = Path.Combine(app.Environment.ContentRootPath, "..", "..", "assets");
+assets = Path.GetFullPath(assets);
+if (Directory.Exists(assets))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(assets),
+        RequestPath = "/assets",
+        ServeUnknownFileTypes = false,
+    });
+    app.Logger.LogInformation("Assets servis depuis {Path}", assets);
+}
+else
+{
+    app.Logger.LogInformation("Aucun dossier d'assets : le visuel tourne en geometrie seule.");
+}
+
 app.MapHub<VisualHub>("/hub");
 
 // Crate annonce la face posee. Un POST plutot qu'une methode de hub : la PWA n'a

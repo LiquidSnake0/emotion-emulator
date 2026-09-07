@@ -1,0 +1,28 @@
+{
+  "_lisez_moi": [
+    "Ce manifeste est versionne, les fichiers qu'il decrit ne le sont pas.",
+    "Deposez vos clips et vos images dans assets/clips et assets/stills, puis",
+    "declarez-les ici. Le depot reste leger et ne contient aucune oeuvre.",
+    "",
+    "kinds  : les phenomenes ou ce visuel a le droit d'apparaitre. Vide = partout.",
+    "weight : poids du tirage. Un clip a 3 sort trois fois plus souvent qu'un clip a 1.",
+    "blend  : composition. screen et lighter eclaircissent et s'entrelacent bien sur",
+    "         un fond sombre ; source-over recouvre.",
+    "hold   : duree d'affichage en millisecondes pour une image fixe. Ignore pour un clip.",
+    "every  : declenche une fois toutes les N attaques. 1 = a chaque temps, 4 = a la mesure."
+  ],
+
+  "clips": [],
+
+  "stills": [],
+
+  "_exemple": {
+    "clips": [
+      { "file": "clips/pluie.webm",  "kinds": ["Thunder", "Swell"], "weight": 3, "blend": "screen",  "every": 4 },
+      { "file": "clips/ressac.webm", "kinds": ["Waves"],            "weight": 2, "blend": "lighter", "every": 8 }
+    ],
+    "stills": [
+      { "file": "stills/ciel.png", "kinds": ["Thunder"], "weight": 1, "blend": "screen", "hold": 240, "every": 4 }
+    ]
+  }
+}

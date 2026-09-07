@@ -3,3 +3,7 @@ obj/
 *.user
 .vs/
 .idea/
+
+# Les oeuvres ne sont pas versionnees : seul le manifeste l'est.
+assets/*
+!assets/manifest.json

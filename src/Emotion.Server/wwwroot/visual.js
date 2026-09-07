@@ -16,6 +16,8 @@
 // Les autres retombent sur la figure geometrique commune, le temps de les regler a
 // l'ecoute famille par famille.
 
+import { ClipLibrary } from './clips.js';
+
 const TAU = Math.PI * 2;
 
 export class Visual {
@@ -33,6 +35,11 @@ export class Visual {
     this.spin = 0;
     this.flash = 0;    // eclair, propre a Thunder
     this.swell = 0;    // avancee des vagues, propre a Waves
+
+    // Les clips et images deposes par Selim. La bibliotheque se debrouille d'un
+    // dossier vide : sans assets, le visuel geometrique tourne seul.
+    this.clips = new ClipLibrary();
+    this.clips.load();
 
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -66,7 +73,11 @@ export class Visual {
     const { ctx, w, h } = this;
 
     // Sans cette enveloppe, l'effet ne durerait qu'une image et ne se verrait pas.
-    if (f.onset) { this.shock = 1; this.flash = 1; }
+    if (f.onset) {
+      this.shock = 1;
+      this.flash = 1;
+      this.clips.onOnset(this.kind, this.intensity);
+    }
     this.shock *= 0.88;
     // Un eclair garde une remanence : a 0.72 il disparaissait en deux dixiemes,
     // trop vite pour que l'oeil le lise comme un eclair plutot qu'un scintillement.
@@ -86,6 +97,10 @@ export class Visual {
       case 'Thunder': this.drawThunder(f); break;
       default:        this.drawFigure(f);  break;
     }
+
+    // Les clips passent par-dessus la geometrie, jamais dessous : c'est la forme qui
+    // porte le rythme, l'image qui l'habille.
+    this.clips.draw(ctx, w, h, f.rms);
   }
 
   // ------------------------------------------------------------------ M-
