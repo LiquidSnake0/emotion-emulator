@@ -18,6 +18,7 @@
 
 import { ClipLibrary } from './clips.js';
 import { Diagnostics } from './diag.js';
+import { Signals } from './signals.js';
 
 const TAU = Math.PI * 2;
 
@@ -58,6 +59,9 @@ export class Visual {
 
     // L'ecran de reglage, masque par defaut. Touche D.
     this.diag = new Diagnostics();
+
+    // L'ecran des signaux : ce qui partira a l'unite de rendu. Touche S.
+    this.signals = new Signals();
 
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -167,6 +171,11 @@ export class Visual {
 
     this.diag.push(f);
     this.diag.draw(ctx, w, h, f);
+
+    // Le nom du phenomene voyage avec l'image pour l'ecran des signaux, qui affiche
+    // le paquet et non le rendu.
+    this.signals.push(f);
+    this.signals.draw(ctx, w, h, { ...f, sceneName: kind });
   }
 
   // ------------------------------------------------------- ce qui sonne

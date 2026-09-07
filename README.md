@@ -18,7 +18,7 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
-**48 tests** · **zéro dépendance tierce dans le cœur**
+**58 tests** · **zéro dépendance tierce dans le cœur**
 
 ---
 
@@ -463,6 +463,78 @@ le signale.
 
 ---
 
+## Vers l'unité de rendu externe
+
+Le rendu final tournera dans un **processus séparé**, en CUDA. Le contrat est donc défini
+avant le branchement, et il est visible dès aujourd'hui.
+
+![Écran des signaux](docs/signals.jpg)
+
+**Touche `S`.** Cet écran ne montre pas un visuel : il montre **le message qui partira**,
+champ par champ, sous les noms exacts de `GpuPacket`. Aucune traduction mentale entre ce
+qu'on regarde ici et ce qu'on lira de l'autre côté.
+
+### Le contrat : 96 octets, plats
+
+```csharp
+[StructLayout(LayoutKind.Explicit, Size = 96)]
+public struct GpuPacket
+{
+    [FieldOffset(0)]  public uint  Magic;      // 0x454D5531 — "EMU1"
+    [FieldOffset(4)]  public uint  Sequence;   // un saut = messages perdus, c'est permis
+    [FieldOffset(8)]  public long  TimeMs;
+    [FieldOffset(16)] public float Level;
+    [FieldOffset(20)] public float Bpm;        // 0 = pas encore accroché
+    [FieldOffset(40)] public byte  Hits;       // bit 0 kick · 1 clap · 2 hat
+    [FieldOffset(48)] public Bands12 Bands;    // douze flottants en ligne
+}
+```
+
+Chaque décision sert la latence :
+
+| Choix | Raison |
+|---|---|
+| `LayoutKind.Explicit` | l'ordre en mémoire est celui écrit, pas celui que le compilateur trouve commode — un lecteur CUDA mappe la même structure sans négocier |
+| Taille fixe, **aucun type référence** | la structure peut vivre en mémoire partagée entre deux processus ; un `float[]` est une référence dans le tas d'un processus, invisible depuis l'autre |
+| `InlineArray` pour les bandes | douze flottants en ligne, sans indirection ni allocation par message |
+| Masque de bits pour les attaques | trois booléens dans un octet |
+| Zéro pour « pas de valeur » | CUDA n'a pas de notion de valeur absente ; c'est documenté dans le contrat |
+
+96 octets à 47 messages par seconde font 4,5 Ko/s : **la bande passante n'est pas le
+sujet, la latence l'est**, et une structure plate se lit d'un bloc.
+
+### Le bus de diffusion
+
+Dès qu'il y a deux consommateurs, un seul chemin ne tient plus : le plus lent dicterait
+la cadence du plus rapide, et une unité GPU occupée ferait sauter le visuel web.
+
+```mermaid
+flowchart LR
+    src["analyseur"] --> bus["<b>FrameBus</b><br/>fan-out"]
+    bus -->|"file bornée"| web["SignalR<br/>renderer web"]
+    bus -->|"file bornée"| gpu["<b>GPU sink</b><br/>mémoire partagée"]
+    bus -.->|"plus tard"| rec["enregistreur<br/>rejouer un set"]
+
+    style bus fill:#4a2d4a,stroke:#9c5a9c,color:#fff
+    style gpu fill:#2d4a2d,stroke:#5a9c5a,color:#fff
+```
+
+**La règle, propre au temps réel :** quand une file déborde, on jette la **plus
+ancienne** image, jamais la nouvelle, et on ne bloque **jamais** le producteur. Une image
+de 21 ms arrivée en retard n'a aucune valeur — la suivante est déjà meilleure. Bloquer
+pour la livrer reviendrait à ajouter du retard à tout le monde pour satisfaire le plus
+lent.
+
+Aucun verrou sur le chemin chaud : `Channel` en mode un producteur / un consommateur
+n'utilise que des opérations atomiques, et `Publish` ne fait que des écritures qui ne
+peuvent pas échouer. Les abonnements, eux, sont rares — quelques-uns au démarrage — donc
+la liste d'abonnés est recopiée sous verrou et lue sans.
+
+Les pertes sont **comptées**, par abonné : un visuel qui saccade sans explication est
+indébogable.
+
+---
+
 ## L'écran de réglage
 
 ![Diagnostic](docs/diagnostic.jpg)
@@ -521,7 +593,7 @@ curl -X POST localhost:5299/deck/take
 ```
 
 ```sh
-dotnet test        # 48 tests
+dotnet test        # 58 tests
 ```
 
 ### Les images et les clips
@@ -548,7 +620,7 @@ inerte et la géométrie tourne seule.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 48 tests | xUnit |
+| `Emotion.Signal.Tests` | 58 tests | xUnit |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans

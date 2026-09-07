@@ -12,7 +12,7 @@
   /* Le bandeau sert au reglage, jamais a la projection. Touche H pour le cacher. */
   #hud {
     position: fixed; left: 0; top: 0; right: 0;
-    display: flex; gap: 1.5rem; align-items: baseline;
+    display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; align-items: baseline;
     padding: .6rem 1rem;
     font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
     color: #9aa0a6; background: rgba(0,0,0,.55);
@@ -35,7 +35,7 @@
   <span id="title">—</span>
   <span>au casque <b id="cued">—</b> <b id="cuepret">—</b></span>
   <span>fondu <b id="blend">—</b></span>
-  <span style="margin-left:auto">D diagnostic · H masque · F plein ecran</span>
+  <span style="margin-left:auto">S signaux · D diagnostic · H masque · F plein ecran</span>
 </div>
 <canvas id="stage"></canvas>
 
