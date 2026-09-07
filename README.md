@@ -192,9 +192,32 @@ votent. Une moyenne serait détruite par une seule attaque manquée, qui doubler
 Il faut qu'un tiers des écarts soient d'accord pour déclarer un tempo — **en dessous, on
 préfère ne rien dire**. `Bpm` est donc `float?`, et le renderer sait tourner sans lui.
 
-**Limite connue :** l'ambiguïté d'octave. 87 et 174 BPM produisent les mêmes intervalles
-si une frappe sur deux est plus marquée. La famille du morceau pourrait lever le doute
-sans jamais fournir la valeur — piste ouverte.
+**Trois conditions pour une attaque**, et il faut les trois : franchir le seuil
+adaptatif, **être un maximum local**, et respecter un écart minimal. La deuxième est
+celle qui manquait, et son absence se mesurait : sur `instamata`, l'écart médian entre
+attaques tombait à 510 ms alors que l'écart minimal imposé valait 426 ms. Quand les deux
+se rejoignent, le détecteur ne détecte plus rien — il déclenche dès qu'il en a le droit,
+et c'est la contrainte qui fait office de métronome. Le prix est un retard de 64 ms,
+sous le seuil de perception d'un décalage entre son et image.
+
+**Un détecteur par registre**, pas un seul sur tout le spectre. C'est ce qui permet
+d'attribuer un effet à un instrument plutôt qu'à « du son » :
+
+| Registre | Instrument | Effet |
+|---|---|---|
+| bandes 0–3 | kick | onde de choc, la masse pulse |
+| bandes 3–8 | **clap, caisse** | **l'éclair** |
+| bandes 9–12 | charleys | scintillement |
+
+**Repli d'octave** pour le tempo. 87 et 174 BPM produisent les mêmes intervalles si une
+frappe sur deux est plus marquée. On replie vers 70–110 BPM, une plage qui décrit **le
+répertoire** et non un morceau : l'ambiguïté est levée sans jamais lire le tempo d'une
+fiche, et la valeur rendue reste celle qui a été mesurée.
+
+**Écran de diagnostic, touche `D`.** On ne règle pas ce qu'on ne voit pas. Il montre le
+flux, le seuil, chaque attaque colorée par registre, les douze bandes, et l'écart médian
+converti en BPM. C'est l'outil qui a permis de passer de 341 BPM implicites à une
+détection utilisable — et celui qui servira à finir le réglage à l'oreille.
 
 ---
 

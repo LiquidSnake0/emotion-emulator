@@ -17,6 +17,7 @@
 // l'ecoute famille par famille.
 
 import { ClipLibrary } from './clips.js';
+import { Diagnostics } from './diag.js';
 
 const TAU = Math.PI * 2;
 
@@ -31,15 +32,21 @@ export class Visual {
     this.sides = 6;
     this.round = false;
 
-    this.shock = 0;    // enveloppe de l'attaque : 1 au declenchement, retombe seule
+    // Une enveloppe par registre : chaque instrument a son effet, et c'est ce qui
+    // permet a l'oeil de raccrocher ce qu'il voit a ce qu'il entend.
+    this.shock = 0;    // kick : la masse pulse, l'onde part du centre
+    this.flash = 0;    // clap : l'eclair
+    this.spark = 0;    // charleys : le scintillement
     this.spin = 0;
-    this.flash = 0;    // eclair, propre a Thunder
     this.swell = 0;    // avancee des vagues, propre a Waves
 
     // Les clips et images deposes par Selim. La bibliotheque se debrouille d'un
     // dossier vide : sans assets, le visuel geometrique tourne seul.
     this.clips = new ClipLibrary();
     this.clips.load();
+
+    // L'ecran de reglage, masque par defaut. Touche D.
+    this.diag = new Diagnostics();
 
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -72,16 +79,21 @@ export class Visual {
   draw(f) {
     const { ctx, w, h } = this;
 
-    // Sans cette enveloppe, l'effet ne durerait qu'une image et ne se verrait pas.
-    if (f.onset) {
-      this.shock = 1;
-      this.flash = 1;
-      this.clips.onOnset(this.kind, this.intensity);
-    }
+    // Sans ces enveloppes, un effet ne durerait qu'une image et ne se verrait pas.
+    const h = f.hits ?? {};
+    if (h.kick) this.shock = 1;
+    if (h.clap) this.flash = 1;
+    if (h.hat)  this.spark = 1;
+
+    // Les clips partent sur le clap : c'est lui qui marque la phrase, le kick est
+    // trop regulier pour servir de declencheur d'image.
+    if (h.clap) this.clips.onOnset(this.kind, this.intensity);
+
     this.shock *= 0.88;
     // Un eclair garde une remanence : a 0.72 il disparaissait en deux dixiemes,
     // trop vite pour que l'oeil le lise comme un eclair plutot qu'un scintillement.
     this.flash *= 0.86;
+    this.spark *= 0.74;
 
     this.spin += 0.0015 + f.rms * 0.004;
     this.swell += 0.004 + f.rms * 0.010;
@@ -101,6 +113,9 @@ export class Visual {
     // Les clips passent par-dessus la geometrie, jamais dessous : c'est la forme qui
     // porte le rythme, l'image qui l'habille.
     this.clips.draw(ctx, w, h, f.rms);
+
+    this.diag.push(f);
+    this.diag.draw(ctx, w, h, f);
   }
 
   // ------------------------------------------------------------------ M-

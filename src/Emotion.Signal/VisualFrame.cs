@@ -27,13 +27,28 @@ namespace Emotion.Signal;
 /// Tempo <b>estime depuis le son</b>. Nul pendant les premieres secondes, le temps
 /// que la detection accroche. Le renderer doit donc savoir tourner sans lui.
 /// </param>
+/// <param name="Hits">
+/// Qui a frappe, par registre. C'est ce qui permet d'attribuer un effet visuel a un
+/// instrument plutot qu'a « du son » : l'eclair au clap, l'onde de choc au kick.
+/// </param>
+/// <param name="Flux">
+/// Montee du spectre depuis la fenetre precedente, normalisee. Diagnostic : c'est la
+/// grandeur qui decide des attaques, et on ne peut pas regler ce qu'on ne voit pas.
+/// </param>
+/// <param name="Threshold">
+/// Seuil courant, normalise sur la meme echelle que <paramref name="Flux"/>. Une
+/// attaque tombe quand le flux le depasse.
+/// </param>
 public readonly record struct VisualFrame(
     long T,
     float Rms,
     float[] Bands,
     bool Onset,
     float? Phase,
-    float? Bpm)
+    float? Bpm,
+    Hits Hits = default,
+    float Flux = 0f,
+    float Threshold = 0f)
 {
     /// <summary>Nombre de bandes emises. Fixe : le shader dimensionne ses uniformes dessus.</summary>
     public const int BandCount = 12;

@@ -36,6 +36,7 @@ function setLink(ok, label) {
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'h') hud.root.classList.toggle('off');
+  if (k === 'd') visual.diag.toggle();
   if (k === 'f') {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();

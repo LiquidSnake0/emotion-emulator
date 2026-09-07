@@ -19,7 +19,20 @@ public sealed class SpectrumAnalyzer
     private readonly float[] _im = new float[Window];
 
     private readonly float[] _prevSpectrum = new float[Window / 2];
+
+    // Maximum glissant par bande, pour normaliser sur ce qui joue plutot que sur une
+    // constante. Sans lui, un morceau fort sature les douze bandes a 1 et le visuel
+    // n'a plus aucun relief, tandis qu'un morceau feutre ne fait rien bouger.
+    private readonly float[] _bandPeak = new float[VisualFrame.BandCount];
     private readonly OnsetDetector _onsets = new();
+
+    // Un detecteur par registre. Ils partagent la mecanique — flux positif, seuil
+    // adaptatif, ecart minimal — mais chacun ne regarde que sa tranche de spectre,
+    // et chacun se cale donc sur le niveau de bruit qui lui est propre.
+    private readonly OnsetDetector _kick = new();
+    private readonly OnsetDetector _clap = new();
+    private readonly OnsetDetector _hat = new(minGap: 4);   // les charleys vont vite
+    private readonly float[] _prevBand = new float[VisualFrame.BandCount];
     private readonly TempoEstimator _tempo = new();
 
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
@@ -69,11 +82,19 @@ public sealed class SpectrumAnalyzer
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint
         // n'est pas une attaque.
+        //
+        // Il est calcule sur le seul registre du kick, pas sur tout le spectre, et
+        // c'est un choix dicte par le repertoire. Le barber beats est plein de souffle,
+        // de crepitement de vinyle et de nappes qui bougent : ce bruit remplit les
+        // aigus de flux en permanence et noie la seule montee qui compte. Mesure sur
+        // instamata : en pleine bande, le detecteur voyait quatre attaques par temps.
+        var kickBins = Math.Min(half, _edges[KickBandLimit]);
+
         var flux = 0f;
         for (var i = 0; i < half; i++)
         {
             var d = spectrum[i] - _prevSpectrum[i];
-            if (d > 0) flux += d;
+            if (d > 0 && i < kickBins) flux += d;
             _prevSpectrum[i] = spectrum[i];
         }
 
@@ -91,10 +112,34 @@ public sealed class SpectrumAnalyzer
 
             // Le pic plutot que la moyenne : sur une bande large, une moyenne noie une
             // pointe unique, or c'est justement la pointe qui se voit a l'ecran.
-            bands[b] = Clamp01(MathF.Pow(peak / 18f, 0.6f));
+            //
+            // Puis normalisation sur le maximum recent de cette bande, qui redescend
+            // lentement. C'est un controle de gain : le visuel garde son relief que le
+            // morceau soit pousse ou feutre, sans que Selim ait a toucher a un niveau.
+            _bandPeak[b] = MathF.Max(peak, _bandPeak[b] * PeakDecay);
+            var reference = MathF.Max(_bandPeak[b], MinReference);
+            bands[b] = Clamp01(MathF.Pow(peak / reference, 0.7f));
         }
 
-        return new VisualFrame(tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm);
+        // Flux par registre, calcule sur les bandes deja normalisees : chaque detecteur
+        // se cale ainsi sur le contraste de sa tranche et non sur son volume absolu,
+        // ce qui evite qu'un mix charge en graves eteigne la detection des claps.
+        var hits = new Hits(
+            Kick: _kick.Feed(BandRise(bands, 0, 3)),
+            Clap: _clap.Feed(BandRise(bands, 3, 8)),
+            Hat:  _hat.Feed(BandRise(bands, 9, VisualFrame.BandCount)));
+
+        Array.Copy(bands, _prevBand, bands.Length);
+
+        // Flux et seuil sont ramenes sur une echelle commune : ce qui compte a l'ecran
+        // de diagnostic est leur rapport, pas leur valeur absolue.
+        var scale = MathF.Max(_onsets.Threshold * 2f, 1e-6f);
+
+        return new VisualFrame(
+            tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
+            Hits: hits,
+            Flux: Clamp01(flux / scale),
+            Threshold: Clamp01(_onsets.Threshold / scale));
     }
 
     /// <summary>
@@ -119,6 +164,35 @@ public sealed class SpectrumAnalyzer
 
         return edges;
     }
+
+    /// <summary>Montee d'energie sur une tranche de bandes, depuis la fenetre precedente.</summary>
+    private float BandRise(float[] bands, int from, int to)
+    {
+        var rise = 0f;
+        for (var i = from; i < to && i < bands.Length; i++)
+        {
+            var d = bands[i] - _prevBand[i];
+            if (d > 0) rise += d;
+        }
+        return rise;
+    }
+
+    /// <summary>
+    /// Jusqu'ou monte le registre pris en compte pour les attaques : les cinq premieres
+    /// bandes, soit environ 30 a 400 Hz. Le kick et le bas de la caisse claire.
+    /// </summary>
+    private const int KickBandLimit = 5;
+
+    /// <summary>
+    /// Vitesse a laquelle le maximum d'une bande redescend, par fenetre. A 0,999 sur
+    /// 47 fenetres par seconde, il faut une quinzaine de secondes pour oublier un pic :
+    /// assez lent pour ne pas pomper au rythme de la musique, assez rapide pour suivre
+    /// un changement de morceau.
+    /// </summary>
+    private const float PeakDecay = 0.999f;
+
+    /// <summary>Plancher, pour que le silence ne soit pas amplifie en bruit plein ecran.</summary>
+    private const float MinReference = 4f;
 
     private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
 }

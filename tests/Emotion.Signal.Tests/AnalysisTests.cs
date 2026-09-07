@@ -52,13 +52,37 @@ public class OnsetDetectorTests
     }
 
     [Fact]
-    public void Une_pointe_franche_declenche_une_seule_fois()
+    public void Une_pointe_franche_declenche_une_seule_fois_avec_un_leger_retard()
     {
+        // La decision arrive quelques fenetres apres la pointe : il faut avoir vu la
+        // suite pour savoir qu'on etait sur un sommet. Ce retard vaut une soixantaine
+        // de millisecondes, sous le seuil de perception d'un decalage son/image.
         var d = new OnsetDetector();
         for (var i = 0; i < 200; i++) d.Feed(1f);      // remplit l'historique
 
-        Assert.True(d.Feed(10f));                       // l'attaque
-        Assert.False(d.Feed(10f));                      // la resonance, pas une seconde frappe
+        d.Feed(10f);                                    // la pointe entre dans le tampon
+
+        var fired = 0;
+        for (var i = 0; i < 10; i++)                    // le plat qui suit revele le sommet
+            if (d.Feed(1f)) fired++;
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Une_montee_progressive_ne_declenche_pas()
+    {
+        // Un fondu qui monte franchit le seuil sans etre une attaque. Sans la condition
+        // de maximum local, il declenchait — et c'est ce qui faisait partir les eclairs
+        // n'importe quand.
+        var d = new OnsetDetector();
+        for (var i = 0; i < 200; i++) d.Feed(1f);
+
+        var fired = 0;
+        for (var i = 1; i <= 40; i++)
+            if (d.Feed(1f + i * 0.5f)) fired++;         // croissance stricte, jamais de sommet
+
+        Assert.Equal(0, fired);
     }
 
     [Fact]

@@ -18,6 +18,20 @@ public sealed class TempoEstimator
     private const float MinBpm = 60f;
     private const float MaxBpm = 180f;
 
+    /// <summary>
+    /// Plage ou le tempo est repli quand c'est possible. Elle decrit <b>le repertoire</b>,
+    /// pas un morceau : le crate vit entre 82 et 97 BPM, la fourchette est elargie pour
+    /// laisser de la marge au fader.
+    ///
+    /// C'est ainsi qu'on leve l'ambiguite d'octave sans jamais lire le tempo d'une fiche.
+    /// 87 et 174 produisent les memes intervalles si une frappe sur deux est plus
+    /// marquee ; en preferant la valeur lente plausible, on tranche a partir du seul
+    /// signal. Et la valeur rendue reste celle qui a ete mesuree, divisee, jamais celle
+    /// qu'un fichier aurait annoncee.
+    /// </summary>
+    private const float PreferredLow = 70f;
+    private const float PreferredHigh = 110f;
+
     private readonly List<long> _gaps = new();
     private long _lastOnset = -1;
     private long _anchor = -1;               // derniere attaque retenue, origine de la phase
@@ -83,7 +97,18 @@ public sealed class TempoEstimator
             if (c > bestCount) { bestCount = c; best = k; }
 
         Bpm = bestCount * 3 >= _gaps.Count && best > 0
-            ? 60_000f / best
+            ? Fold(60_000f / best)
             : null;
+    }
+
+    /// <summary>
+    /// Ramene un tempo dans la plage du repertoire en le divisant ou le multipliant par
+    /// deux. Un tempo deja plausible n'est pas touche.
+    /// </summary>
+    private static float Fold(float bpm)
+    {
+        for (var i = 0; i < 3 && bpm > PreferredHigh; i++) bpm /= 2f;
+        for (var i = 0; i < 3 && bpm < PreferredLow; i++) bpm *= 2f;
+        return bpm;
     }
 }
