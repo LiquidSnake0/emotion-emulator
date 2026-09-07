@@ -29,14 +29,19 @@ public sealed class PulseAudioSource : IAudioSource
     /// <c>pactl list short sources</c> les enumere.
     /// </param>
     /// <param name="log">Journal facultatif, pour voir passer les relances.</param>
-    public PulseAudioSource(string? device = null, Action<string>? log = null)
+    /// <param name="separate">
+    /// Separer le percussif de l'harmonique avant analyse. Coute 64 ms de latence : on
+    /// doit pouvoir couper pour comparer avec et sans sur le meme morceau.
+    /// </param>
+    public PulseAudioSource(string? device = null, Action<string>? log = null, bool separate = true)
     {
         _device = string.IsNullOrWhiteSpace(device) ? null : device;
-        _analyzer = new SpectrumAnalyzer(SampleRate);
+        _analyzer = new SpectrumAnalyzer(SampleRate, separate);
         _log = log;
     }
 
-    public string Name => _device is null ? "entree par defaut" : _device;
+    public string Name =>
+        (_device is null ? "entree par defaut" : _device) + (_analyzer.Separating ? " · HPSS" : "");
 
     /// <summary>Passage de relais : reprend le tempo trouve par un autre analyseur.</summary>
     public void AdoptTempo(float bpm, long tMs) => _analyzer.AdoptTempo(bpm, tMs);

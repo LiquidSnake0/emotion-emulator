@@ -30,7 +30,8 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     // materiel, l'entree ligne le jour ou la table est branchee.
     IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
     {
-        "pulse" => new PulseAudioSource(cfg["Signal:Device"]),
+        "pulse" => new PulseAudioSource(cfg["Signal:Device"],
+                                        separate: cfg.GetValue("Signal:Separate", true)),
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 
@@ -39,7 +40,8 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     var cueDevice = cfg["Signal:CueDevice"];
     if (string.IsNullOrWhiteSpace(cueDevice)) return master;
 
-    return new DualAudioSource(master, new PulseAudioSource(cueDevice));
+    return new DualAudioSource(master,
+        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", true)));
 });
 
 builder.Services.AddHostedService<SignalWorker>();

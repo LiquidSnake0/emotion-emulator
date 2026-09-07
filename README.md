@@ -18,7 +18,7 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
-**41 tests** · **zéro dépendance tierce dans le cœur**
+**48 tests** · **zéro dépendance tierce dans le cœur**
 
 ---
 
@@ -234,6 +234,52 @@ flowchart TD
     style hat fill:#4a4a4a,stroke:#999,color:#fff
     style harm fill:#4a2d5c,stroke:#9c5ad9,color:#fff
 ```
+
+### HPSS : séparer avant d'analyser
+
+Dans un spectrogramme, les deux familles de sons laissent des traces **perpendiculaires** :
+
+```
+fréquence
+   ^
+   |   |        |         une percussion : trace VERTICALE
+   |   |        |         large en fréquence, brève dans le temps
+   |───────────────────   une note tenue : trace HORIZONTALE
+   |   |        |         étroite en fréquence, longue dans le temps
+   +─────────────────> temps
+```
+
+D'où la méthode : une **médiane le long du temps**, à fréquence fixe, conserve ce qui
+dure et efface ce qui passe — c'est l'harmonique. Une **médiane le long des fréquences**,
+à instant fixe, conserve ce qui s'étale et efface ce qui est étroit — c'est le percussif.
+
+La médiane et non la moyenne, parce qu'elle est insensible aux valeurs extrêmes : c'est
+précisément ce qu'on veut, puisque l'autre composante **est** la valeur extrême dont il
+faut se débarrasser.
+
+Les deux chaînes en profitent : les attaques travaillent sur le percussif seul, le
+chromagramme sur l'harmonique seul. Masques de **Wiener** plutôt qu'un choix binaire —
+un masque binaire attribuerait chaque bin entier à l'une des composantes et laisserait
+des trous nets dans le spectre ; les masques doux répartissent proportionnellement au
+carré, et leur somme vaut exactement l'original (un test le vérifie).
+
+**Mesure sur `instamata`, même morceau, séparation coupée puis active :**
+
+| | sans HPSS | avec HPSS | cible |
+|---|---|---|---|
+| BPM du kick | 112,1 | **90,6** | 87 |
+| erreur | +29 % | **+4 %** | — |
+| régularité (écart-type des écarts) | 187 ms | **156 ms** | plus bas = mieux |
+
+Le piano remplissait les médiums de flux en permanence et brouillait la détection ; les
+percussions salissaient en retour le chromagramme. Séparer nettoie les deux d'un coup,
+au lieu d'ajouter une correction à chacune.
+
+**Le prix est une latence de 64 ms**, et elle est structurelle : pour savoir si un bin
+durait, il faut avoir vu la suite. Elle est annoncée par `LatencyFrames` plutôt que
+subie, et la séparation se coupe par configuration — `Signal__Separate=false` — pour
+pouvoir comparer avec et sans sur le même morceau. C'est ainsi que les chiffres
+ci-dessus ont été obtenus.
 
 **Fenêtre de Hann.** Sans elle, une note qui ne tombe pas exactement sur un bin fuit sur
 tout le spectre et les bandes graves se remplissent de bruit d'aigu.
@@ -475,7 +521,7 @@ curl -X POST localhost:5299/deck/take
 ```
 
 ```sh
-dotnet test        # 41 tests
+dotnet test        # 48 tests
 ```
 
 ### Les images et les clips
@@ -502,7 +548,7 @@ inerte et la géométrie tourne seule.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 41 tests | xUnit |
+| `Emotion.Signal.Tests` | 48 tests | xUnit |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans
@@ -512,9 +558,6 @@ serveur, sans carte son et sans navigateur**.
 
 ## Ce qui reste
 
-- **HPSS** — séparer le percussif de l'harmonique avant analyse, par filtre médian dans
-  les deux directions du spectrogramme. Le gain le plus élevé pour l'effort : le kick
-  cesserait d'être pollué par le piano, et inversement.
 - **Signature par événement** — centroïde spectral, largeur de bande et temps de
   décroissance suffisent à ranger un son dans une famille générique sans avoir à le
   nommer.

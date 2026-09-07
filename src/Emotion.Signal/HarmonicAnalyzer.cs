@@ -46,10 +46,21 @@ public sealed class HarmonicAnalyzer
 
     private Harmony _last = Harmony.None;
 
+    // La meme separation, cote harmonie : on ne garde ici que ce qui dure. Les
+    // percussions salissaient le chromagramme en repandant de l'energie sur toutes les
+    // classes de hauteur a chaque frappe, ce qui aplatissait le profil et rendait la
+    // note dominante indecise.
+    private readonly Hpss _hpss;
+
     public HarmonicAnalyzer(int sampleRate = 48_000)
     {
         _sampleRate = sampleRate;
         _classOf = BuildClassMap(sampleRate);
+
+        // Fenetre temporelle plus courte qu'en percussion : ici chaque saut vaut 21 ms
+        // de signal mais la fenetre couvre 85 ms, si bien que cinq sauts suffisent a
+        // couvrir une demi-seconde d'observation.
+        _hpss = new Hpss(Window / 2, timeFrames: 5, freqBins: 33);
     }
 
     /// <summary>
@@ -87,6 +98,14 @@ public sealed class HarmonicAnalyzer
         var half = Window / 2;
         Array.Clear(_chroma);
 
+        Span<float> mags = stackalloc float[half];
+        for (var i = 0; i < half; i++)
+            mags[i] = MathF.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
+
+        // On ne garde que la composante harmonique pour les hauteurs.
+        var separated = _hpss.Feed(mags);
+        if (separated) _hpss.Harmonic.CopyTo(mags);
+
         // Platitude spectrale : moyenne geometrique sur moyenne arithmetique. Proche de
         // 1 le spectre est plat, donc bruite ; proche de 0 il est concentre sur des
         // raies, donc tonal. On la calcule en logarithmes pour ne pas perdre la moyenne
@@ -97,7 +116,7 @@ public sealed class HarmonicAnalyzer
 
         for (var i = 1; i < half; i++)
         {
-            var mag = MathF.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
+            var mag = mags[i];
 
             var c = _classOf[i];
             if (c >= 0) _chroma[c] += mag;

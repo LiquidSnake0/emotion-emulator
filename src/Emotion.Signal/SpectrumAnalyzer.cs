@@ -44,17 +44,33 @@ public sealed class SpectrumAnalyzer
     // demi-tons. Elle recoit les memes echantillons et se cadence toute seule.
     private readonly HarmonicAnalyzer _harmony;
 
+    // Separation harmonique / percussive, appliquee avant tout le reste. Les bandes et
+    // les attaques travaillent alors sur le percussif seul : le piano ne remplit plus
+    // les mediums de flux, et un clap redevient detectable pour ce qu'il est.
+    //
+    // Optionnelle : elle coute 64 ms de latence, et on doit pouvoir comparer avec et
+    // sans sur le meme morceau pour juger si le gain les vaut.
+    private readonly Hpss? _hpss;
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
     private readonly int[] _edges;
 
-    public SpectrumAnalyzer(int sampleRate = 48_000)
+    /// <param name="separate">
+    /// Separer le percussif de l'harmonique avant analyse. Coute la latence annoncee par
+    /// <see cref="Hpss.LatencyFrames"/>, soit 64 ms sur le reglage par defaut.
+    /// </param>
+    public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = true)
     {
         _sampleRate = sampleRate;
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
+        _hpss = separate ? new Hpss(Window / 2) : null;
     }
+
+    /// <summary>La separation est-elle active.</summary>
+    public bool Separating => _hpss is not null;
 
     /// <summary>Tempo estime, nul tant que la detection n'a pas accroche.</summary>
     public float? Bpm => _tempo.Bpm;
@@ -98,6 +114,13 @@ public sealed class SpectrumAnalyzer
         Span<float> spectrum = stackalloc float[half];
         for (var i = 0; i < half; i++)
             spectrum[i] = MathF.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
+
+        // La separation remplace le spectre par sa seule composante percussive. Tant
+        // que son tampon n'est pas plein elle ne rend rien, et on travaille alors sur
+        // le spectre complet : mieux vaut une analyse imparfaite qu'un ecran noir
+        // pendant les premieres fenetres.
+        if (_hpss is not null && _hpss.Feed(spectrum))
+            _hpss.Percussive.CopyTo(spectrum);
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint
         // n'est pas une attaque.
