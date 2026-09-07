@@ -32,7 +32,23 @@ namespace Emotion.Signal;
 /// chaque beatmatch — c'est-a-dire tout le temps.
 ///
 /// Une seule frappe egaree ne prouve rien par ailleurs : c'est le lot ordinaire d'une
-/// detection. Il en faut trois de suite.
+/// detection.
+///
+/// CE QUE CE DETECTEUR FAIT BIEN, ET CE QU'IL NE FAIT PAS. Il repere proprement un arret
+/// ou un changement de disque, par le silence. Il finit par reperer un saut de sillon,
+/// mais lui-meme et tardivement : une quinzaine de mesures, ce qui ne sert a rien en
+/// direct.
+///
+/// Ce n'est pas un reglage a trouver, c'est le critere qui plafonne. Apres un saut,
+/// l'ecart de phase n'est plus une erreur mais un tirage : pres de la moitie des frappes
+/// tombent sur la grille par coincidence, et une part d'entre elles dans la continuite de
+/// la precedente, ce qui ressemble a un disque en parfaite sante. Le durcir etait pourtant
+/// necessaire — a seuil bas il voyait dix ruptures en cent secondes sur un set qui n'en
+/// contenait aucune, et chacune effacait un temps fort acquis en une minute d'ecoute.
+///
+/// Un saut change surtout <b>ce qu'on entend</b>. Le detecter par le contenu — le spectre
+/// et l'harmonie qui sautent ailleurs dans le disque — plutot que par la phase est la
+/// piste, et elle reste ouverte.
 /// </summary>
 public sealed class ContinuityWatch
 {
@@ -50,9 +66,19 @@ public sealed class ContinuityWatch
     /// par pure coincidence. Exiger trois frappes egarees de suite ne se declenchait
     /// donc presque jamais — le test l'a montre immediatement.
     ///
-    /// A quatre, il faut environ deux mesures de desordre pour decrocher.
+    /// A huit, il faut environ quatre mesures de desordre franc pour decrocher.
+    ///
+    /// <b>Le seuil valait quatre, et c'etait beaucoup trop bas.</b> Mesure sur cent
+    /// secondes d'un set ou aucun disque ne saute : cinq, trois et dix ruptures selon le
+    /// passage — chacune effacant la grille, et le verrouillage du temps fort tombant de
+    /// 74 a 31 %. Le test unitaire ne pouvait pas le montrer : il supposait une detection
+    /// de kick parfaite, quand le vrai signal en produit d'egarees en permanence.
+    ///
+    /// L'asymetrie commande. Un faux positif detruit ce qu'on a mis une minute a
+    /// construire ; un faux negatif laisse la grille fausse le temps que l'oubli fasse
+    /// son travail. On decroche donc tard, jamais tot.
     /// </summary>
-    private const float DisorderForBreak = 4f;
+    private const float DisorderForBreak = 10f;
 
     /// <summary>
     /// Variation minimale d'une frappe a la suivante pour parler de desordre. En dessous,
@@ -63,8 +89,15 @@ public sealed class ContinuityWatch
     /// <summary>Niveau sous lequel on considere qu'il ne sort plus rien.</summary>
     private const float SilenceLevel = 0.02f;
 
-    /// <summary>Fenetres de silence valant arret. Une seconde environ.</summary>
-    private const int SilenceForStop = 47;
+    /// <summary>
+    /// Fenetres de silence valant arret. Trois secondes environ.
+    ///
+    /// A une seconde, la sonde comptait trois arrets en cent secondes de set : <b>c'etaient
+    /// des breaks</b>. Un morceau qui se vide un instant n'est pas un morceau qui
+    /// s'arrete, et confondre les deux fait jeter le tempo au moment precis ou le public
+    /// attend le retour.
+    /// </summary>
+    private const int SilenceForStop = 140;
 
     private float _disorder;
     private float _previousError;
@@ -166,8 +199,10 @@ public sealed class ContinuityWatch
         }
         else if (!stray && !jumped)
         {
-            // Sur la grille et dans la continuite de la precedente : tout va bien.
-            _disorder = MathF.Max(0f, _disorder - 0.5f);
+            // Sur la grille et dans la continuite de la precedente : tout va bien. On
+            // efface plus vite qu'on n'accumule, pour que le bruit ordinaire de detection
+            // — quelques frappes egarees noyees dans des justes — ne monte jamais.
+            _disorder = MathF.Max(0f, _disorder - 0.75f);
             _agreements++;
         }
         else

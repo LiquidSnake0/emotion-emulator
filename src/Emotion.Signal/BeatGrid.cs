@@ -82,6 +82,9 @@ public sealed class BeatGrid
 
     public bool BarStart { get; private set; }
 
+    /// <summary>Rang du temps courant dans la grille, non corrige du temps fort.</summary>
+    public long BeatIndex => _index;
+
     /// <summary>Position dans le temps courant, 0 a 1.</summary>
     public float Phase { get; private set; }
 
@@ -193,6 +196,17 @@ public sealed class BeatGrid
     public void MarkChange(long tMs) => Vote(Near(tMs), 2.0f);
 
     /// <summary>
+    /// Le profil des quatre temps a designe un temps fort. Ce vote-la ne vient pas d'un
+    /// evenement mais de ce que les temps <b>portent</b> en moyenne, et c'est le seul qui
+    /// sache distinguer le 1 du 3 quand le kick tombe partout — par son amplitude, la ou
+    /// une detection binaire ne voit que quatre kicks identiques.
+    ///
+    /// Il n'intervient qu'une fois par mesure : c'est une moyenne lente, la republier a
+    /// chaque temps reviendrait a lui donner quatre voix pour une seule observation.
+    /// </summary>
+    public void MarkProfile(int offset, float weight) => Vote(offset, weight);
+
+    /// <summary>
     /// Une rupture structurelle vient d'etre entendue. Elle ne recale plus la phrase —
     /// mesure faite, ces ruptures se repartissent au hasard sur un compteur libre et ne
     /// marquent donc rien — mais elle reste un excellent indice du temps fort : une
@@ -204,6 +218,16 @@ public sealed class BeatGrid
         // avec le changement d'accord, l'un des deux seuls indices capables de lever
         // l'ambiguite de deux temps que le backbeat laisse ouverte.
         Vote(Near(tMs), 2.0f);
+    }
+
+    /// <summary>
+    /// Attenue l'acquis sans l'effacer. Employe quand la continuite parait rompue : ce
+    /// qu'on croyait savoir devient douteux, il ne devient pas faux.
+    /// </summary>
+    public void Weaken(float factor)
+    {
+        for (var i = 0; i < 4; i++) _score[i] *= factor;
+        Conclude();
     }
 
     public void Reset()

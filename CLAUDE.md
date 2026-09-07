@@ -115,6 +115,15 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 - **Le mock perd le contrat à chaque fois qu'on l'étend.** Deux fois déjà — les frappes,
   puis les registres, le timbre et la structure. Un test vérifie désormais qu'aucun champ
   ne reste à sa valeur par défaut sur quatre secondes.
+- **Un détecteur qui protège peut coûter plus qu'il ne rapporte.** `ContinuityWatch` a été
+  commité sur la foi de ses tests unitaires, sans mesure sur du signal réel. Il voyait 5 à
+  10 ruptures par 100 s sur un set où aucun disque ne saute — chacune effaçant un temps
+  fort acquis en une minute d'écoute, verrouillage de 74 à 31 %. Le test ne pouvait pas le
+  montrer : il supposait une détection de kick parfaite. **Un test unitaire vert ne
+  remplace pas une mesure sur la matière réelle.**
+- **Atténuer plutôt qu'effacer.** Effacer suppose que le détecteur ne se trompe jamais.
+  En atténuant, une vraie rupture laisse la nouvelle information l'emporter en quelques
+  mesures, une fausse ne coûte qu'un peu de confiance passagère.
 - **Ce qui suit en continu paraît toujours calé.** L'orbe des graves n'a jamais été en
   retard parce qu'il ne décide de rien. Ne pas en conclure que le reste va bien.
 
@@ -177,6 +186,35 @@ suspect : c'est au contraire attendu, un set beatmatché a par construction un s
 
 **Ce qui reste ouvert :** le verrouillage du temps fort varie de 38 à 74 % selon le
 passage. C'est le vote du downbeat, pas le tempo.
+
+### Le profil des quatre temps
+
+Le vote ne portait que sur des **détections binaires** — un kick est là ou il n'est pas.
+Or dans quantité de morceaux le kick tombe sur les quatre temps et n'apprend alors rien.
+Mais quatre kicks présents ne sont pas quatre fois le même kick : **celui du 1 porte plus
+de grave**. La présence ne discrimine pas, l'amplitude si.
+
+`DownbeatProfile` accumule, pour chacune des quatre positions, ce qu'elle porte en
+moyenne — énergie grave, montée du registre du kick, mouvement harmonique — sur des
+dizaines de mesures.
+
+| Verrouillage | 300 s | 900 s | 1500 s | pire cas |
+|---|---|---|---|---|
+| sans le profil | 38 % | **74 %** | 57 % | 38 % |
+| **avec** | **59 %** | 71 % | 53 % | **53 %** |
+
+Moyenne identique, **pire cas de 38 à 53**. Pour un usage live c'est le pire cas qui
+compte : un passage où le système ne sait pas deux fois sur trois se voit, trois passages
+moyens non.
+
+C'est la troisième fois qu'un problème cède en passant de l'événement au continu — le
+tempo, la structure longue, le temps fort.
+
+> **Piège traversé :** j'ai d'abord jugé ce profil sur une base cassée. Branché, il
+> faisait chuter le verrouillage à 21/38/31 — mais `ContinuityWatch`, commité la veille
+> sans mesure, effaçait la grille 5 à 10 fois par 100 s. Une fois cette régression
+> réparée, le même profil relevait le pire cas de 15 points. **Ne jamais évaluer une
+> addition sur une base dont on n'a pas vérifié l'état.**
 
 ### Trois tentatives sur le vote du downbeat, trois échecs
 

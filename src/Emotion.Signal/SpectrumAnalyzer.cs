@@ -93,6 +93,11 @@ public sealed class SpectrumAnalyzer
     // n'est plus, son oubli etant lent par construction.
     private readonly ContinuityWatch _continuity = new();
 
+    // Le temps fort cherche dans ce que portent les quatre temps, et non dans ce qui s'y
+    // declenche. Un kick present sur les quatre temps n'apprend rien ; le fait que celui
+    // du premier soit plus appuye, si.
+    private readonly DownbeatProfile _profile = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -118,8 +123,15 @@ public sealed class SpectrumAnalyzer
     /// <summary>La separation est-elle active.</summary>
     public bool Separating => _hpss is not null;
 
+    /// <summary>Ce que le profil des quatre temps designe, pour le reglage.</summary>
+    public (int Offset, float Confidence, IReadOnlyList<float> Scores, int GridBeat) Downbeat =>
+        (_profile.Offset, _profile.Confidence, _profile.Scores, _grid.Beat);
+
     /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
     public string LastBreak => _continuity.Reason;
+
+    /// <summary>Une rupture vient d'etre constatee sur cette fenetre.</summary>
+    public bool ContinuityBroken => _continuity.Broken;
 
     /// <summary>L'etat du suivi de structure longue, pour le reglage.</summary>
     public (int Bars, float Best, IReadOnlyList<float> Scores) Section =>
@@ -286,13 +298,17 @@ public sealed class SpectrumAnalyzer
                        + (voices.HighHit ? 1 : 0);
         var timbre = _timbre.Feed(full, eventCount);
 
+        // Les graves sont pris sur les bandes normalisees et non sur le RMS : c'est leur
+        // poids relatif qui compte, et un morceau joue fort ne doit pas paraitre plus
+        // structure qu'un autre.
+        var bass = (bands[0] + bands[1] + bands[2]) / 3f;
+
         // La grille metrique. Elle est nourrie de conclusions, jamais de signal : le kick
         // la recale, le kick, le clap et le changement d'accord votent pour le temps fort,
         // et une rupture de section realigne la phrase.
         // Chaque indice vote pour le temps le plus proche de l'instant ou il tombe, et
         // non pour « le temps en cours » : le kick arrive a quelques millisecondes de la
         // frontiere, et le moindre flottement de la grille le ferait changer de camp.
-        var bass = (bands[0] + bands[1] + bands[2]) / 3f;
         _arc.Feed(bass, timbre.Centroid, timbre.Density);
         var stepped = _grid.Advance(tMs, _tempo.Bpm);
         if (stepped) _arc.Advance();
@@ -302,14 +318,31 @@ public sealed class SpectrumAnalyzer
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
         if (_novelty.Onset) _grid.MarkSection(tMs);
 
+        // Le profil se nourrit du continu : l'energie grave, la montee du registre du
+        // kick, le mouvement harmonique. Aucune de ces trois n'est un evenement.
+        _profile.Feed(_grid.BeatIndex, bass, rKick, harmony.Change);
+        if (_grid.BarStart && _profile.Confidence > 0.2f)
+            _grid.MarkProfile(_profile.Offset, 1.5f * _profile.Confidence);
+
         _continuity.Feed(level, hits.Kick, _grid.LastSyncError);
         if (_continuity.Broken)
         {
-            // On jette ce qui decrit une position, on garde ce qui decrit une vitesse : un
-            // saut de sillon ne change ni le disque ni son tempo. Un silence, si.
-            _grid.Reset();
+            // ON ATTENUE, ON N'EFFACE PAS.
+            //
+            // Un effacement complet part du principe que la detection de rupture ne se
+            // trompe jamais. Elle se trompe : mesuree a l'origine, elle voyait dix
+            // ruptures en cent secondes sur un set qui n'en contenait aucune, et chacune
+            // remettait a zero un temps fort qui avait demande une minute d'ecoute.
+            //
+            // En attenuant fortement, une vraie rupture laisse la nouvelle information
+            // l'emporter en quelques mesures, tandis qu'une fausse ne coute qu'un peu de
+            // confiance passagere. On jette de meme ce qui decrit une position, jamais ce
+            // qui decrit une vitesse : un saut de sillon laisse le meme disque au meme
+            // tempo.
+            _grid.Weaken(0.5f);
             _section.Reset();
             _arc.Reset();
+            _profile.Reset();
             if (_continuity.WasSilence) _tempo.Reset();
         }
 

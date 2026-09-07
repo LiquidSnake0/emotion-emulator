@@ -49,6 +49,11 @@ var barCounter = 0;
 var freeBreaks = new List<int>();
 var phraseLen = new Dictionary<int, int>();
 var sectionConf = new List<float>();
+var profileConf = new List<float>();
+var agree = 0;
+var compared = 0;
+var ruptures = 0;
+var lastReason = "";
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
@@ -78,6 +83,16 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     confidences.Add(s.Confidence);
     phraseLen[s.PhraseBars] = phraseLen.GetValueOrDefault(s.PhraseBars) + 1;
     sectionConf.Add(s.SectionConfidence);
+    if (analyzer.ContinuityBroken) { ruptures++; lastReason = analyzer.LastBreak; }
+    var (pOff, pConf, _, gBeat) = analyzer.Downbeat;
+    profileConf.Add(pConf);
+    // Le profil designe une position de grille ; la grille, elle, publie le rang du temps.
+    // Ils sont d'accord quand le temps que le profil designe est bien le temps fort.
+    if (gBeat >= 0 && pConf > 0.2f)
+    {
+        compared++;
+        if (((int)(s.Beat) == 0) == (pOff == (int)(pOff))) { }
+    }
     buildups.Add(s.Buildup);
     var (sb, sa, su) = analyzer.Slopes;
     slopes.Add(MathF.Abs(sb) + MathF.Abs(sa) + MathF.Abs(su));
@@ -117,6 +132,10 @@ var (sBars, sBest, sScores) = analyzer.Section;
 Console.WriteLine($"scores de phrase    " + string.Join("  ",
     SectionTracker.Candidates.Select((c, i) => $"{c}:{sScores[i]:F3}")) +
     $"   retenu {sBars}");
+var (dOff, dConf, dScores, _) = analyzer.Section is var _ ? analyzer.Downbeat : default;
+Console.WriteLine($"ruptures de continuite  {ruptures}" + (ruptures > 0 ? $"  (derniere : {lastReason})" : ""));
+Console.WriteLine($"profil du temps fort  offset {dOff} · confiance finale {dConf:F2} · mediane {Median(profileConf):F2}");
+Console.WriteLine($"  scores  " + string.Join(" ", dScores.Select((v, i) => $"{i}:{v:+0.000;-0.000}")));
 Console.WriteLine($"confiance section   mediane {Median(sectionConf):F2} · max {sectionConf.Max():F2}");
 Console.WriteLine($"phrases             {phraseStarts.Count}");
 if (phraseStarts.Count > 2)
