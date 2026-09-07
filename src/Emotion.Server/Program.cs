@@ -16,7 +16,7 @@ builder.Services.AddSignalR()
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters
     .Add(new JsonStringEnumConverter()));
 
-builder.Services.AddSingleton<TrackState>();
+builder.Services.AddSingleton<DeckState>();
 
 // La source se choisit par configuration. Aujourd'hui il n'y en a qu'une, mais le
 // jour ou la table est branchee, seule cette ligne change : ni le worker, ni le hub,
@@ -24,8 +24,15 @@ builder.Services.AddSingleton<TrackState>();
 builder.Services.AddSingleton<IAudioSource>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
-    var bpm = cfg.GetValue("Signal:Bpm", 87f);
-    return new MockAudioSource(bpm);
+
+    // "mock" fabrique un signal a partir d'un tempo, sans carte son.
+    // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
+    // materiel, l'entree ligne le jour ou la table est branchee.
+    return cfg["Signal:Source"]?.ToLowerInvariant() switch
+    {
+        "pulse" => new PulseAudioSource(cfg["Signal:Device"]),
+        _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
+    };
 });
 
 builder.Services.AddHostedService<SignalWorker>();
@@ -59,18 +66,7 @@ else
 
 app.MapHub<VisualHub>("/hub");
 
-// Crate annonce la face posee. Un POST plutot qu'une methode de hub : la PWA n'a
-// alors aucun client SignalR a embarquer, un fetch suffit, et le meme appel se teste
-// en une ligne de curl depuis les platines.
-app.MapPost("/track", async (TrackContext track, TrackState state,
-                             IHubContext<VisualHub> hub) =>
-{
-    state.Current = track;
-    await hub.Clients.All.SendAsync("track", track);
-    return Results.NoContent();
-});
-
-// Ce que le renderer affiche en ce moment, pour verifier l'etat sans ouvrir la page.
-app.MapGet("/track", (TrackState state) => Results.Ok(state.Current));
+// Les commandes venues du telephone : caler, basculer, renoncer.
+app.MapDeck();
 
 app.Run();

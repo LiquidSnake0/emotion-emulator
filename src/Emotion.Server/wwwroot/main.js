@@ -25,6 +25,7 @@ const hud = {
   camelot: document.getElementById('camelot'),
   title: document.getElementById('title'),
   scene: document.getElementById('scene'),
+  cued: document.getElementById('cued'),
 };
 
 function setLink(ok, label) {
@@ -56,13 +57,21 @@ let latest = null;
 
 conn.on('frame', (f) => { latest = f; });
 
-conn.on('track', (t) => {
-  visual.setTrack(t);
-  hud.side.textContent = t.side || '—';
-  hud.camelot.textContent = t.camelot || '—';
-  hud.title.textContent = t.title || '—';
-  hud.scene.textContent = t.scene?.kind ?? '—';
+// L'etat des platines. Seul `playing` atteint le mur : `cued` est ce que Selim cale au
+// casque, et l'afficher reviendrait a montrer le beatmatch au public.
+conn.on('deck', (d) => {
+  visual.setTrack(d.playing);
+
+  hud.side.textContent = d.playing.side || '—';
+  hud.camelot.textContent = d.playing.camelot || '—';
+  hud.title.textContent = d.playing.title || '—';
+  hud.scene.textContent = d.playing.scene?.kind ?? '—';
+
+  hud.cued.textContent = d.cued ? `${d.cued.side || '?'} · ${d.cued.title}` : '—';
+  hud.cued.style.color = d.cued ? '#e8eaed' : '#5f6368';
 });
+
+conn.on('source', (name) => { hud.src.textContent = name; });
 
 conn.onreconnecting(() => setLink(false, 'reconnexion…'));
 conn.onreconnected(() => setLink(true, 'en ligne'));
@@ -78,8 +87,8 @@ function loop() {
   if (latest) {
     visual.draw(latest);
     // Le tempo est estime depuis le son : il est nul le temps que la detection accroche.
+    // Le tempo est estime depuis le son : il est nul le temps que la detection accroche.
     hud.bpm.textContent = latest.bpm != null ? latest.bpm.toFixed(1) : '…';
-    hud.src.textContent = 'mock';
   }
   requestAnimationFrame(loop);
 }
