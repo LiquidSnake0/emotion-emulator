@@ -71,6 +71,29 @@ public class MockAudioSourceTests
     }
 
     [Fact]
+    public void Le_mock_declenche_les_trois_registres()
+    {
+        // Le mock existe pour regler le visuel sans materiel. S'il n'alimente pas les
+        // registres, aucun effet ne part et il ne simule plus rien : un signal fabrique
+        // doit remplir le meme contrat qu'un vrai signal.
+        var src = new MockAudioSource(bpm: 120f);   // 500 ms par temps
+        long last = -1;
+
+        int kick = 0, clap = 0, hat = 0;
+        for (long t = 0; t < 4_000; t += 5)         // 4 s, huit temps, deux mesures
+        {
+            var f = src.At(t, ref last);
+            if (f.Hits.Kick) kick++;
+            if (f.Hits.Clap) clap++;
+            if (f.Hits.Hat) hat++;
+        }
+
+        Assert.Equal(8, kick);                       // un par temps
+        Assert.Equal(4, clap);                       // le deux et le quatre de chaque mesure
+        Assert.Equal(8, hat);                        // un par contretemps
+    }
+
+    [Fact]
     public void Deux_sources_de_meme_graine_donnent_le_meme_signal()
     {
         // C'est ce qui permet de comparer deux versions d'un shader sur exactement

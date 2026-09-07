@@ -13,6 +13,11 @@ import { Visual } from './visual.js';
 const canvas = document.getElementById('stage');
 const visual = new Visual(canvas);
 
+// Expose le rendu a la console du navigateur. Sert au reglage : declencher un effet a
+// la demande, figer une enveloppe, comparer deux valeurs sans attendre que la musique
+// veuille bien les produire.
+window.visual = visual;
+
 // ---------------------------------------------------------------- bandeau
 
 const hud = {

@@ -91,9 +91,36 @@ public sealed class MockAudioSource : IAudioSource
         var rms = Clamp01(0.25f + 0.55f * kick + 0.20f * Average(bands));
 
         // Phase sur quatre temps : de quoi animer une figure a l'echelle de la mesure.
+        var beatInBar = (int)(((beatIndex % 4) + 4) % 4);
         var phase = (float)(((beats % 4) + 4) % 4 / 4.0);
 
-        return new VisualFrame(t, rms, bands, beat, phase, _bpm);
+        // Les trois registres, sur le motif le plus courant du repertoire : kick sur
+        // chaque temps, clap sur le deux et le quatre, charley sur les contretemps.
+        //
+        // Sans eux le mock ne declencherait plus rien a l'ecran, ce qui lui oterait sa
+        // raison d'etre : il existe pour regler le visuel sans materiel. Un signal
+        // fabrique doit rester coherent avec le contrat que remplit un vrai signal,
+        // sinon il ne simule plus rien.
+        var hits = new Hits(
+            Kick: beat,
+            Clap: beat && (beatInBar == 1 || beatInBar == 3),
+            Hat:  CrossedOffbeat(beats));
+
+        return new VisualFrame(t, rms, bands, beat, phase, _bpm, Hits: hits);
+    }
+
+    private double _lastOffbeat = -1;
+
+    /// <summary>
+    /// Vrai sur la seule image qui franchit un contretemps. Meme regle que pour le
+    /// temps : une impulsion, jamais un etat.
+    /// </summary>
+    private bool CrossedOffbeat(double beats)
+    {
+        var half = Math.Floor(beats * 2);
+        if (half <= _lastOffbeat) return false;
+        _lastOffbeat = half;
+        return half % 2 == 1;          // les demi-temps impairs sont les contretemps
     }
 
     /// <summary>Enveloppe percussive : 1 a l'attaque, decroissance exponentielle.</summary>
