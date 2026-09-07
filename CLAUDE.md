@@ -178,6 +178,50 @@ suspect : c'est au contraire attendu, un set beatmatché a par construction un s
 **Ce qui reste ouvert :** le verrouillage du temps fort varie de 38 à 74 % selon le
 passage. C'est le vote du downbeat, pas le tempo.
 
+### Trois tentatives sur le vote du downbeat, trois échecs
+
+Le score décroît de 0,99 par temps. L'idée — la sienne, et elle est théoriquement juste —
+était qu'un backbeat régulier vote sans cesse pour les deux mêmes hypothèses à égalité :
+il n'apprend rien, tandis que la décroissance ronge l'avance qu'un changement d'accord
+avait acquise. L'oubli devrait donc être déclenché par un changement, pas par le temps.
+
+| Tentative | Verrouillage (300 / 900 / 1500 s) |
+|---|---|
+| **décroissance fixe 0,99** (en place) | 38 / **74** / **58 %** |
+| oubli seulement sur rupture de section | 58 / 34 / 36 % |
+| renormalisation par soustraction du minimum | inchangé — le plafond n'est jamais atteint |
+| oubli modulé par la dérive de la grille | 41 / 28 / 30 % |
+
+**Ce que la mesure apprend :** un vote est exprimé dans le *référentiel de la grille*, et
+ce référentiel glisse. Un vote vieux d'une minute a été porté dans une grille qui n'est
+plus la même — il ne désigne plus le même temps. On n'oublie donc pas parce que la musique
+change, mais parce que notre propre référence a bougé. Moduler l'oubli par la dérive
+mesurée n'a pourtant pas suffi : **le mécanisme reste mal compris, et le constat empirique
+tient lieu de règle en attendant.**
+
+### Les ruptures ne marquent pas les phrases
+
+Test direct de l'hypothèse « la musique se construit en 4, 8, 16 » : sur un compteur de
+mesures **libre**, jamais réaligné, les ruptures détectées tombent-elles aux frontières ?
+
+```
+900 s   modulo 4 : 4 3 5 6    écart au hasard 1,1
+1500 s  modulo 4 : 3 4 6 3    écart au hasard 1,5
+```
+
+Réparties au hasard — il faudrait dépasser 8 pour parler de structure. Le
+`NoveltyDetector` signale une rupture toutes les deux mesures, ce qui est le rythme d'un
+changement de timbre, pas d'une section.
+
+**La piste est celle qui vient de marcher pour le tempo, un ordre de grandeur au-dessus :
+autocorréler une signature à longue échelle** pour trouver la période de la section
+(10 à 45 s) comme on trouve celle du temps (0,3 à 1 s). Une phrase se répète, donc elle
+se corrèle avec elle-même.
+
+**Piège de mesure à ne pas refaire :** mesurer la position des ruptures sur le compteur
+`Bar` est circulaire, puisque `AlignPhrase` le remet à zéro à chaque rupture. Les trouver
+sur la mesure 0 ne prouve rien.
+
 ## Structure## Structure
 
 | Projet | Rôle | Dépendances |

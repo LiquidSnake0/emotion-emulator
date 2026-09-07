@@ -38,6 +38,16 @@ var changes = new List<float>();
 var slopes = new List<float>();
 var tempos = new List<float>();
 
+// Ou tombent les ruptures dans la phrase. Si la musique se construit vraiment en 4, 8,
+// 16, elles doivent se concentrer sur quelques mesures et non se repartir au hasard —
+// et c'est ce qui rendrait leur prochaine occurrence previsible.
+var breakBar = new int[Structure.PhraseBars];
+var breakBeat = new int[4];
+var lastBreakBar = -1;
+var breakGaps = new List<int>();
+var barCounter = 0;
+var freeBreaks = new List<int>();
+
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
     var tMs = (long)(i * 1000L / rate);
@@ -52,7 +62,15 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     if (f.Bpm is { } bp) tempos.Add(bp);
 
     var s = f.Structure;
-    if (s.BarStart) barStarts.Add(tMs);
+    if (s.BarStart) { barStarts.Add(tMs); barCounter++; }
+    if (f.NoveltyOnset && s.Confidence > 0.35f)
+    {
+        breakBar[Math.Clamp(s.Bar, 0, Structure.PhraseBars - 1)]++;
+        if (s.Beat >= 0) breakBeat[s.Beat]++;
+        freeBreaks.Add(barCounter);
+        if (lastBreakBar >= 0) breakGaps.Add(barCounter - lastBreakBar);
+        lastBreakBar = barCounter;
+    }
     if (s.PhraseStart) phraseStarts.Add(tMs);
     if (s.Drop) drops.Add(tMs);
     confidences.Add(s.Confidence);
@@ -89,6 +107,46 @@ if (barStarts.Count > 2)
 }
 
 Console.WriteLine($"phrases             {phraseStarts.Count}");
+
+var totalBreaks = breakBar.Sum();
+// Compteur libre : celui-la n'est jamais realigne, donc la position d'une rupture y a
+// un sens. C'est le seul moyen de savoir si les ruptures tombent vraiment toutes les
+// 4, 8 ou 16 mesures.
+if (freeBreaks.Count >= 4)
+{
+    Console.WriteLine($"\nsur un compteur de mesures LIBRE, {freeBreaks.Count} ruptures :");
+    foreach (var period in new[] { 4, 8, 16 })
+    {
+        var histo = new int[period];
+        foreach (var b in freeBreaks) histo[b % period]++;
+        var flat2 = freeBreaks.Count / (float)period;
+        var chi2 = histo.Sum(c => (c - flat2) * (c - flat2) / flat2);
+        Console.WriteLine($"  modulo {period,2} : {string.Join(" ", histo)}" +
+                          $"   ecart au hasard {chi2:F1}");
+    }
+}
+
+if (totalBreaks >= 4)
+{
+    Console.WriteLine($"\nou tombent les {totalBreaks} ruptures :");
+    Console.WriteLine("  mesure  " + string.Join(" ", breakBar.Select((c, i) => $"{i}:{c}")));
+    Console.WriteLine("  temps   " + string.Join(" ", breakBeat.Select((c, i) => $"{i}:{c}")));
+
+    // Une repartition au hasard donnerait autant de ruptures par mesure. L'ecart a cette
+    // repartition dit si la phrase existe vraiment, et si elle est de la bonne longueur.
+    var flat = totalBreaks / (float)Structure.PhraseBars;
+    var chi = breakBar.Sum(c => (c - flat) * (c - flat) / flat);
+    Console.WriteLine($"  ecart au hasard  {chi:F1}  (0 = reparti au hasard, > 14 = concentre)");
+    Console.WriteLine("  ATTENTION : biaise. AlignPhrase remet le compteur a zero a chaque");
+    Console.WriteLine("  rupture, donc les trouver sur la mesure 0 ne prouve rien.");
+
+    if (breakGaps.Count >= 3)
+    {
+        var g = breakGaps.OrderBy(x => x).ToList();
+        Console.WriteLine($"  espacement median  {g[g.Count / 2]} mesures  " +
+                          $"(multiples de 4 : {breakGaps.Count(x => x % 4 == 0)}/{breakGaps.Count})");
+    }
+}
 Console.WriteLine($"tension mediane     {Median(buildups):F2} · maximum {buildups.Max():F2}");
 Console.WriteLine($"ruptures            {drops.Count}" +
                   (drops.Count > 0 ? "  a " + string.Join(", ", drops.Select(d => $"{d / 1000f:F0} s")) : ""));
