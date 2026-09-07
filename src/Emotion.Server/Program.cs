@@ -28,11 +28,18 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     // "mock" fabrique un signal a partir d'un tempo, sans carte son.
     // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
     // materiel, l'entree ligne le jour ou la table est branchee.
-    return cfg["Signal:Source"]?.ToLowerInvariant() switch
+    IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
     {
         "pulse" => new PulseAudioSource(cfg["Signal:Device"]),
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
+
+    // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme
+    // fonctionne exactement comme avant et la transition reste commandee a la main.
+    var cueDevice = cfg["Signal:CueDevice"];
+    if (string.IsNullOrWhiteSpace(cueDevice)) return master;
+
+    return new DualAudioSource(master, new PulseAudioSource(cueDevice));
 });
 
 builder.Services.AddHostedService<SignalWorker>();

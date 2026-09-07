@@ -26,11 +26,17 @@ export class Visual {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
 
+    // Ce qui joue.
     this.color = { r: 110, g: 110, b: 110 };
     this.kind = 'Rest';
     this.intensity = 0;
     this.sides = 6;
     this.round = false;
+
+    // Ce qui est cale au casque. Il n'atteint le mur que dans la mesure ou il est
+    // deja passe dans le master : c'est `blend` qui l'y autorise, pas un bouton.
+    this.next = null;
+    this.blend = 0;
 
     // Une enveloppe par registre : chaque instrument a son effet, et c'est ce qui
     // permet a l'oeil de raccrocher ce qu'il voit a ce qu'il entend.
@@ -65,6 +71,16 @@ export class Visual {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.w = innerWidth;
     this.h = innerHeight;
+  }
+
+  // La face calee au casque. On la garde de cote sans rien changer a l'ecran : tant
+  // que le fader est ferme, le public ne doit rien voir venir.
+  setCued(t) {
+    this.next = t ? {
+      color: hexToRgb(t.colorHex) ?? { r: 110, g: 110, b: 110 },
+      kind: t.scene?.kind ?? 'Rest',
+      intensity: t.scene?.intensity ?? 0,
+    } : null;
   }
 
   setTrack(t) {
@@ -112,15 +128,34 @@ export class Visual {
     this.spin += 0.0015 + f.rms * 0.004;
     this.swell += 0.004 + f.rms * 0.010;
 
+    // La transition, mesuree et non commandee. Tant que le fader est ferme, `blend`
+    // vaut zero et rien ne change ; a mesure qu'il monte, la couleur glisse vers celle
+    // de la face qui arrive, et le nouveau phenomene prend la main a mi-chemin.
+    //
+    // Il n'y a donc plus d'instant de bascule : le mur suit le geste, sur les huit ou
+    // seize mesures que dure le fondu.
+    this.blend = f.blend ?? 0;
+    const c = this.next
+      ? mixColor(this.color, this.next.color, this.blend)
+      : this.color;
+
+    // Au-dela de la moitie, c'est le phenomene de la nouvelle face qui s'affiche : le
+    // morceau qui arrive est alors celui qu'on entend le plus.
+    const kind = (this.next && this.blend > 0.5) ? this.next.kind : this.kind;
+    const intensity = this.next
+      ? this.intensity + (this.next.intensity - this.intensity) * this.blend
+      : this.intensity;
+    this.drawColor = c;
+    this.drawIntensity = intensity;
+
     // Fond : jamais un noir pur, une teinte tres sombre de la famille. Le noir pur
     // fait ressortir la trame du videoprojecteur.
-    const c = this.color;
     ctx.fillStyle = `rgb(${c.r * 0.06 | 0}, ${c.g * 0.06 | 0}, ${c.b * 0.06 | 0})`;
     ctx.fillRect(0, 0, w, h);
 
     this.drawHarmony(f);
 
-    switch (this.kind) {
+    switch (kind) {
       case 'Waves':   this.drawWaves(f);   break;
       case 'Thunder': this.drawThunder(f); break;
       default:        this.drawFigure(f);  break;
@@ -151,7 +186,7 @@ export class Visual {
 
     // La note colore : on tourne d'un douzieme de tour par demi-ton autour de la
     // couleur de la famille, sans jamais la quitter tout a fait.
-    const c = this.color;
+    const c = this.drawColor ?? this.color;
     const turn = this.pitch != null ? this.pitch / 12 : 0;
     const tint = rotate(c, turn * 0.55);
 
@@ -188,7 +223,7 @@ export class Visual {
   // Rien de percussif, le ressac ne frappe pas, il porte.
   drawWaves(f) {
     const { ctx, w, h } = this;
-    const c = this.color;
+    const c = this.drawColor ?? this.color;
     const bands = f.bands || [];
     const rows = 7;
 
@@ -227,11 +262,11 @@ export class Visual {
   // pas dans le remplissage — un ecran sature ne laisse plus rien exploser.
   drawThunder(f) {
     const { ctx, w, h } = this;
-    const c = this.color;
+    const c = this.drawColor ?? this.color;
 
     if (this.flash > 0.02) {
       // Nappe de lumiere, puis l'eclair par-dessus.
-      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${this.flash * 0.22 * this.intensity})`;
+      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${this.flash * 0.22 * (this.drawIntensity ?? this.intensity)})`;
       ctx.fillRect(0, 0, w, h);
 
       ctx.strokeStyle = `rgba(255, 255, 255, ${this.flash * 0.9})`;
@@ -265,7 +300,7 @@ export class Visual {
     const { ctx, w, h } = this;
     const cx = w / 2, cy = h / 2;
     const unit = Math.min(w, h) / 2;
-    const c = this.color;
+    const c = this.drawColor ?? this.color;
     const bands = f.bands || [];
 
     // Couronne : une barre par bande.
@@ -333,6 +368,12 @@ export class Visual {
 function pseudo(n) {
   const x = Math.sin(n * 12.9898) * 43758.5453;
   return x - Math.floor(x);
+}
+
+// Fondu entre deux couleurs de famille, au rythme du fader.
+function mixColor(a, b, t) {
+  const m = (x, y) => Math.round(x + (y - x) * t);
+  return { r: m(a.r, b.r), g: m(a.g, b.g), b: m(a.b, b.b) };
 }
 
 // Rotation de teinte, en restant dans la famille : on melange vers la couleur

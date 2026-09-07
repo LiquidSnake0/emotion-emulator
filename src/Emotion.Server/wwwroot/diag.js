@@ -149,7 +149,8 @@ export class Diagnostics {
       `kick ${this.nKick}  clap ${this.nClap}  hat ${this.nHat}   ` +
       `note ${f?.harmony?.pitch != null ? NOTES[f.harmony.pitch] : '—'}   ` +
       `tonal ${(f?.harmony?.tonality ?? 0).toFixed(2)}   ` +
-      `accord ${(f?.harmony?.change ?? 0).toFixed(2)}`,
+      `accord ${(f?.harmony?.change ?? 0).toFixed(2)}   ` +
+      `fondu ${((f?.blend ?? 0) * 100).toFixed(0)}%`,
       x, y
     );
 

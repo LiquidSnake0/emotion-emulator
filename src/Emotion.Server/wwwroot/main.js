@@ -26,6 +26,8 @@ const hud = {
   title: document.getElementById('title'),
   scene: document.getElementById('scene'),
   cued: document.getElementById('cued'),
+  cuePret: document.getElementById('cuepret'),
+  blend: document.getElementById('blend'),
 };
 
 function setLink(ok, label) {
@@ -62,6 +64,7 @@ conn.on('frame', (f) => { latest = f; });
 // casque, et l'afficher reviendrait a montrer le beatmatch au public.
 conn.on('deck', (d) => {
   visual.setTrack(d.playing);
+  visual.setCued(d.cued);
 
   hud.side.textContent = d.playing.side || '—';
   hud.camelot.textContent = d.playing.camelot || '—';
@@ -73,6 +76,15 @@ conn.on('deck', (d) => {
 });
 
 conn.on('source', (name) => { hud.src.textContent = name; });
+
+// L'etat de preparation du disque cale au casque. Il ne touche jamais au rendu : c'est
+// un tableau de bord pour Selim, affiche sur son telephone et jamais projete.
+conn.on('cue', (f) => {
+  if (!f) return;
+  const pret = f.bpm != null;
+  hud.cuePret.textContent = pret ? `pret ${f.bpm.toFixed(1)} bpm` : 'analyse…';
+  hud.cuePret.style.color = pret ? '#34a853' : '#9aa0a6';
+});
 
 conn.onreconnecting(() => setLink(false, 'reconnexion…'));
 conn.onreconnected(() => setLink(true, 'en ligne'));
@@ -90,6 +102,11 @@ function loop() {
     // Le tempo est estime depuis le son : il est nul le temps que la detection accroche.
     // Le tempo est estime depuis le son : il est nul le temps que la detection accroche.
     hud.bpm.textContent = latest.bpm != null ? latest.bpm.toFixed(1) : '…';
+
+    // La part du prepare deja passee dans le melange : mesuree, jamais commandee.
+    const b = latest.blend ?? 0;
+    hud.blend.textContent = b > 0.01 ? `${(b * 100).toFixed(0)}%` : '—';
+    hud.blend.style.color = b > 0.5 ? '#e8eaed' : '#9aa0a6';
   }
   requestAnimationFrame(loop);
 }

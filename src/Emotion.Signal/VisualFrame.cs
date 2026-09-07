@@ -36,6 +36,11 @@ namespace Emotion.Signal;
 /// tonal. Les attaques donnent le rythme, l'harmonie donne la couleur — sans elle, un
 /// piano joue sans que rien ne lui reponde a l'ecran.
 /// </param>
+/// <param name="Blend">
+/// Part du morceau prepare deja passee dans le master, 0 a 1, <b>mesuree et non
+/// declaree</b>. C'est elle qui fait glisser la projection d'un phenomene a l'autre au
+/// rythme du fader, au lieu de basculer sur un bouton.
+/// </param>
 /// <param name="Flux">
 /// Montee du spectre depuis la fenetre precedente, normalisee. Diagnostic : c'est la
 /// grandeur qui decide des attaques, et on ne peut pas regler ce qu'on ne voit pas.
@@ -53,6 +58,7 @@ public readonly record struct VisualFrame(
     float? Bpm,
     Hits Hits = default,
     Harmony Harmony = default,
+    float Blend = 0f,
     float Flux = 0f,
     float Threshold = 0f)
 {
