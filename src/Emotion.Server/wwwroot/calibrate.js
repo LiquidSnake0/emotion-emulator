@@ -37,11 +37,16 @@ export class Calibrate {
     if (hit.clap) this.clap = 1;
     if (hit.hat) this.hat = 1;
 
-    // Retombee franche : en 120 ms la forme a disparu, donc deux frappes proches
-    // restent distinctes a l'oeil.
-    this.kick *= 0.86;
-    this.clap *= 0.86;
-    this.hat *= 0.80;
+    // Retombee liee au tempo, comme le rendu. Ici on la garde volontairement plus
+    // courte qu'a la projection — c'est un instrument de mesure, deux frappes proches
+    // doivent rester distinctes — mais elle suit quand meme le morceau, sinon l'ecran
+    // de calage clignote la ou le visuel respire, et on ne juge plus la meme chose.
+    const beatMs = 60000 / (f.bpm ?? 90);
+    const fall = (part) => Math.exp(-(1000 / 60) / (beatMs * part));
+
+    this.kick *= fall(0.30);
+    this.clap *= fall(0.26);
+    this.hat  *= fall(0.12);
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';

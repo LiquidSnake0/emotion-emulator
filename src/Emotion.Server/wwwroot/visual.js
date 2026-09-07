@@ -127,12 +127,25 @@ export class Visual {
     if (ha.pitch != null) this.pitch = ha.pitch;
     this.tonal += ((ha.tonality ?? 0) - this.tonal) * 0.05;
 
-    this.chord *= 0.965;
-    this.shock *= 0.88;
-    // Un eclair garde une remanence : a 0.72 il disparaissait en deux dixiemes,
-    // trop vite pour que l'oeil le lise comme un eclair plutot qu'un scintillement.
-    this.flash *= 0.86;
-    this.spark *= 0.74;
+    // La retombee suit le tempo, elle n'est plus une constante — et c'est la
+    // correction la plus importante du rendu.
+    //
+    // Avec un coefficient fixe, un effet mourait en 120 ms quel que soit le morceau.
+    // Sur un barber beats a 87 BPM, dont le temps dure 690 ms, cela laissait l'ecran
+    // eteint les quatre cinquiemes du temps, coupe de coups de lumiere : le
+    // stroboscope. En faisant retomber chaque enveloppe sur une fraction du temps,
+    // l'effet remplit la mesure et l'oeil lit une respiration au lieu d'un clignotement.
+    //
+    // Un morceau lent respire donc lentement, un morceau rapide claque : c'est le
+    // comportement qu'on attend, et il sort du signal sans qu'on ait rien a regler.
+    const beatMs = 60000 / (f.bpm ?? 90);
+    const dt = 1000 / 60;
+    const fall = (partOfBeat) => Math.exp(-dt / (beatMs * partOfBeat));
+
+    this.chord *= fall(2.4);    // une harmonie s'installe, elle ne claque pas
+    this.shock *= fall(0.55);   // le kick porte : il occupe la moitie du temps
+    this.flash *= fall(0.40);   // le clap marque, un peu plus bref
+    this.spark *= fall(0.18);   // le charley scintille, mais discretement
 
     this.spin += 0.0015 + f.rms * 0.004;
     this.swell += 0.004 + f.rms * 0.010;
@@ -284,10 +297,16 @@ export class Visual {
 
     if (this.flash > 0.02) {
       // Nappe de lumiere, puis l'eclair par-dessus.
-      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${this.flash * 0.22 * (this.drawIntensity ?? this.intensity)})`;
+      // La nappe pleine page est divisee par deux : c'etait elle qui rendait le rendu
+      // agressif sur un morceau calme. Un orage se lit a son eclair, pas a la salle
+      // entiere qui s'allume.
+      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${this.flash * 0.11 * (this.drawIntensity ?? this.intensity)})`;
       ctx.fillRect(0, 0, w, h);
 
-      ctx.strokeStyle = `rgba(255, 255, 255, ${this.flash * 0.9})`;
+      // L'eclair lui-meme reste franc, mais son blanc pur devient la couleur de la
+      // famille eclaircie : moins de contraste brut, autant de lisibilite.
+      const lit = { r: (c.r + 255 * 2) / 3 | 0, g: (c.g + 255 * 2) / 3 | 0, b: (c.b + 255 * 2) / 3 | 0 };
+      ctx.strokeStyle = `rgba(${lit.r}, ${lit.g}, ${lit.b}, ${this.flash * 0.75})`;
       ctx.lineWidth = Math.max(1.5, h * 0.003 * this.flash);
       ctx.beginPath();
 
@@ -364,7 +383,7 @@ export class Visual {
     ctx.closePath();
     ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.10 + f.rms * 0.20})`;
     ctx.fill();
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 + this.shock * 0.5})`;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.30 + this.shock * 0.28})`;
     ctx.lineWidth = Math.max(1.5, unit * 0.006);
     ctx.stroke();
     ctx.restore();
