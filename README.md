@@ -7,7 +7,7 @@ un `M+` — animé par le son qui sort réellement des enceintes.
 Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données du bac
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
-.NET 10 · ASP.NET Core · SignalR · Canvas 2D · PulseAudio · xUnit · **29 tests**
+.NET 10 · ASP.NET Core · SignalR · Canvas 2D · PulseAudio · xUnit · **40 tests**
 
 ---
 
@@ -218,6 +218,64 @@ fiche, et la valeur rendue reste celle qui a été mesurée.
 flux, le seuil, chaque attaque colorée par registre, les douze bandes, et l'écart médian
 converti en BPM. C'est l'outil qui a permis de passer de 341 BPM implicites à une
 détection utilisable — et celui qui servira à finir le réglage à l'oreille.
+
+---
+
+## 3bis. Deux entrées, deux analyseurs, un relais
+
+Une transition de DJ n'est pas un instant, c'est un geste : le fader monte pendant huit
+ou seize mesures. Le visuel doit **suivre ce geste**, pas l'annoncer par un bouton.
+
+D'où une seconde entrée — la sortie casque de la table — et deux analyseurs complets.
+
+### Le cue n'est pas un capteur
+
+Il a son propre détecteur d'attaques, son estimateur de tempo, son analyse harmonique.
+Pendant tout le beatmatch, il accroche donc le tempo et le profil de hauteurs du disque
+à venir.
+
+### La transition est mesurée, pas déclarée
+
+`BlendEstimator` corrèle la **dynamique** des deux entrées pour savoir quelle part du
+préparé est déjà passée dans le mélange. On ne mesure pas la position du fader mais son
+effet : à mi-course sur un morceau discret, il ne se passe pas la même chose qu'à
+mi-course sur un morceau massif.
+
+Le centrage se fait **bande par bande**, et c'est le point délicat. Une première version
+centrait sur la moyenne globale : la mesure saturait à 1 **fader fermé**. Ce n'était pas
+un bug mais une propriété de la musique — deux morceaux quelconques ont tous deux plus
+d'énergie dans les graves, donc leurs profils se ressemblent par construction, et cette
+ressemblance n'apprend rien. En retranchant la moyenne propre à chaque bande, il ne
+reste que la dynamique : où ça monte, où ça descend, à quel moment. C'est elle qui porte
+le rythme, donc qui identifie un disque dans un mélange.
+
+**La relation n'est pas linéaire, et il ne faut pas la rendre linéaire.** À fader
+mi-course, la mesure vaut déjà ~0,8 : c'est correct, parce qu'à mi-course le nouveau
+morceau domine déjà la perception.
+
+### Le relais amorce, il ne verrouille pas
+
+À mi-fondu, le master reprend le tempo du cue comme **point de départ** — un estimateur
+parti de rien met une à deux secondes à accrocher, et ces deux secondes tomberaient en
+plein milieu du passage le plus visible du set.
+
+Mais le master a bien à découvrir, et c'est là que la nuance compte :
+
+- pendant le beatmatch **le pitch a bougé** — c'est le but du geste ;
+- l'**EQ de la table** modifie le spectre entre le casque et la sortie.
+
+Ce qui joue en salle n'est donc jamais tout à fait ce que le cue a entendu. `Adopt`
+amorce le vote avec un tiers de sa mémoire seulement : assez pour donner une valeur
+immédiatement, assez peu pour que les attaques réelles du master reprennent la main en
+quelques mesures. Un test le vérifie explicitement — cue à 87, disque pitché à 94, le
+master converge vers 94.
+
+La seconde entrée est **facultative**. Sans elle, tout se comporte comme avant : fondu
+mesuré à zéro, transition commandée à la main.
+
+```sh
+Signal__CueDevice=alsa_input.pci-0000_00_1f.3.analog-stereo
+```
 
 ---
 

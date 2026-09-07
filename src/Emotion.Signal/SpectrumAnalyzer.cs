@@ -60,6 +60,13 @@ public sealed class SpectrumAnalyzer
     public float? Bpm => _tempo.Bpm;
 
     /// <summary>
+    /// Reprend le tempo d'un autre analyseur comme point de depart. Voir
+    /// <see cref="TempoEstimator.Adopt"/> : c'est une amorce, pas un verrou, et
+    /// l'analyse du master continue de chercher a partir de la.
+    /// </summary>
+    public void AdoptTempo(float bpm, long tMs) => _tempo.Adopt(bpm, tMs);
+
+    /// <summary>
     /// Analyse une fenetre. <paramref name="samples"/> doit contenir
     /// <see cref="Window"/> echantillons mono dans [-1, 1].
     /// </summary>

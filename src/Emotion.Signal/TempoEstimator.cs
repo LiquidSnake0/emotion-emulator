@@ -38,6 +38,38 @@ public sealed class TempoEstimator
 
     public float? Bpm { get; private set; }
 
+    /// <summary>
+    /// Reprend le tempo trouve par un autre analyseur, comme point de depart et non
+    /// comme verite.
+    ///
+    /// C'est le passage de relais d'une transition : le cue a eu huit ou seize mesures
+    /// pour accrocher le tempo du disque a venir, le master n'a pas a refaire ce travail
+    /// pendant le passage le plus visible du set.
+    ///
+    /// Mais <b>le master doit continuer a chercher</b>, et cette nuance est le coeur de
+    /// la methode. Pendant le beatmatch le pitch a bouge — c'est meme le but du geste —
+    /// donc le tempo du cue n'est deja plus tout a fait celui qui sort en salle. L'EQ de
+    /// la table modifie en outre le spectre entre le casque et la sortie. On amorce donc
+    /// le vote avec quelques ecarts au tempo repris, sans les figer : les attaques
+    /// reelles du master les remplaceront en une poignee de mesures, et la valeur
+    /// convergera vers ce qui joue vraiment.
+    /// </summary>
+    public void Adopt(float bpm, long tMs)
+    {
+        if (bpm < MinBpm || bpm > MaxBpm) return;
+
+        var gap = (long)MathF.Round(60_000f / bpm);
+
+        // Un tiers de la memoire, pas plus : assez pour donner une valeur tout de suite,
+        // assez peu pour que le vote bascule des que le master parle.
+        _gaps.Clear();
+        for (var i = 0; i < Keep / 3; i++) _gaps.Add(gap);
+
+        _lastOnset = tMs;
+        _anchor = tMs;
+        Vote();
+    }
+
     /// <summary>Enregistre une attaque a l'instant donne.</summary>
     public void Mark(long tMs)
     {

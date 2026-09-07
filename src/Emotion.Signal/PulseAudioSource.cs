@@ -38,6 +38,9 @@ public sealed class PulseAudioSource : IAudioSource
 
     public string Name => _device is null ? "entree par defaut" : _device;
 
+    /// <summary>Passage de relais : reprend le tempo trouve par un autre analyseur.</summary>
+    public void AdoptTempo(float bpm, long tMs) => _analyzer.AdoptTempo(bpm, tMs);
+
     /// <summary>
     /// Lit sans fin. Si <c>parec</c> s'arrete — peripherique debranche, serveur audio
     /// redemarre, carte son qui disparait — on le relance au lieu de rendre la main :

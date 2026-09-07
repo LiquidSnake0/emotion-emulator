@@ -16,10 +16,19 @@ namespace Emotion.Signal;
 /// <b>Le cue est un analyseur de plein droit, pas un capteur.</b> Il a son propre
 /// detecteur d'attaques, son propre estimateur de tempo, sa propre analyse harmonique —
 /// tout ce que possede le master. Pendant les huit ou seize mesures du beatmatch, il
-/// verrouille donc le tempo et le profil de hauteurs du disque a venir, si bien qu'au
-/// moment ou le fondu se fait, <b>le master n'a plus rien a decouvrir</b>. Un analyseur
-/// met une a deux secondes a accrocher un tempo : sur une transition, ces deux secondes
-/// tomberaient en plein milieu du passage le plus visible du set.
+/// accroche donc le tempo et le profil de hauteurs du disque a venir.
+///
+/// A mi-fondu, il passe le relais : le master <b>reprend</b> ce tempo comme point de
+/// depart, au lieu de repartir de rien pendant le passage le plus visible du set — un
+/// analyseur met une a deux secondes a accrocher.
+///
+/// Mais ce n'est qu'un point de depart, et la nuance est essentielle. <b>Le master a
+/// bien a decouvrir</b>, pour deux raisons : le pitch a bouge pendant le beatmatch,
+/// c'est meme le but du geste, et l'EQ de la table modifie le spectre entre le casque
+/// et la sortie. Ce qui joue en salle n'est donc jamais tout a fait ce que le cue a
+/// entendu. Le relais amorce, il ne verrouille pas : le master continue de suivre la
+/// continuite du son qui sort reellement, et sa propre mesure remplace l'amorce en
+/// quelques mesures.
 ///
 /// Le master mene la cadence et s'abonne au cue : c'est lui qui emet les images, en y
 /// joignant la part du prepare deja passee dans le melange. Si le cue s'arrete — casque
@@ -34,6 +43,15 @@ public sealed class DualAudioSource : IAudioSource
     private volatile float[] _lastCueBands = new float[VisualFrame.BandCount];
     private VisualFrame _cueFrame;
     private readonly Lock _cueGate = new();
+
+    /// <summary>
+    /// A quel niveau de fondu le relais se fait. A mi-chemin : plus tot, le morceau qui
+    /// arrive ne domine pas encore et le master se calerait sur ce qui va disparaitre ;
+    /// plus tard, on aurait laisse passer le moment ou l'aide sert.
+    /// </summary>
+    private const float HandoverAt = 0.5f;
+
+    private bool _handedOver;
 
     /// <summary>
     /// La derniere analyse du cue : tempo, harmonie, registres du disque en preparation.
@@ -54,8 +72,14 @@ public sealed class DualAudioSource : IAudioSource
 
     public string Name => $"{_master.Name} + cue {_cue.Name}";
 
-    /// <summary>Remet la mesure a zero : nouveau disque au casque.</summary>
-    public void ResetBlend() => _blend.Reset();
+    /// <summary>
+    /// Remet la mesure a zero : nouveau disque au casque, et un nouveau relais a venir.
+    /// </summary>
+    public void ResetBlend()
+    {
+        _blend.Reset();
+        _handedOver = false;
+    }
 
     public async IAsyncEnumerable<VisualFrame> ReadAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -84,6 +108,18 @@ public sealed class DualAudioSource : IAudioSource
             await foreach (var frame in _master.ReadAsync(stop.Token))
             {
                 var blend = _blend.Feed(frame.Bands, _lastCueBands);
+
+                // Le passage de relais, une seule fois par transition.
+                if (!_handedOver && blend >= HandoverAt)
+                {
+                    var cue = CueFrame;
+                    if (cue.Bpm is { } bpm && _master is PulseAudioSource p)
+                    {
+                        p.AdoptTempo(bpm, frame.T);
+                        _handedOver = true;
+                    }
+                }
+
                 yield return frame with { Blend = blend };
             }
         }
