@@ -40,17 +40,19 @@ public readonly record struct Structure(
     float Buildup,
     bool Drop,
     bool BarStart,
-    bool PhraseStart)
+    bool PhraseStart,
+    int PhraseBars = 8,   // = DefaultPhraseBars ; une valeur par defaut de parametre
+                          // ne peut pas citer une constante declaree dans le corps
+    int BarsToBoundary = 0,
+    float SectionConfidence = 0f)
 {
     /// <summary>
-    /// Longueur d'une phrase, en mesures. <b>Tire du repertoire, pas d'un principe.</b>
-    ///
-    /// La house et la techno se construisent en seize mesures ; le hip-hop et la soul
-    /// dont vit ce bac se construisent en huit. A 87 BPM, huit mesures font vingt-deux
-    /// secondes — une duree qu'on percoit comme une section. Seize en feraient
-    /// quarante-quatre, et le compteur n'aurait plus aucun rapport avec ce qu'on entend.
+    /// Longueur de phrase supposee tant que <see cref="SectionTracker"/> n'a pas tranche.
+    /// La house et la techno se construisent en seize mesures, le hip-hop et la soul dont
+    /// vit ce bac en huit — mais c'est desormais une valeur de depart et non une regle :
+    /// la longueur reelle se mesure.
     /// </summary>
-    public const int PhraseBars = 8;
+    public const int DefaultPhraseBars = 8;
 
     public static Structure None => new(-1, 0, 0f, 0f, 0f, false, false, false);
 }

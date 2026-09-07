@@ -132,13 +132,13 @@ public sealed class MockAudioSource : IAudioSource
         // La structure est fabriquee, pas mesuree : le mock connait sa propre grille, il
         // n'a donc rien a estimer. La tension suit le meme cycle que le filtre, ce qui
         // donne une montee toutes les seize mesures et une rupture a son sommet.
-        var bar = (int)((beatIndex / 4) % Structure.PhraseBars);
+        var bar = (int)((beatIndex / 4) % Structure.DefaultPhraseBars);
         var barStart = beat && beatInBar == 0;
         var buildup = Clamp01((cycle - 0.55f) / 0.35f);
         var structure = new Structure(
             Beat: beatInBar,
             Bar: bar,
-            PhrasePos: (float)((beatIndex % (Structure.PhraseBars * 4) + inBeat) / (Structure.PhraseBars * 4)),
+            PhrasePos: (float)((beatIndex % (Structure.DefaultPhraseBars * 4) + inBeat) / (Structure.DefaultPhraseBars * 4)),
             Confidence: 1f,
             Buildup: buildup,
             Drop: barStart && buildup > 0.9f,

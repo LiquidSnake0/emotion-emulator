@@ -33,7 +33,7 @@ public class BeatGridTests
                 if (clapOn.Contains(b)) grid.MarkClap(t);
                 if (chordOnOne && b == 0) grid.MarkChange(t);
                 if (breakEvery > 0 && b == 0 && (beat / 4) % breakEvery == 0)
-                    grid.AlignPhrase(t);
+                    grid.MarkSection(t);
                 beat++;
             }
         }
@@ -121,12 +121,14 @@ public class BeatGridTests
     }
 
     [Fact]
-    public void La_mesure_avance_et_la_phrase_boucle()
+    public void La_mesure_avance_au_rythme_de_la_musique()
     {
-        var (grid, starts) = Play(kickOn: [0, 2], clapOn: [1, 3], bars: 24, chordOnOne: true);
+        // La grille ne compte plus les phrases — SectionTracker les mesure. Elle ne rend
+        // que le franchissement de mesure, et c'est deja ce qu'on lui demande de plus
+        // difficile.
+        var (_, starts) = Play(kickOn: [0, 2], clapOn: [1, 3], bars: 24, chordOnOne: true);
 
         Assert.True(starts.Count > 15, $"{starts.Count} mesures comptees");
-        Assert.InRange(grid.Bar, 0, Structure.PhraseBars - 1);
     }
 
     [Fact]

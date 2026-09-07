@@ -76,16 +76,11 @@ public sealed class BeatGrid
     private readonly float[] _score = new float[4];
     private int _offset;
 
-    // Une nouveaute est tombee : la prochaine mesure ouvrira une phrase.
-    private bool _realign;
-
     public float BeatMs => _beatMs;
     public float Confidence { get; private set; }
     public bool Locked => Confidence > LockedAbove;
 
-    public int Bar { get; private set; }
     public bool BarStart { get; private set; }
-    public bool PhraseStart { get; private set; }
 
     /// <summary>Position dans le temps courant, 0 a 1.</summary>
     public float Phase { get; private set; }
@@ -103,7 +98,6 @@ public sealed class BeatGrid
     public bool Advance(long tMs, float? bpm)
     {
         BarStart = false;
-        PhraseStart = false;
 
         if (bpm is { } b && b > 40f && b < 200f)
         {
@@ -133,13 +127,10 @@ public sealed class BeatGrid
         Forget();
         _index += crossed;
 
-        if (Beat == 0)
-        {
-            BarStart = true;
-            Bar = _realign ? 0 : (Bar + 1) % Structure.PhraseBars;
-            _realign = false;
-            PhraseStart = Bar == 0;
-        }
+        // Le rang de la mesure dans la phrase ne se compte plus ici : il se mesure, et
+        // c'est SectionTracker qui le tient. Deux compteurs pour une meme grandeur se
+        // seraient contredits des la premiere phrase mal devinee.
+        if (Beat == 0) BarStart = true;
 
         return true;
     }
@@ -194,14 +185,13 @@ public sealed class BeatGrid
     public void MarkChange(long tMs) => Vote(Near(tMs), 2.0f);
 
     /// <summary>
-    /// Une rupture structurelle vient d'etre entendue : la prochaine mesure sera la
-    /// premiere d'une phrase. On ne recale jamais en plein milieu d'une mesure — ce
-    /// serait echanger une erreur de phrase contre une erreur de mesure, qui se voit
-    /// bien davantage.
+    /// Une rupture structurelle vient d'etre entendue. Elle ne recale plus la phrase —
+    /// mesure faite, ces ruptures se repartissent au hasard sur un compteur libre et ne
+    /// marquent donc rien — mais elle reste un excellent indice du temps fort : une
+    /// section ne commence jamais au milieu d'une mesure.
     /// </summary>
-    public void AlignPhrase(long tMs)
+    public void MarkSection(long tMs)
     {
-        _realign = true;
         // Et elle vote. Une section ne commence jamais au milieu d'une mesure : c'est,
         // avec le changement d'accord, l'un des deux seuls indices capables de lever
         // l'ambiguite de deux temps que le backbeat laisse ouverte.
@@ -215,7 +205,6 @@ public sealed class BeatGrid
         _index = 0;
         Array.Clear(_score);
         Confidence = 0f;
-        Bar = 0;
     }
 
     /// <summary>

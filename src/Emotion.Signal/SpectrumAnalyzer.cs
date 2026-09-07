@@ -84,6 +84,10 @@ public sealed class SpectrumAnalyzer
     private readonly BeatGrid _grid = new();
     private readonly ArcDetector _arc = new();
 
+    // La structure longue. Elle autocorrele une signature de mesure la ou TempoTracker
+    // autocorrele une enveloppe d'attaque : meme idee, un ordre de grandeur au-dessus.
+    private readonly SectionTracker _section = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -108,6 +112,10 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>La separation est-elle active.</summary>
     public bool Separating => _hpss is not null;
+
+    /// <summary>L'etat du suivi de structure longue, pour le reglage.</summary>
+    public (int Bars, float Best, IReadOnlyList<float> Scores) Section =>
+        (_section.PhraseBars, _section.BestScore, _section.Scores);
 
     /// <summary>Les pentes de la tension, pour le reglage et la sonde hors ligne.</summary>
     public (float Bright, float Bass, float Busy) Slopes =>
@@ -284,14 +292,20 @@ public sealed class SpectrumAnalyzer
         if (hits.Kick) { _grid.Sync(tMs); _grid.MarkKick(tMs); }
         if (hits.Clap) _grid.MarkClap(tMs);
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
-        if (_novelty.Onset) _grid.AlignPhrase(tMs);
+        if (_novelty.Onset) _grid.MarkSection(tMs);
+
+        // La signature de la mesure en cours, close a chaque debut de mesure.
+        _section.Feed(bands, timbre.Centroid, timbre.Density);
+        if (_grid.BarStart) _section.CloseBar();
 
         var beat = _grid.Beat;
         var inBar = beat < 0 ? 0f : (beat + _grid.Phase) / 4f;
+        var bars = _section.PhraseBars;
+        var bar = _section.BarInPhrase;
         var structure = new Structure(
             beat,
-            _grid.Bar,
-            (_grid.Bar + inBar) / Structure.PhraseBars,
+            bar,
+            (bar + inBar) / bars,
             _grid.Confidence,
             _arc.Buildup,
             // La rupture ne vaut que pour la fenetre ou elle est constatee. L'arc n'avance
@@ -300,7 +314,10 @@ public sealed class SpectrumAnalyzer
             // au meme instant.
             stepped && _arc.Drop,
             _grid.BarStart,
-            _grid.PhraseStart);
+            _grid.BarStart && bar == 0,
+            bars,
+            _section.BarsToBoundary,
+            _section.Confidence);
 
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,

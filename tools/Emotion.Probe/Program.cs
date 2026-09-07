@@ -41,12 +41,14 @@ var tempos = new List<float>();
 // Ou tombent les ruptures dans la phrase. Si la musique se construit vraiment en 4, 8,
 // 16, elles doivent se concentrer sur quelques mesures et non se repartir au hasard —
 // et c'est ce qui rendrait leur prochaine occurrence previsible.
-var breakBar = new int[Structure.PhraseBars];
+var breakBar = new int[Structure.DefaultPhraseBars];
 var breakBeat = new int[4];
 var lastBreakBar = -1;
 var breakGaps = new List<int>();
 var barCounter = 0;
 var freeBreaks = new List<int>();
+var phraseLen = new Dictionary<int, int>();
+var sectionConf = new List<float>();
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
@@ -65,7 +67,7 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     if (s.BarStart) { barStarts.Add(tMs); barCounter++; }
     if (f.NoveltyOnset && s.Confidence > 0.35f)
     {
-        breakBar[Math.Clamp(s.Bar, 0, Structure.PhraseBars - 1)]++;
+        breakBar[Math.Clamp(s.Bar, 0, Structure.DefaultPhraseBars - 1)]++;
         if (s.Beat >= 0) breakBeat[s.Beat]++;
         freeBreaks.Add(barCounter);
         if (lastBreakBar >= 0) breakGaps.Add(barCounter - lastBreakBar);
@@ -74,6 +76,8 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     if (s.PhraseStart) phraseStarts.Add(tMs);
     if (s.Drop) drops.Add(tMs);
     confidences.Add(s.Confidence);
+    phraseLen[s.PhraseBars] = phraseLen.GetValueOrDefault(s.PhraseBars) + 1;
+    sectionConf.Add(s.SectionConfidence);
     buildups.Add(s.Buildup);
     var (sb, sa, su) = analyzer.Slopes;
     slopes.Add(MathF.Abs(sb) + MathF.Abs(sa) + MathF.Abs(su));
@@ -106,7 +110,22 @@ if (barStarts.Count > 2)
     Console.WriteLine($"  irreguliers       {off} sur {gaps.Count}");
 }
 
+Console.WriteLine($"\nlongueur de phrase  " +
+    string.Join("  ", phraseLen.OrderByDescending(k => k.Value)
+        .Select(k => $"{k.Key} mesures : {k.Value * 100 / confidences.Count} %")));
+var (sBars, sBest, sScores) = analyzer.Section;
+Console.WriteLine($"scores de phrase    " + string.Join("  ",
+    SectionTracker.Candidates.Select((c, i) => $"{c}:{sScores[i]:F3}")) +
+    $"   retenu {sBars}");
+Console.WriteLine($"confiance section   mediane {Median(sectionConf):F2} · max {sectionConf.Max():F2}");
 Console.WriteLine($"phrases             {phraseStarts.Count}");
+if (phraseStarts.Count > 2)
+{
+    var pg = phraseStarts.Zip(phraseStarts.Skip(1), (a, b) => (float)(b - a)).ToList();
+    var pmed = Median(pg);
+    Console.WriteLine($"  intervalle median {pmed / 1000f:F1} s  ·  " +
+                      $"reguliers {pg.Count(g => MathF.Abs(g - pmed) < pmed * 0.2f)}/{pg.Count}");
+}
 
 var totalBreaks = breakBar.Sum();
 // Compteur libre : celui-la n'est jamais realigne, donc la position d'une rupture y a
@@ -134,7 +153,7 @@ if (totalBreaks >= 4)
 
     // Une repartition au hasard donnerait autant de ruptures par mesure. L'ecart a cette
     // repartition dit si la phrase existe vraiment, et si elle est de la bonne longueur.
-    var flat = totalBreaks / (float)Structure.PhraseBars;
+    var flat = totalBreaks / (float)Structure.DefaultPhraseBars;
     var chi = breakBar.Sum(c => (c - flat) * (c - flat) / flat);
     Console.WriteLine($"  ecart au hasard  {chi:F1}  (0 = reparti au hasard, > 14 = concentre)");
     Console.WriteLine("  ATTENTION : biaise. AlignPhrase remet le compteur a zero a chaque");

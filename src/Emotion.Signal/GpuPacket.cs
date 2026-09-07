@@ -133,6 +133,19 @@ public struct GpuPacket
     /// </summary>
     [FieldOffset(107)] public byte StructureBits;
 
+    /// <summary>Longueur de phrase mesuree, en mesures.</summary>
+    [FieldOffset(108)] public byte PhraseBars;
+
+    /// <summary>
+    /// Mesures restantes avant la prochaine frontiere de phrase. La seule grandeur du
+    /// paquet qui regarde devant — mais elle ne vaut que si <see cref="SectionSure"/> est
+    /// franc, sans quoi le renderer anticiperait une frontiere inventee.
+    /// </summary>
+    [FieldOffset(109)] public byte BarsToBoundary;
+
+    /// <summary>Fiabilite de la structure longue, 0 a 255.</summary>
+    [FieldOffset(110)] public byte SectionSure;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -209,6 +222,9 @@ public struct GpuPacket
         if (f.Structure.Drop) p.StructureBits |= DropBit;
         if (f.Structure.BarStart) p.StructureBits |= BarBit;
         if (f.Structure.PhraseStart) p.StructureBits |= PhraseBit;
+        p.PhraseBars = (byte)f.Structure.PhraseBars;
+        p.BarsToBoundary = (byte)Math.Clamp(f.Structure.BarsToBoundary, 0, 255);
+        p.SectionSure = (byte)Math.Clamp(f.Structure.SectionConfidence * 255f, 0f, 255f);
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;

@@ -216,19 +216,66 @@ changement de timbre, pas d'une section.
 **La piste est celle qui vient de marcher pour le tempo, un ordre de grandeur au-dessus :
 autocorréler une signature à longue échelle** pour trouver la période de la section
 (10 à 45 s) comme on trouve celle du temps (0,3 à 1 s). Une phrase se répète, donc elle
-se corrèle avec elle-même.
+se corrèle avec elle-même. → `SectionTracker`, ci-dessous.
 
 **Piège de mesure à ne pas refaire :** mesurer la position des ruptures sur le compteur
 `Bar` est circulaire, puisque `AlignPhrase` le remet à zéro à chaque rupture. Les trouver
 sur la mesure 0 ne prouve rien.
 
-## Structure## Structure
+## Structure## La structure longue : ce qu'elle trouve, et ce qu'elle ne trouve pas
+
+`SectionTracker` autocorrèle une signature de mesure — 12 bandes, brillance, densité —
+sur cinq hypothèses seulement : 4, 8, 16, 32 mesures. **Deux n'y figure pas** : à cette
+échelle on décrit le motif que le batteur répète *à l'intérieur* de la phrase, qui se
+corrèle mieux que la vraie phrase et n'apprend rien. Mesuré en la laissant : elle
+l'emportait deux fois sur trois.
+
+**Sur signal structuré, ça marche parfaitement.** Ressemblance mesurée : **0,999** pour
+une phrase de 8 régulière, **0,092** sur du bruit. Un facteur dix.
+
+**Sur le set de Selim, la confiance est nulle.** Meilleur score 0,002. Le suivi dit qu'il
+ne sait pas, ce qui est la bonne réponse — mais ça reste un résultat négatif :
+
+> Sur le master, **deux morceaux se superposent**. La signature d'une mesure y mélange ce
+> qui sort et ce qui entre, et aucune phrase ne peut se corréler avec elle-même. C'est
+> l'argument de Selim pour le cue : au casque le morceau est **seul**, et c'est là que sa
+> structure est lisible. La structure longue est probablement une mesure de cue, pas de
+> master.
+
+### Trois métriques de confiance, deux fausses
+
+| Mesure | Sur du bruit | Sur une phrase franche |
+|---|---|---|
+| écart à la moyenne des hypothèses | **1,00** ✗ | 1,00 |
+| écart au poursuivant / dispersion | 0,56 | **0,00** ✗ |
+| **valeur absolue** (en place) | 0,18 | 1,00 |
+
+La deuxième échoue pour une raison qui vaut d'être retenue : **16 mesures est le double de
+8**, donc quand la réponse est 8 son harmonique se corrèle presque autant. La bonne
+réponse et son double se tiennent, ce qui écrase l'écart au suivant précisément quand tout
+va bien.
+
+### Le faux positif qu'il ne faut pas refaire
+
+Le suivi a d'abord rendu « 8 mesures, 100 % du temps », avec des phrases espacées de
+**20,0 s** — soit exactement 8 mesures à 96 BPM. Tout concordait. C'était la **valeur par
+défaut jamais modifiée** : une hypothèse manquant de données valait zéro, les scores réels
+étant négatifs, et l'estimateur sortait sans rien décider.
+
+> **Une valeur par défaut qui a l'air juste est plus dangereuse qu'une erreur franche.**
+> Un test vérifie désormais qu'un signal sans répétition ne produit aucune confiance.
+
+Les scores sont négatifs, et c'est normal : la somme de vecteurs centrés est nulle, donc
+la somme de leurs produits scalaires vaut l'opposé de la somme de leurs carrés. On compare
+les hypothèses entre elles, jamais à zéro.
+
+## Structure
 
 | Projet | Rôle | Dépendances |
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources, transport | **aucune** |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 79 tests | xUnit |
+| `Emotion.Signal.Tests` | 84 tests | xUnit |
 | `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**
