@@ -162,8 +162,11 @@ dotnet run -c Release --project tools/Emotion.Probe -- <set.wav> [début_s] [dur
 Regarder l'écran renseigne sur ce qu'on voit, jamais sur ce qui décide. La sonde a
 corrigé quatre constantes devinées dès sa première exécution.
 
-`http://localhost:5299` · `S` cycle visuel / superposé / signaux · `D` diagnostic ·
+`http://localhost:5099` · `S` cycle visuel / superposé / signaux · `D` diagnostic ·
 `H` masque · `F` plein écran · `/health` pour l'état des tuyaux.
+
+Le port vient de `launchSettings.json` et vaut **5099** — pas 5299, qui a traîné ici et
+m'a fait diagnostiquer à côté une collision de ports.
 
 **Mesurer en `Release`.** En `Debug`, l'écriture vers l'anneau coûte trois fois plus, et
 toute conclusion sur la latence serait fausse.
