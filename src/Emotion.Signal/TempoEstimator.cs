@@ -29,8 +29,19 @@ public sealed class TempoEstimator
     /// signal. Et la valeur rendue reste celle qui a ete mesuree, divisee, jamais celle
     /// qu'un fichier aurait annoncee.
     /// </summary>
+    // LA PLAGE PREFEREE DOIT COUVRIR UN FACTEUR DEUX EXACTEMENT.
+    //
+    // Elle valait 70 a 110, soit un rapport de 1,57. Une plage plus etroite qu'une octave
+    // laisse des valeurs sans aucun representant : 133 BPM divise par deux donne 66,5, qui
+    // est sous 70, donc on le remultiplie par deux et l'on retombe sur 133. Le repli
+    // n'avait pas de point fixe et la valeur oscillait entre deux bornes sans jamais
+    // rentrer. Mesure sur un set : le tempo n'etait publie que sur 4 % des fenetres.
     private const float PreferredLow = 70f;
-    private const float PreferredHigh = 110f;
+    private const float PreferredHigh = 140f;
+
+    // Zone de confort du repertoire, elle bien plus etroite : le bac vit entre 82 et 97.
+    private const float ComfortLow = 78f;
+    private const float ComfortHigh = 112f;
 
     private readonly List<long> _gaps = new();
     private long _lastOnset = -1;
@@ -139,8 +150,27 @@ public sealed class TempoEstimator
     /// </summary>
     private static float Fold(float bpm)
     {
-        for (var i = 0; i < 3 && bpm > PreferredHigh; i++) bpm /= 2f;
-        for (var i = 0; i < 3 && bpm < PreferredLow; i++) bpm *= 2f;
+        for (var i = 0; i < 4 && bpm > PreferredHigh; i++) bpm /= 2f;
+        for (var i = 0; i < 4 && bpm < PreferredLow; i++) bpm *= 2f;
+
+        // LE REPLI TERNAIRE, et c'est un reglage de repertoire.
+        //
+        // Le barber beats et une bonne part du hip-hop sont joues en swing : la
+        // subdivision n'est pas la croche mais le triolet, et le detecteur d'attaques y
+        // voit tres bien un intervalle valant les deux tiers du temps. Mesure sur un set
+        // reel : 133 BPM publies avec constance, soit exactement trois demi-temps pour
+        // deux — le morceau est a 89.
+        //
+        // Un repli d'octave seul ne peut rien pour ce cas : 133 et 89 ne different pas
+        // d'un facteur deux. On tente donc les deux tiers, et <b>seulement</b> s'ils
+        // ramenent dans la zone du repertoire — a defaut on garderait la valeur brute
+        // plutot que d'inventer un tempo qui arrange.
+        if (bpm > ComfortHigh)
+        {
+            var ternary = bpm * 2f / 3f;
+            if (ternary >= ComfortLow && ternary <= ComfortHigh) return ternary;
+        }
+
         return bpm;
     }
 }

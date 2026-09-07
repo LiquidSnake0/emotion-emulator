@@ -81,6 +81,7 @@ public readonly record struct VisualFrame(
     Harmony Harmony = default,
     Voices Voices = default,
     Timbre Timbre = default,
+    Structure Structure = default,
     float Novelty = 0f,
     bool NoveltyOnset = false,
     float Blend = 0f,

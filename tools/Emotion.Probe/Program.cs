@@ -1,0 +1,181 @@
+using Emotion.Signal;
+
+// Sonde hors ligne : passe un enregistrement dans la chaine d'analyse et rend des
+// chiffres.
+//
+// POURQUOI ELLE EXISTE. Regarder l'ecran renseigne sur ce qu'on voit, jamais sur ce qui
+// decide. Chaque correction de ce projet vient d'une mesure — quatre attaques par temps,
+// ecart median egal a l'ecart minimal, 22 µs par message — et aucune n'aurait ete trouvee
+// a l'oeil. Un descripteur qui n'a jamais rencontre de vrai signal n'est pas un
+// descripteur, c'est une intention.
+//
+//   dotnet run --project tools/Emotion.Probe -- <fichier.wav> [debut_s] [duree_s]
+
+if (args.Length < 1)
+{
+    Console.Error.WriteLine("usage: probe <fichier.wav> [debut_s] [duree_s]");
+    return 1;
+}
+
+var path = args[0];
+var startS = args.Length > 1 ? double.Parse(args[1]) : 0;
+var lengthS = args.Length > 2 ? double.Parse(args[2]) : 90;
+
+var (mono, rate) = Wav.ReadMono(path, startS, lengthS);
+Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} s a {rate} Hz");
+
+var analyzer = new SpectrumAnalyzer(rate);
+const int hop = SpectrumAnalyzer.Window;
+
+var barStarts = new List<long>();
+var phraseStarts = new List<long>();
+var drops = new List<long>();
+var confidences = new List<float>();
+var buildups = new List<float>();
+int kicks = 0, claps = 0, hats = 0, novelties = 0, chordChanges = 0;
+var beatHisto = new int[5];   // -1 puis 0..3
+var changes = new List<float>();
+var slopes = new List<float>();
+var tempos = new List<float>();
+
+for (var i = 0; i + hop <= mono.Length; i += hop)
+{
+    var tMs = (long)(i * 1000L / rate);
+    var f = analyzer.Analyze(mono.AsSpan(i, hop), tMs);
+
+    if (f.Hits.Kick) kicks++;
+    if (f.Hits.Clap) claps++;
+    if (f.Hits.Hat) hats++;
+    if (f.NoveltyOnset) novelties++;
+    if (f.Harmony.Change > 0.45f) chordChanges++;
+    changes.Add(f.Harmony.Change);
+    if (f.Bpm is { } bp) tempos.Add(bp);
+
+    var s = f.Structure;
+    if (s.BarStart) barStarts.Add(tMs);
+    if (s.PhraseStart) phraseStarts.Add(tMs);
+    if (s.Drop) drops.Add(tMs);
+    confidences.Add(s.Confidence);
+    buildups.Add(s.Buildup);
+    var (sb, sa, su) = analyzer.Slopes;
+    slopes.Add(MathF.Abs(sb) + MathF.Abs(sa) + MathF.Abs(su));
+    beatHisto[s.Beat + 1]++;
+}
+
+Console.WriteLine($"\nlatence d'analyse   {analyzer.LatencyMs:F0} ms");
+Console.WriteLine($"tempo detecte sur   {tempos.Count * 100 / Math.Max(1, changes.Count)} % des fenetres" +
+                  (tempos.Count > 0 ? $" · median {Median(tempos):F1} BPM" : ""));
+Console.WriteLine($"changement d'accord p50 {Pct(changes, 50):F2} · p90 {Pct(changes, 90):F2} · p99 {Pct(changes, 99):F2}");
+Console.WriteLine($"pentes cumulees     p50 {Pct(slopes, 50):F3} · p95 {Pct(slopes, 95):F3} · max {slopes.Max():F3}");
+Console.WriteLine($"tempo               {analyzer.Bpm?.ToString("F1") ?? "—"} BPM");
+Console.WriteLine($"frappes             {kicks} kicks · {claps} claps · {hats} charleys");
+Console.WriteLine($"indices de structure {chordChanges} changements d'accord · {novelties} ruptures");
+
+Console.WriteLine($"\nconfiance du temps fort  finale {confidences[^1]:F2} · mediane {Median(confidences):F2}");
+Console.WriteLine($"verrouille sur           {confidences.Count(c => c > 0.35f) * 100 / confidences.Count} % des fenetres");
+Console.WriteLine($"temps non nomme          {beatHisto[0] * 100 / confidences.Count} % des fenetres");
+
+if (barStarts.Count > 2)
+{
+    var gaps = barStarts.Zip(barStarts.Skip(1), (a, b) => (float)(b - a)).ToList();
+    var med = Median(gaps);
+    // Une mesure vaut quatre temps : la comparaison au tempo dit si le compteur suit
+    // vraiment la musique ou s'il derive tout seul.
+    var expected = analyzer.Bpm is { } bpm ? 4f * 60_000f / bpm : float.NaN;
+    var off = gaps.Count(g => MathF.Abs(g - med) > med * 0.25f);
+    Console.WriteLine($"\nmesures comptees    {barStarts.Count}");
+    Console.WriteLine($"  intervalle median {med:F0} ms (attendu {expected:F0} ms au tempo detecte)");
+    Console.WriteLine($"  irreguliers       {off} sur {gaps.Count}");
+}
+
+Console.WriteLine($"phrases             {phraseStarts.Count}");
+Console.WriteLine($"tension mediane     {Median(buildups):F2} · maximum {buildups.Max():F2}");
+Console.WriteLine($"ruptures            {drops.Count}" +
+                  (drops.Count > 0 ? "  a " + string.Join(", ", drops.Select(d => $"{d / 1000f:F0} s")) : ""));
+return 0;
+
+static float Pct(List<float> v, int p)
+{
+    if (v.Count == 0) return 0f;
+    var c = new List<float>(v);
+    c.Sort();
+    return c[Math.Clamp(c.Count * p / 100, 0, c.Count - 1)];
+}
+
+static float Median(List<float> v)
+{
+    var c = new List<float>(v);
+    c.Sort();
+    return c.Count == 0 ? 0f : c[c.Count / 2];
+}
+
+/// <summary>Lecteur WAV minimal : PCM 16 ou 24 bits, replie en mono.</summary>
+static class Wav
+{
+    public static (float[] Samples, int Rate) ReadMono(string path, double startS, double lengthS)
+    {
+        using var fs = File.OpenRead(path);
+        using var r = new BinaryReader(fs);
+
+        if (new string(r.ReadChars(4)) != "RIFF") throw new InvalidDataException("pas un RIFF");
+        r.ReadUInt32();
+        if (new string(r.ReadChars(4)) != "WAVE") throw new InvalidDataException("pas un WAVE");
+
+        int channels = 0, rate = 0, bits = 0;
+        long dataOffset = 0, dataSize = 0;
+
+        while (fs.Position + 8 <= fs.Length)
+        {
+            var id = new string(r.ReadChars(4));
+            var size = r.ReadUInt32();
+            var next = fs.Position + size + (size % 2);
+
+            if (id == "fmt ")
+            {
+                r.ReadUInt16();
+                channels = r.ReadUInt16();
+                rate = (int)r.ReadUInt32();
+                r.ReadUInt32();
+                r.ReadUInt16();
+                bits = r.ReadUInt16();
+            }
+            else if (id == "data")
+            {
+                dataOffset = fs.Position;
+                dataSize = size;
+                break;
+            }
+
+            fs.Position = next;
+        }
+
+        if (bits != 16 && bits != 24) throw new NotSupportedException($"{bits} bits non gere");
+
+        var bytesPerSample = bits / 8;
+        var frameBytes = channels * bytesPerSample;
+        var totalFrames = dataSize / frameBytes;
+        var from = Math.Min((long)(startS * rate), totalFrames);
+        var count = (long)Math.Min(lengthS * rate, totalFrames - from);
+
+        fs.Position = dataOffset + from * frameBytes;
+        var raw = r.ReadBytes((int)(count * frameBytes));
+
+        var mono = new float[count];
+        for (long i = 0; i < count; i++)
+        {
+            var sum = 0f;
+            for (var c = 0; c < channels; c++)
+            {
+                var o = (int)(i * frameBytes + c * bytesPerSample);
+                sum += bits == 16
+                    ? BitConverter.ToInt16(raw, o) / 32768f
+                    // 24 bits petit-boutiste signe : on reconstitue le mot puis on etend
+                    // le bit de signe depuis le rang 23.
+                    : ((raw[o] | (raw[o + 1] << 8) | ((sbyte)raw[o + 2] << 16))) / 8388608f;
+            }
+            mono[i] = sum / channels;
+        }
+
+        return (mono, rate);
+    }
+}

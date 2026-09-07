@@ -77,6 +77,13 @@ public sealed class SpectrumAnalyzer
     // sans sur le meme morceau pour juger si le gain les vaut.
     private readonly Hpss? _hpss;
 
+    // La grille metrique et la tension. Elles ne regardent aucun echantillon : elles ne
+    // consomment que ce que les autres ont deja conclu. C'est le premier etage du projet
+    // qui travaille sur le temps long — huit mesures — la ou tout le reste vit dans
+    // l'instant.
+    private readonly BeatGrid _grid = new();
+    private readonly ArcDetector _arc = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -101,6 +108,10 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>La separation est-elle active.</summary>
     public bool Separating => _hpss is not null;
+
+    /// <summary>Les pentes de la tension, pour le reglage et la sonde hors ligne.</summary>
+    public (float Bright, float Bass, float Busy) Slopes =>
+        (_arc.SlopeBright, _arc.SlopeBass, _arc.SlopeBusy);
 
     /// <summary>
     /// Retard total entre le son et la detection, en millisecondes. La somme des deux
@@ -254,12 +265,45 @@ public sealed class SpectrumAnalyzer
                        + (voices.HighHit ? 1 : 0);
         var timbre = _timbre.Feed(full, eventCount);
 
+        // La grille metrique. Elle est nourrie de conclusions, jamais de signal : le kick
+        // la recale, le kick, le clap et le changement d'accord votent pour le temps fort,
+        // et une rupture de section realigne la phrase.
+        // Chaque indice vote pour le temps le plus proche de l'instant ou il tombe, et
+        // non pour « le temps en cours » : le kick arrive a quelques millisecondes de la
+        // frontiere, et le moindre flottement de la grille le ferait changer de camp.
+        var bass = (bands[0] + bands[1] + bands[2]) / 3f;
+        _arc.Feed(bass, timbre.Centroid, timbre.Density);
+        var stepped = _grid.Advance(tMs, _tempo.Bpm);
+        if (stepped) _arc.Advance();
+
+        if (hits.Kick) { _grid.Sync(tMs); _grid.MarkKick(tMs); }
+        if (hits.Clap) _grid.MarkClap(tMs);
+        if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
+        if (_novelty.Onset) _grid.AlignPhrase(tMs);
+
+        var beat = _grid.Beat;
+        var inBar = beat < 0 ? 0f : (beat + _grid.Phase) / 4f;
+        var structure = new Structure(
+            beat,
+            _grid.Bar,
+            (_grid.Bar + inBar) / Structure.PhraseBars,
+            _grid.Confidence,
+            _arc.Buildup,
+            // La rupture ne vaut que pour la fenetre ou elle est constatee. L'arc n'avance
+            // qu'une fois par temps, et republier son verdict a chaque fenetre ferait durer
+            // un evenement instantane une trentaine d'images — la sonde en comptait vingt
+            // au meme instant.
+            stepped && _arc.Drop,
+            _grid.BarStart,
+            _grid.PhraseStart);
+
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
             Harmony: harmony,
             Voices: voices,
             Timbre: timbre,
+            Structure: structure,
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             Flux: Clamp01(rKick / scale),
@@ -317,6 +361,17 @@ public sealed class SpectrumAnalyzer
     /// Jusqu'ou monte le registre pris en compte pour les attaques : les cinq premieres
     /// bandes, soit environ 30 a 400 Hz. Le kick et le bas de la caisse claire.
     /// </summary>
+    // Au-dela de quoi un ecart de profil harmonique compte comme un changement d'accord
+    // dans le vote du temps fort.
+    //
+    // MESURE, PAS DEVINE. A 0,45 — la valeur que la formule appelait « raisonnable » —
+    // la sonde comptait 935 changements d'accord en deux minutes, soit huit par seconde :
+    // ce n'etait plus un indice rare, c'etait un vote uniforme pour tous les temps, donc
+    // aucune information. La distribution reelle sur un set enregistre donne p50 = 0,27
+    // et p99 = 0,77. Le seuil doit vivre dans la queue de cette distribution, pas au
+    // milieu — un indice qui se produit tout le temps ne discrimine rien.
+    private const float ChordChangeVote = 0.75f;
+
     private const int KickBandLimit = 5;
 
     /// <summary>

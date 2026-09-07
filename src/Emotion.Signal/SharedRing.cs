@@ -189,10 +189,17 @@ public sealed unsafe class SharedRingReader : IDisposable
         {
             var w = Volatile.Read(ref *(long*)(_base + 64));
 
-            if (w - _read > _capacity)
+            // UNE CASE N'EST SURE QUE SI L'ECART EST STRICTEMENT INFERIEUR A LA CAPACITE.
+            //
+            // A l'egalite exacte, le producteur ecrit deja dans cette case : le curseur
+            // vaut w, il redige donc la case w & masque, qui est precisement la notre
+            // puisque w - lecture vaut un tour entier. Le curseur ne sera incremente
+            // qu'apres. Une comparaison stricte laissait passer ce cas-la, et le test de
+            // concurrence rendait des messages mixtes de facon intermittente.
+            if (w - _read >= _capacity)
             {
-                Missed += w - _read - _capacity;
-                _read = w - _capacity;
+                Missed += w - _read - _capacity + 1;
+                _read = w - _capacity + 1;
             }
 
             if (_read >= w)
@@ -217,14 +224,26 @@ public sealed unsafe class SharedRingReader : IDisposable
             // qu'un test de concurrence existe pour attraper — dix-sept messages mixtes
             // sur deux cent mille.
             //
-            // On relit donc le curseur : si la case qu'on vient de copier a ete depassee
-            // entre-temps, la copie est suspecte et on recommence a un point sur.
+            // On relit donc le curseur : si la case qu'on vient de copier a ete rejointe
+            // entre-temps, la copie est suspecte et on recommence a un point sur. Meme
+            // borne qu'a l'entree, et pour la meme raison : a l'egalite exacte, l'ecriture
+            // de cette case est deja commencee.
+            // BARRIERE COMPLETE, ET PAS SEULEMENT UNE LECTURE VOLATILE.
+            //
+            // Volatile.Read a une semantique d'acquisition : elle empeche ce qui suit de
+            // remonter avant elle. Elle n'empeche <b>pas</b> ce qui precede de descendre
+            // apres — or ce qui precede est justement la copie des cent douze octets. Sans
+            // barriere pleine, rien n'interdit au compilateur de placer la copie apres la
+            // relecture du curseur, ce qui viderait la verification de tout son sens.
+            //
+            // C'est le schema du seqlock : lire le compteur, copier, barriere, relire le
+            // compteur, et rejeter s'il a bouge.
+            Thread.MemoryBarrier();
             var after = Volatile.Read(ref *(long*)(_base + 64));
-            if (after - _read > _capacity)
+            if (after - _read >= _capacity)
             {
-                // Ecrasee pendant la copie : on jette et on se repositionne.
-                Missed++;
-                _read = after - _capacity;
+                Missed += after - _read - _capacity + 1;
+                _read = after - _capacity + 1;
                 continue;
             }
 
