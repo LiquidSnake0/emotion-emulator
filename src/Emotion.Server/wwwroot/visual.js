@@ -22,6 +22,7 @@ import { Diagnostics } from './diag.js';
 import { Signals } from './signals.js';
 import { Calibrate } from './calibrate.js';
 import { Spring, Pulse, FrameLerp } from './motion.js';
+import { BeatClock } from './beatclock.js';
 import * as S from './shapes.js';
 
 const TAU = Math.PI * 2;
@@ -66,6 +67,18 @@ export class Visual {
     this.spin = 0;
     this.sweep = -1;
     this.lastAt = performance.now();
+
+    // L'horloge de battement : elle ne remplace pas la detection, elle la devance. Toute
+    // la chaine ajoute du retard — fenetre, separation, sommet, interpolation, affichage,
+    // ecran — et aller plus vite a chaque etage ne suffit pas. Un morceau a un tempo :
+    // le prochain temps est previsible, donc on le declenche quand il tombe plutot
+    // qu'apres l'avoir constate.
+    this.clock = new BeatClock();
+
+    // Avance volontaire, pour compenser ce qui reste en aval de l'analyse : la boucle
+    // d'affichage et la dalle, une trentaine de millisecondes. Le visuel part alors un
+    // cheveu avant le son, ce que l'oreille pardonne bien mieux que l'inverse.
+    this.leadMs = 30;
 
     this.clips = new ClipLibrary();
     this.clips.load();
@@ -127,8 +140,18 @@ export class Visual {
     const v = frame.voices ?? {};
     const hit = frame.hits ?? {};
 
+    // ---- l'horloge, avant les impulsions ----
+    // Elle avance de l'ecart reel plus l'avance voulue, et se recale sur chaque kick
+    // detecte sans jamais s'y aligner d'un coup.
+    this.clock.step(dtMs + this.leadMs * 0.02, frame.bpm, this.leadMs);
+    if (hit.kick) this.clock.sync();
+
     // ---- impulsions ----
-    if (hit.kick) this.kick.fire();
+    // Le kick part de la grille quand elle est verrouillee, de la detection sinon. C'est
+    // le seul evenement periodique : un clap irregulier, une voix, un break n'ont pas de
+    // grille et doivent rester reactifs. Predire l'imprevisible inventerait des
+    // evenements, ce qui est pire qu'un visuel en retard.
+    if (this.clock.locked ? this.clock.justFired : hit.kick) this.kick.fire();
     if (hit.clap) { this.clap.fire(); this.clips.onOnset(this.kindName, this.intensity); }
     if (hit.hat) this.hat.fire();
     if (v.lowHit) this.bassHit.fire();

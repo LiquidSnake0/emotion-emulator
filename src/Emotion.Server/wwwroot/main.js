@@ -33,6 +33,7 @@ const hud = {
   cued: document.getElementById('cued'),
   cuePret: document.getElementById('cuepret'),
   blend: document.getElementById('blend'),
+  lock: document.getElementById('lock'),
 };
 
 function setLink(ok, label) {
@@ -178,6 +179,15 @@ function loop() {
     const b = latest.blend ?? 0;
     hud.blend.textContent = b > 0.01 ? `${(b * 100).toFixed(0)}%` : '—';
     hud.blend.style.color = b > 0.5 ? '#e8eaed' : '#9aa0a6';
+
+    // Verrouille : le visuel anticipe le temps au lieu de le subir. Non verrouille : il
+    // reagit, donc avec le retard de toute la chaine. Savoir dans quel mode on est
+    // change ce qu'on juge a l'oeil.
+    const cl = visual.clock;
+    hud.lock.textContent = cl.locked
+      ? `verrouille ±${Math.abs(cl.errorMs).toFixed(0)} ms`
+      : `accroche ${(cl.confidence * 100).toFixed(0)}%`;
+    hud.lock.style.color = cl.locked ? '#34a853' : '#9aa0a6';
   }
   requestAnimationFrame(loop);
 }

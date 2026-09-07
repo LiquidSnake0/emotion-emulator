@@ -79,6 +79,11 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
   où l'œil cesse de lier une image au son. `SpectrumAnalyzer.LatencyMs` doit rester
   affiché et sous ce seuil. Un filtrage payé en désynchronisation ne vaut jamais son prix
   sur un visuel.
+- **La latence ne se règle pas seulement en allant plus vite.** Après avoir ramené
+  l'analyse à 43 ms, il restait ~100 ms bout en bout — interpolation, affichage, dalle.
+  La réponse est la prédiction : `BeatClock` verrouille une grille sur le tempo et
+  déclenche le kick dessus. Écart mesuré 4,5 ms. **Mais uniquement pour le périodique** :
+  prédire un clap irrégulier ou une voix inventerait des événements.
 - **Ce qui suit en continu paraît toujours calé.** L'orbe des graves n'a jamais été en
   retard parce qu'il ne décide de rien. Ne pas en conclure que le reste va bien.
 
