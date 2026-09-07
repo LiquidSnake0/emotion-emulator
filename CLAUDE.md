@@ -82,6 +82,25 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 - **Ce qui suit en continu paraît toujours calé.** L'orbe des graves n'a jamais été en
   retard parce qu'il ne décide de rien. Ne pas en conclure que le reste va bien.
 
+## Face aux bibliothèques du domaine
+
+Mesuré, pas supposé — 89 s d'`instamata`, morceau fiché à 87 BPM :
+
+| Source | Tempo | Erreur |
+|---|---|---|
+| `aubiotrack` | 117,1 | +34,6 % |
+| `aubioonset` + nos contraintes | 115,4 | +32,6 % |
+| **ce projet** | **90,4** | **+3,9 %** |
+
+**Hypothèse réfutée :** l'avantage ne vient pas des contraintes de domaine appliquées en
+aval — les greffer sur `aubio` ne corrige rien. Il vient du **prétraitement** : HPSS puis
+ciblage du registre du kick avant détection.
+
+En .NET il n'existe aucun équivalent d'Essentia ou d'aubio ; `NWaves` couvre le DSP mais
+ni le beat tracking ni le HPSS. Le C++ reste justifié **pour le rendu GPU uniquement** —
+conteneuriser l'analyse ajouterait un runtime et une frontière IPC pour un gain nul,
+l'écriture d'un message coûtant 2,9 µs.
+
 ## Structure
 
 | Projet | Rôle | Dépendances |

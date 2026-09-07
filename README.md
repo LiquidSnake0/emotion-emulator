@@ -493,6 +493,77 @@ le signale.
 
 ---
 
+## Pourquoi pas une bibliothèque existante
+
+La question mérite d'être posée avant d'écrire la moindre FFT, et elle l'a été. Voici
+l'état réel du terrain.
+
+| Bibliothèque | Langage | Ce qu'elle couvre |
+|---|---|---|
+| **Essentia** | C++ | La référence académique : onset, beat, tonalité, HPSS, segmentation |
+| **aubio** | C | Onset / pitch / tempo temps réel, léger |
+| **madmom** | Python | Beat tracking par réseaux de neurones, état de l'art |
+| `NWaves` | **.NET** | FFT, filtres, MFCC, chroma — **ni beat tracking, ni HPSS** |
+| `FftSharp` | **.NET** | La FFT seule |
+
+**Le constat :** en .NET il n'existe aucun équivalent d'Essentia ou d'aubio. Pour la
+FFT, `FftSharp` aurait fait l'affaire et la nôtre n'était pas indispensable. Pour le
+reste — onset, tempo, HPSS, chroma en temps réel — le trou est réel, et les options
+étaient d'écrire, ou de passer par du P/Invoke vers du C.
+
+### Le test contre la référence
+
+Plutôt que d'en débattre, on a mesuré. 89 secondes d'`instamata` enregistrées, données
+aux deux analyseurs.
+
+| Source | Tempo trouvé | Erreur |
+|---|---|---|
+| `aubiotrack` (référence C) | 117,1 BPM | **+34,6 %** |
+| `aubioonset` brut | 348,7 BPM | +301 % |
+| **Emotion Emulator** | **90,4 BPM** | **+3,9 %** |
+| *Vérité (fiche du crate)* | *87 BPM* | |
+
+Sans triomphalisme : `aubio` règle le **cas général**, toute la musique confondue. Ce
+projet règle **un crate**, et le connaît — écart minimal calé entre la noire et la croche
+de 82–97 BPM, repli d'octave vers 70–110, flux limité au registre du kick parce que le
+barber beats est plein de souffle et de crépitement de vinyle. Un outil générique ne peut
+pas faire ces hypothèses ; ici on le peut.
+
+### Une hypothèse testée, et réfutée
+
+L'explication qui venait naturellement était que la valeur ajoutée tenait aux
+**contraintes de domaine**, donc au post-traitement — et qu'on pourrait les appliquer à
+n'importe quelle source d'attaques, `aubio` compris. Le test dit non :
+
+| Source | Tempo |
+|---|---|
+| `aubioonset` + nos contraintes de domaine | 115,4 BPM |
+| `aubiotrack` + nos contraintes de domaine | 117,6 BPM |
+
+Aucune amélioration. **L'avantage vient du prétraitement, pas du post-traitement** :
+séparer le percussif de l'harmonique, puis ne chercher les attaques que dans le registre
+du kick. `aubio` détecte sur le signal complet, attrape donc le piano et les charleys, et
+sa grille est décalée dès le départ — aucune règle en sortie ne rattrape cela.
+
+Conséquence pratique : enrichir `aubio` de notre connaissance du répertoire supposerait
+d'y injecter le HPSS et le ciblage de registre **en amont** de sa détection, pas des
+règles en aval.
+
+### Où le C++ reste justifié
+
+| Étage | Langage | Raison |
+|---|---|---|
+| Analyse | **.NET** | prouvé suffisant, et plus juste qu'`aubio` sur ce répertoire |
+| Transport | mémoire partagée | ~1 µs, aucun runtime supplémentaire |
+| **Rendu GPU** | **C++/CUDA** | aucun équivalent .NET — c'est le bon endroit |
+
+Conteneuriser un service d'analyse en Python ou en C ajouterait un second runtime et une
+frontière réseau ou IPC, pour un gain nul : l'écriture d'un message coûte aujourd'hui
+**2,9 µs**, et une soirée entière a été passée à supprimer un saut de fil pour gagner des
+microsecondes. Le langage n'est pas le goulot.
+
+---
+
 ## Vers l'unité de rendu externe
 
 Le rendu final tournera dans un **processus séparé**, en CUDA. Le contrat est donc défini

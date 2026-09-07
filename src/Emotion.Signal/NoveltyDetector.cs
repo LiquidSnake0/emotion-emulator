@@ -28,6 +28,7 @@ public sealed class NoveltyDetector
     private const int Memory = 180;
 
     private readonly float[] _mean = new float[VisualFrame.BandCount];
+    private float _rawMean;
     private int _seen;
 
     /// <summary>Coefficient d'oubli, deduit de la memoire.</summary>
@@ -44,6 +45,19 @@ public sealed class NoveltyDetector
     public bool Onset { get; private set; }
 
     private bool _armed = true;
+    private int _sinceLast = int.MaxValue;
+
+    /// <summary>
+    /// Ecart minimal entre deux declenchements, en fenetres. Cent quarante valent trois
+    /// secondes.
+    ///
+    /// L'hysteresis seule ne suffisait pas : sur un morceau dont la texture bouge
+    /// constamment, la valeur redescend sous le seuil bas assez souvent pour rearmer, et
+    /// le balayage repartait toutes les deux secondes. Or c'est un geste d'evenement — il
+    /// doit rester rare pour vouloir dire quelque chose. Un effet qui se declenche tout
+    /// le temps ne signale plus rien.
+    /// </summary>
+    private const int Cooldown = 140;
 
     /// <summary>
     /// Nourrit le detecteur du profil de bandes courant.
@@ -76,25 +90,38 @@ public sealed class NoveltyDetector
             return;
         }
 
-        // Lissage court : la distance brute tremble d'une fenetre a l'autre, et un
-        // visuel qui suivrait ce tremblement scintillerait.
-        // Facteur releve apres mesure : sur instamata la nouveaute ne franchissait
-        // jamais son seuil, parce que l'ecart de texture d'un morceau construit sur une
-        // boucle reste faible en valeur absolue. C'est le rapport qui compte, pas
-        // l'amplitude brute.
-        var target = Clamp01(raw * 7f);
+        // Seuil adaptatif plutot qu'un facteur constant, et c'est la troisieme tentative.
+        //
+        // Un facteur fixe s'est revele impossible a regler : a 3,2 la nouveaute ne
+        // franchissait jamais son seuil, a 7 elle restait a 0,80 de moyenne et ne
+        // redescendait donc jamais assez pour se rearmer. Aucune constante ne peut
+        // marcher, parce que l'ecart de texture depend entierement du morceau — une
+        // boucle repetitive en produit peu, un montage de samples enormement.
+        //
+        // On compare donc l'ecart courant a l'ecart <b>habituel de ce morceau</b>, comme
+        // le detecteur d'attaques compare le flux a sa propre moyenne. La grandeur
+        // devient un rapport, sans unite et sans reglage a refaire par disque.
+        _rawMean += (raw - _rawMean) * 0.01f;
+        var ratio = _rawMean > 1e-6f ? raw / _rawMean : 0f;
+
+        var target = Clamp01((ratio - 1f) * 0.8f);
         Level += (target - Level) * 0.25f;
 
         // Seuil a hysteresis : on declenche haut et on se rearme bas. Un seuil unique
         // ferait clignoter le declenchement pendant tout le temps ou la valeur oscille
         // autour de lui — or une voix dure plusieurs secondes.
         Onset = false;
-        if (_armed && Level > 0.30f)
+        if (_sinceLast < int.MaxValue) _sinceLast++;
+
+        // Seuil releve apres ecoute : a 0,30 le balayage partait trop souvent. Une
+        // nouveaute doit etre franche pour meriter son geste.
+        if (_armed && _sinceLast >= Cooldown && Level > 0.45f)
         {
             Onset = true;
             _armed = false;
+            _sinceLast = 0;
         }
-        else if (!_armed && Level < 0.16f)
+        else if (!_armed && Level < 0.20f)
         {
             _armed = true;
         }
