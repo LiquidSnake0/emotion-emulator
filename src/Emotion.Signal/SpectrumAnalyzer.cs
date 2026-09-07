@@ -64,6 +64,11 @@ public sealed class SpectrumAnalyzer
     // la separation, qui etait jusqu'ici calculee puis jetee.
     private readonly VoiceTracker _voices;
 
+    // La couleur du son. Elle travaille sur le spectre complet et non sur le percussif :
+    // un filtre passe-bas agit sur tout, et le mesurer apres separation reviendrait a
+    // regarder par le trou de la serrure.
+    private readonly TimbreTracker _timbre;
+
     // Separation harmonique / percussive, appliquee avant tout le reste. Les bandes et
     // les attaques travaillent alors sur le percussif seul : le piano ne remplit plus
     // les mediums de flux, et un clap redevient detectable pour ce qu'il est.
@@ -87,6 +92,7 @@ public sealed class SpectrumAnalyzer
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
+        _timbre = new TimbreTracker(sampleRate, Window);
         // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
         // un peu moins nette, mais elle reste tres suffisante pour empecher le piano de
         // declencher les claps — et surtout elle cesse de desynchroniser le visuel.
@@ -154,10 +160,14 @@ public sealed class SpectrumAnalyzer
         // que son tampon n'est pas plein elle ne rend rien, et on travaille alors sur
         // le spectre complet : mieux vaut une analyse imparfaite qu'un ecran noir
         // pendant les premieres fenetres.
+        // Le timbre se mesure avant la separation, sur le spectre entier.
         // La separation rend les deux composantes. On garde la percussive pour les
         // bandes et les attaques, et on donne l'harmonique aux registres tonals : sans
         // elle, chaque coup de caisse claire ferait bondir les trois a la fois.
         var voices = Voices.None;
+        Span<float> full = stackalloc float[half];
+        spectrum.CopyTo(full);
+
         if (_hpss is not null && _hpss.Feed(spectrum))
         {
             voices = _voices.Feed(_hpss.Harmonic);
@@ -237,11 +247,19 @@ public sealed class SpectrumAnalyzer
 
         _novelty.Feed(bands);
 
+        // Densite : tout ce qui s'est declenche sur cette fenetre. Un passage calme
+        // n'est pas seulement plus sourd, il est plus vide.
+        var eventCount = (hits.Kick ? 1 : 0) + (hits.Clap ? 1 : 0) + (hits.Hat ? 1 : 0)
+                       + (voices.LowHit ? 1 : 0) + (voices.MidHit ? 1 : 0)
+                       + (voices.HighHit ? 1 : 0);
+        var timbre = _timbre.Feed(full, eventCount);
+
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
             Harmony: harmony,
             Voices: voices,
+            Timbre: timbre,
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             Flux: Clamp01(rKick / scale),

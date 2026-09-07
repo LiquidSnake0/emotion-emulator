@@ -54,6 +54,16 @@ export class Visual {
     this.level = new Spring(16);
     this.tonal = new Spring(6);        // la texture change lentement
 
+    // Le timbre : la couleur du son, pas ses evenements. Un filtre passe-bas qu'on
+    // ferme sur huit mesures ne change ni le tempo, ni les attaques, ni les notes — le
+    // visuel restait donc impassible pendant le geste le plus visible d'un set.
+    //
+    // Raideur basse : ces grandeurs bougent au rythme de la main du DJ, pas de la
+    // musique. Une reaction vive les ferait trembler.
+    this.open = new Spring(5, 1);      // ouverture du filtre, 1 au demarrage
+    this.bright = new Spring(5, 0.5);
+    this.density = new Spring(4, 0.5);
+
     // Impulsions, dont la duree de vie est une fraction du temps musical et non une
     // constante : sinon un effet meurt en 120 ms quel que soit le morceau, et l'ecran
     // reste eteint les quatre cinquiemes d'un temps a 87 BPM.
@@ -170,6 +180,11 @@ export class Visual {
     this.level.step(rms, dt);
     this.tonal.step(frame.harmony?.tonality ?? 0, dt);
 
+    const tb = frame.timbre ?? {};
+    this.open.step(tb.openness ?? 1, dt);
+    this.bright.step(tb.centroid ?? 0.5, dt);
+    this.density.step(tb.density ?? 0.5, dt);
+
     this.spin += dt * (0.06 + this.level.value * 0.22);
     if (this.sweep >= 0) {
       this.sweep += dtMs / (beatMs * 4);
@@ -189,6 +204,26 @@ export class Visual {
     const cx = w / 2, cy = h / 2;
     const unit = Math.min(w, h);
 
+    // L'OUVERTURE DU FILTRE PILOTE TOUT LE RENDU.
+    //
+    // Quand le passe-bas se ferme, le son perd ses aigus : le visuel doit perdre ses
+    // details de la meme facon. On l'obtient en trois gestes simultanes, parce qu'un
+    // seul ne se lirait pas — la scene se contracte, elle se trouble, et tout ce qui
+    // est aigu s'efface. C'est le geste le plus frequent d'un set, il merite d'occuper
+    // tout l'ecran.
+    const open = this.open.value;
+
+    ctx.save();
+    // 1. Contraction : la scene se replie vers son centre.
+    const shrink = 0.72 + open * 0.28;
+    ctx.translate(cx, cy);
+    ctx.scale(shrink, shrink);
+    ctx.translate(-cx, -cy);
+
+    // 2. Trouble : les contours se perdent, comme les aigus.
+    const blur = (1 - open) * 14;
+    if (blur > 0.5) ctx.filter = `blur(${blur.toFixed(1)}px)`;
+
     this.drawBass(ctx, cx, cy, unit, c);
     this.drawKickWave(ctx, cx, cy, unit, c);
     this.drawVoice(ctx, cx, cy, unit, c, sides);
@@ -196,6 +231,7 @@ export class Visual {
     this.drawClap(ctx, cx, cy, unit, c);
     this.drawHat(ctx, w, h, unit, c, bands);
     this.drawSweep(ctx, w, h, c);
+    ctx.restore();
 
     this.clips.draw(ctx, w, h, this.level.value);
 
@@ -255,6 +291,10 @@ export class Visual {
     const count = 9;
     const tint = S.lighten(c, 0.55);
 
+    // Le xylophone est ce qu'un passe-bas coupe en premier. Sa disparition est donc le
+    // signe le plus fidele d'un filtre qui ferme.
+    const cut = Math.pow(this.open.value, 1.6);
+
     for (let i = 0; i < count; i++) {
       const p = S.scatter(i, 3);
       const x = p.x * w;
@@ -267,7 +307,8 @@ export class Visual {
       if (amp < 0.03) continue;
 
       const r = unit * (0.012 + amp * 0.022);
-      S.triangle(ctx, x, y, r, this.spin * 0.6 + phase * TAU, tint, Math.min(0.85, amp));
+      S.triangle(ctx, x, y, r, this.spin * 0.6 + phase * TAU, tint,
+                 Math.min(0.85, amp) * cut);
     }
   }
 
@@ -298,7 +339,7 @@ export class Visual {
       const band = bands[Math.min(bands.length - 1, 6 + (i % 6))] ?? 0;
       const x = w * (0.14 + (i / (n - 1)) * 0.72);
       S.tick(ctx, x, y, unit * (0.008 + band * 0.020) * a,
-             Math.max(1, unit * 0.0025), tint, a * 0.5);
+             Math.max(1, unit * 0.0025), tint, a * 0.5 * Math.pow(this.open.value, 1.4));
     }
   }
 

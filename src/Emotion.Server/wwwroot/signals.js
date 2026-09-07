@@ -20,6 +20,8 @@ const LANES = [
   { key: 'vlow',      label: 'Voice.Low',   color: '#8d6e63', get: f => f.voices?.low ?? 0 },
   { key: 'vmid',      label: 'Voice.Mid',   color: '#66bb6a', get: f => f.voices?.mid ?? 0 },
   { key: 'vhigh',     label: 'Voice.High',  color: '#fff176', get: f => f.voices?.high ?? 0 },
+  { key: 'open',      label: 'Openness',    color: '#ff7043', get: f => f.timbre?.openness ?? 1 },
+  { key: 'bright',    label: 'Centroid',    color: '#26c6da', get: f => f.timbre?.centroid ?? 0 },
 ];
 
 const NOTES = ['do','do#','re','mib','mi','fa','fa#','sol','sol#','la','sib','si'];

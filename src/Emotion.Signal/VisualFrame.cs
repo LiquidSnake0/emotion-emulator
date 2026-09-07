@@ -42,6 +42,12 @@ namespace Emotion.Signal;
 /// global les melange en un seul profil — on sait alors quelle note sonne, jamais qui
 /// la joue.
 /// </param>
+/// <param name="Timbre">
+/// La couleur du son plutot que ses evenements : brillance, ouverture du filtre,
+/// densite. Un passe-bas qu'on ferme sur huit mesures ne change ni le tempo, ni les
+/// attaques, ni les notes — sans cette mesure, le systeme reste impassible pendant le
+/// geste le plus visible d'un set.
+/// </param>
 /// <param name="Novelty">
 /// Ecart a la texture des dernieres secondes, 0 a 1. Capte ce qu'aucun autre detecteur
 /// ne voit : une voix, un sample, une nappe qui entre. Les autres cherchent chacun une
@@ -74,6 +80,7 @@ public readonly record struct VisualFrame(
     Hits Hits = default,
     Harmony Harmony = default,
     Voices Voices = default,
+    Timbre Timbre = default,
     float Novelty = 0f,
     bool NoveltyOnset = false,
     float Blend = 0f,

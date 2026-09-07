@@ -185,26 +185,53 @@ public sealed unsafe class SharedRingReader : IDisposable
     /// </summary>
     public bool TryRead(out GpuPacket packet)
     {
-        var w = Volatile.Read(ref *(long*)(_base + 64));
-
-        if (w - _read > _capacity)
+        while (true)
         {
-            Missed += w - _read - _capacity;
-            _read = w - _capacity;
+            var w = Volatile.Read(ref *(long*)(_base + 64));
+
+            if (w - _read > _capacity)
+            {
+                Missed += w - _read - _capacity;
+                _read = w - _capacity;
+            }
+
+            if (_read >= w)
+            {
+                packet = default;
+                return false;
+            }
+
+            var slot = _base + SharedRing.HeaderSize + (_read & (_capacity - 1)) * _slotSize;
+            packet = *(GpuPacket*)slot;
+
+            // VERIFICATION APRES LECTURE, et c'est indispensable.
+            //
+            // Constater qu'une case est valide puis la lire ne suffit pas : entre les
+            // deux, le producteur a pu faire un tour complet et la reecrire pendant
+            // qu'on la copiait. On obtient alors un message dont la moitie appartient a
+            // une image et la moitie a une autre.
+            //
+            // Le defaut existait depuis le debut mais restait improbable ; il est apparu
+            // le jour ou le message est passe de 96 a 112 octets, parce qu'une copie plus
+            // longue elargit la fenetre de course. C'est exactement le genre de bogue
+            // qu'un test de concurrence existe pour attraper — dix-sept messages mixtes
+            // sur deux cent mille.
+            //
+            // On relit donc le curseur : si la case qu'on vient de copier a ete depassee
+            // entre-temps, la copie est suspecte et on recommence a un point sur.
+            var after = Volatile.Read(ref *(long*)(_base + 64));
+            if (after - _read > _capacity)
+            {
+                // Ecrasee pendant la copie : on jette et on se repositionne.
+                Missed++;
+                _read = after - _capacity;
+                continue;
+            }
+
+            _read++;
+            Volatile.Write(ref *(long*)(_base + 128), _read);
+            return true;
         }
-
-        if (_read >= w)
-        {
-            packet = default;
-            return false;
-        }
-
-        var slot = _base + SharedRing.HeaderSize + (_read & (_capacity - 1)) * _slotSize;
-        packet = *(GpuPacket*)slot;
-        _read++;
-
-        Volatile.Write(ref *(long*)(_base + 128), _read);
-        return true;
     }
 
     public void Dispose()

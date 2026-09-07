@@ -96,6 +96,18 @@ public struct GpuPacket
     /// <summary>Bit 0 grave, bit 1 medium, bit 2 aigu : une note vient d'etre jouee.</summary>
     [FieldOffset(99)] public byte VoiceHits;
 
+    /// <summary>Brillance percue, 0 sourd, 255 clair.</summary>
+    [FieldOffset(100)] public byte Centroid;
+
+    /// <summary>
+    /// Ouverture du filtre, 0 ferme, 255 grand ouvert. C'est le geste du DJ le plus
+    /// visible et le plus frequent.
+    /// </summary>
+    [FieldOffset(101)] public byte Openness;
+
+    /// <summary>Densite d'evenements, 0 vide, 255 dense.</summary>
+    [FieldOffset(102)] public byte Density;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -151,6 +163,10 @@ public struct GpuPacket
         if (f.Voices.LowHit) p.VoiceHits |= 1;
         if (f.Voices.MidHit) p.VoiceHits |= 2;
         if (f.Voices.HighHit) p.VoiceHits |= 4;
+
+        p.Centroid = (byte)Math.Clamp(f.Timbre.Centroid * 255f, 0f, 255f);
+        p.Openness = (byte)Math.Clamp(f.Timbre.Openness * 255f, 0f, 255f);
+        p.Density = (byte)Math.Clamp(f.Timbre.Density * 255f, 0f, 255f);
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
