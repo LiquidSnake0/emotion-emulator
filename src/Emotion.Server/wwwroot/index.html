@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emotion Emulator</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+
+  /* Le bandeau sert au reglage, jamais a la projection. Touche H pour le cacher. */
+  #hud {
+    position: fixed; left: 0; top: 0; right: 0;
+    display: flex; gap: 1.5rem; align-items: baseline;
+    padding: .6rem 1rem;
+    font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #9aa0a6; background: rgba(0,0,0,.55);
+    backdrop-filter: blur(6px);
+    user-select: none;
+  }
+  #hud b { color: #e8eaed; font-weight: 600; }
+  #hud .dot { width: .55rem; height: .55rem; border-radius: 50%; display: inline-block; background: #444; }
+  #hud.off { display: none; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <span><span class="dot" id="link"></span> <span id="state">connexion…</span></span>
+  <span>source <b id="src">—</b></span>
+  <span>bpm <b id="bpm">—</b></span>
+  <span>face <b id="side">—</b></span>
+  <span>camelot <b id="camelot">—</b></span>
+  <span>scene <b id="scene">—</b></span>
+  <span id="title">—</span>
+  <span style="margin-left:auto">H masque · F plein ecran</span>
+</div>
+<canvas id="stage"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

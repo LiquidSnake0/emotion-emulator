@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Emotion.Server/Emotion.Server.csproj" />
+    <Project Path="src/Emotion.Signal/Emotion.Signal.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Emotion.Signal.Tests/Emotion.Signal.Tests.csproj" />
+  </Folder>
+</Solution>
