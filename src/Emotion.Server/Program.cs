@@ -60,7 +60,21 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<GpuSink>());
 var app = builder.Build();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// Le renderer se regle en boucle : on modifie un shader, on recharge, on juge. Or les
+// modules ES sont mis en cache aussi agressivement que le reste, et le navigateur
+// continue de servir l'ancien code sans rien signaler — on croit alors juger une
+// correction qui n'est pas chargee. Ce piege a coute plusieurs allers-retours.
+//
+// Le cout d'un rechargement complet est nul ici : quelques kilooctets depuis localhost.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        ctx.Context.Response.Headers.Pragma = "no-cache";
+    },
+});
 
 // Les clips et les images vivent hors du depot : le manifeste est versionne, les
 // oeuvres non. Le dossier est donc servi depuis la racine du projet plutot que depuis
