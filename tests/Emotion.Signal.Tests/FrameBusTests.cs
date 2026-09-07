@@ -119,7 +119,7 @@ public class GpuPacketTests
     {
         // Le lecteur CUDA s'aligne sur cette constante : elle ne doit pas deriver du
         // cote .NET sans qu'un test le voie.
-        Assert.Equal(GpuPacket.Size,
+        Assert.Equal(112,
                      System.Runtime.InteropServices.Marshal.SizeOf<GpuPacket>());
     }
 

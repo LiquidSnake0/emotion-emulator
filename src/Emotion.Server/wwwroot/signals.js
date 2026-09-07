@@ -16,6 +16,10 @@ const LANES = [
   { key: 'blend',     label: 'Blend',       color: '#ff8a65', get: f => f.blend ?? 0 },
   { key: 'tonality',  label: 'Tonality',    color: '#ba68c8', get: f => f.harmony?.tonality ?? 0 },
   { key: 'chord',     label: 'ChordChange', color: '#f06292', get: f => f.harmony?.change ?? 0 },
+  { key: 'novelty',   label: 'Novelty',     color: '#4dd0e1', get: f => f.novelty ?? 0 },
+  { key: 'vlow',      label: 'Voice.Low',   color: '#8d6e63', get: f => f.voices?.low ?? 0 },
+  { key: 'vmid',      label: 'Voice.Mid',   color: '#66bb6a', get: f => f.voices?.mid ?? 0 },
+  { key: 'vhigh',     label: 'Voice.High',  color: '#fff176', get: f => f.voices?.high ?? 0 },
 ];
 
 const NOTES = ['do','do#','re','mib','mi','fa','fa#','sol','sol#','la','sib','si'];
@@ -69,6 +73,7 @@ export class Signals {
     if (h.kick) bits |= 1;
     if (h.clap) bits |= 2;
     if (h.hat) bits |= 4;
+    if (f.noveltyOnset) bits |= 8;
     this.hits.push(bits);
     if (this.hits.length > HISTORY) this.hits.shift();
   }
@@ -173,6 +178,7 @@ export class Signals {
       { bit: 1, label: 'Hits.Kick', color: '#5aa0ff' },
       { bit: 2, label: 'Hits.Clap', color: '#ffd23c' },
       { bit: 4, label: 'Hits.Hat',  color: '#9aa0a6' },
+      { bit: 8, label: 'Hits.Novelty', color: '#4dd0e1' },
     ];
     const rh = h / rows.length;
     const step = w / (HISTORY - 1);

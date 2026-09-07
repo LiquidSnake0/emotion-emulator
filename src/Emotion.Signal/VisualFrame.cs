@@ -36,6 +36,21 @@ namespace Emotion.Signal;
 /// tonal. Les attaques donnent le rythme, l'harmonie donne la couleur — sans elle, un
 /// piano joue sans que rien ne lui reponde a l'ecran.
 /// </param>
+/// <param name="Voices">
+/// Ce qui joue des notes, reparti en trois registres. Les attaques couvrent ce qui
+/// frappe ; un piano, un xylophone ou une voix ne frappent pas, et un chromagramme
+/// global les melange en un seul profil — on sait alors quelle note sonne, jamais qui
+/// la joue.
+/// </param>
+/// <param name="Novelty">
+/// Ecart a la texture des dernieres secondes, 0 a 1. Capte ce qu'aucun autre detecteur
+/// ne voit : une voix, un sample, une nappe qui entre. Les autres cherchent chacun une
+/// chose precise et ne voient donc que ce qu'on leur a appris a voir.
+/// </param>
+/// <param name="NoveltyOnset">
+/// Vrai sur la seule fenetre ou la nouveaute franchit son seuil. Une impulsion, sinon
+/// l'effet resterait allume tout le temps que dure la voix.
+/// </param>
 /// <param name="Blend">
 /// Part du morceau prepare deja passee dans le master, 0 a 1, <b>mesuree et non
 /// declaree</b>. C'est elle qui fait glisser la projection d'un phenomene a l'autre au
@@ -58,6 +73,9 @@ public readonly record struct VisualFrame(
     float? Bpm,
     Hits Hits = default,
     Harmony Harmony = default,
+    Voices Voices = default,
+    float Novelty = 0f,
+    bool NoveltyOnset = false,
     float Blend = 0f,
     float Flux = 0f,
     float Threshold = 0f)

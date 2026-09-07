@@ -50,6 +50,18 @@ export class Visual {
 
     // L'harmonie : ce qui sonne, par opposition a ce qui frappe. Le piano vit ici.
     this.chord = 0;    // impulsion sur un changement d'accord
+
+    // La nouveaute : une voix, un sample, une nappe qui entre. Elle a son propre geste,
+    // un balayage qui traverse — ni une pulsation comme les percussions, ni une aureole
+    // comme l'harmonie. Un evenement qu'aucun des deux ne voit merite sa propre forme,
+    // sinon il se confondrait avec eux et on ne saurait pas ce qu'on regarde.
+    this.sweep = -1;   // position du balayage, -1 quand il n'y en a pas
+    this.novelty = 0;  // niveau continu, pour la respiration de fond
+
+    // Les instruments qui ne frappent pas, un geste par registre. Ils occupent trois
+    // zones distinctes de l'ecran : sans cela ils se confondraient entre eux et avec
+    // les percussions, et on ne saurait pas ce qu'on regarde.
+    this.vLow = 0; this.vMid = 0; this.vHigh = 0;
     this.pitch = null; // classe de hauteur dominante, 0 a 11
     this.tonal = 0;    // 0 bruite, 1 franchement tonal — lisse, il ne doit pas sauter
 
@@ -142,6 +154,25 @@ export class Visual {
     const dt = 1000 / 60;
     const fall = (partOfBeat) => Math.exp(-dt / (beatMs * partOfBeat));
 
+    // Le balayage traverse en une mesure : assez lent pour se lire, assez rapide pour
+    // ne pas trainer sur le suivant.
+    if (f.noveltyOnset) this.sweep = 0;
+    if (this.sweep >= 0) {
+      this.sweep += dt / (beatMs * 4);
+      if (this.sweep > 1.25) this.sweep = -1;
+    }
+    this.novelty += ((f.novelty ?? 0) - this.novelty) * 0.08;
+
+    // Les notes ont une retombee plus longue que les frappes : un piano resonne, une
+    // caisse claire non. C'est ce qui les distingue a l'oeil autant que leur place.
+    const v = f.voices ?? {};
+    if (v.lowHit) this.vLow = 1;
+    if (v.midHit) this.vMid = 1;
+    if (v.highHit) this.vHigh = 1;
+    this.vLow *= fall(1.1);
+    this.vMid *= fall(0.9);
+    this.vHigh *= fall(0.5);
+
     this.chord *= fall(2.4);    // une harmonie s'installe, elle ne claque pas
     this.shock *= fall(0.55);   // le kick porte : il occupe la moitie du temps
     this.flash *= fall(0.40);   // le clap marque, un peu plus bref
@@ -169,6 +200,7 @@ export class Visual {
       : this.intensity;
     this.drawColor = c;
     this.drawIntensity = intensity;
+    this.drawKind = kind;
 
     // Fond : jamais un noir pur, une teinte tres sombre de la famille. Le noir pur
     // fait ressortir la trame du videoprojecteur.
@@ -187,6 +219,9 @@ export class Visual {
     // porte le rythme, l'image qui l'habille.
     this.clips.draw(ctx, w, h, f.rms);
 
+    this.drawVoices(f);
+    this.drawSweep(f);
+
     this.diag.push(f);
     this.diag.draw(ctx, w, h, f);
 
@@ -198,6 +233,83 @@ export class Visual {
     // Le calage passe en dernier et couvre tout : c'est un instrument de mesure, il ne
     // doit rien avoir d'autre a l'ecran pour que l'oeil puisse juger.
     this.calibrate.draw(ctx, w, h, f, this.latencyMs);
+  }
+
+  // ----------------------------------------------- ce qui joue des notes
+  // Trois zones, trois registres. Le grave monte du bas comme une houle, le medium
+  // respire au centre, l'aigu scintille en haut. Aucun ne pulse comme une percussion :
+  // une note resonne, elle ne frappe pas, et le geste doit le dire.
+  drawVoices(f) {
+    const { ctx, w, h } = this;
+    const c = this.drawColor ?? this.color;
+    const v = f.voices ?? {};
+
+    // GRAVE — une masse qui monte du bas, lente et large.
+    if (this.vLow > 0.03) {
+      const height = h * (0.10 + this.vLow * 0.22) * (0.4 + (v.low ?? 0));
+      const g = ctx.createLinearGradient(0, h, 0, h - height);
+      g.addColorStop(0, `rgba(${c.r}, ${c.g}, ${c.b}, ${this.vLow * 0.30})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, h - height, w, height);
+    }
+
+    // MEDIUM — un anneau qui respire autour du centre. C'est la que vit la voix.
+    if (this.vMid > 0.03) {
+      const unit = Math.min(w, h);
+      const r = unit * (0.30 + this.vMid * 0.10);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${this.vMid * 0.16})`;
+      ctx.lineWidth = Math.max(1, unit * 0.010 * this.vMid);
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // AIGU — des points dans le haut, places par une suite deterministe pour qu'ils ne
+    // dansent pas au hasard d'une image a l'autre.
+    if (this.vHigh > 0.03) {
+      const count = 14;
+      ctx.fillStyle = `rgba(255, 255, 255, ${this.vHigh * 0.5})`;
+      for (let i = 0; i < count; i++) {
+        const x = ((i * 0.6180339887) % 1) * w;
+        const y = h * (0.06 + ((i * 0.7548776662) % 1) * 0.26);
+        const s = Math.max(1, Math.min(w, h) * 0.004 * this.vHigh);
+        ctx.beginPath();
+        ctx.arc(x, y, s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // ------------------------------------------------- ce qui vient d'entrer
+  // Un bandeau lumineux qui traverse l'ecran, plus une lueur de fond proportionnelle a
+  // l'ecart de texture. Il passe au-dessus de tout : c'est un evenement, il doit se
+  // remarquer, et c'est le seul moment ou une voix se voit.
+  drawSweep(f) {
+    const { ctx, w, h } = this;
+    const c = this.drawColor ?? this.color;
+
+    // Lueur de fond : elle monte quand le morceau s'ecarte durablement de sa texture
+    // habituelle, donc pendant un refrain ou un break, et redescend seule.
+    if (this.novelty > 0.05) {
+      ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${this.novelty * 0.10})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    if (this.sweep < 0) return;
+
+    // Le bandeau lui-meme, avec un degrade de chaque cote pour qu'il glisse au lieu de
+    // sauter. Il s'efface sur la fin de sa course.
+    const x = (this.sweep * 1.4 - 0.2) * w;
+    const width = w * 0.16;
+    const fade = Math.max(0, 1 - Math.max(0, this.sweep - 0.75) * 4);
+
+    const g = ctx.createLinearGradient(x - width, 0, x + width, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.5, `rgba(255, 255, 255, ${0.16 * fade})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - width, 0, width * 2, h);
   }
 
   // ------------------------------------------------------- ce qui sonne

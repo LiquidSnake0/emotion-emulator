@@ -30,7 +30,7 @@ namespace Emotion.Signal;
 public struct GpuPacket
 {
     /// <summary>Taille exacte du message, en octets. Le lecteur CUDA s'aligne dessus.</summary>
-    public const int Size = 96;
+    public const int Size = 112;
 
     /// <summary>Nombre magique, pour qu'un lecteur detecte tout de suite un flux mal cadre.</summary>
     public const uint MagicValue = 0x454D5531;   // "EMU1"
@@ -61,7 +61,7 @@ public struct GpuPacket
     /// <summary>Changement d'accord, impulsion 0 a 1.</summary>
     [FieldOffset(36)] public float ChordChange;
 
-    /// <summary>Bit 0 kick, bit 1 clap, bit 2 hat.</summary>
+    /// <summary>Bit 0 kick, bit 1 clap, bit 2 hat, <b>bit 3 nouveaute</b>.</summary>
     [FieldOffset(40)] public byte Hits;
 
     /// <summary>Classe de hauteur dominante, 0 a 11, ou 255 si aucune.</summary>
@@ -73,18 +73,35 @@ public struct GpuPacket
     /// <summary>Intensite du phenomene, 0 a 255 pour 0 a 1.</summary>
     [FieldOffset(43)] public byte Intensity;
 
-    /// <summary>Couleur de famille, un octet par canal, plus un octet libre.</summary>
+    /// <summary>Ecart a la texture des dernieres secondes, 0 a 255 pour 0 a 1.</summary>
+    [FieldOffset(47)] public byte Novelty;
+
+    /// <summary>Couleur de famille, un octet par canal.</summary>
     [FieldOffset(44)] public byte R;
     [FieldOffset(45)] public byte G;
     [FieldOffset(46)] public byte B;
-    [FieldOffset(47)] public byte Reserved;
+
 
     /// <summary>Les douze bandes, grave a aigu, chacune 0 a 1. 48 octets.</summary>
     [FieldOffset(48)] public Bands12 Bands;
 
+    /// <summary>
+    /// Niveaux tonals par registre : grave, medium, aigu. 0 a 255 pour 0 a 1.
+    /// Ce sont les instruments qui ne frappent pas — piano, xylophone, voix.
+    /// </summary>
+    [FieldOffset(96)] public byte VoiceLow;
+    [FieldOffset(97)] public byte VoiceMid;
+    [FieldOffset(98)] public byte VoiceHigh;
+
+    /// <summary>Bit 0 grave, bit 1 medium, bit 2 aigu : une note vient d'etre jouee.</summary>
+    [FieldOffset(99)] public byte VoiceHits;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
+
+    /// <summary>Un element est entre : voix, sample, nappe. Aucun des trois autres ne le voit.</summary>
+    public const byte NoveltyBit = 8;
 
     /// <summary>Aucune hauteur dominante.</summary>
     public const byte NoPitch = 255;
@@ -125,6 +142,15 @@ public struct GpuPacket
         if (f.Hits.Kick) p.Hits |= KickBit;
         if (f.Hits.Clap) p.Hits |= ClapBit;
         if (f.Hits.Hat) p.Hits |= HatBit;
+        if (f.NoveltyOnset) p.Hits |= NoveltyBit;
+        p.Novelty = (byte)Math.Clamp(f.Novelty * 255f, 0f, 255f);
+
+        p.VoiceLow = (byte)Math.Clamp(f.Voices.Low * 255f, 0f, 255f);
+        p.VoiceMid = (byte)Math.Clamp(f.Voices.Mid * 255f, 0f, 255f);
+        p.VoiceHigh = (byte)Math.Clamp(f.Voices.High * 255f, 0f, 255f);
+        if (f.Voices.LowHit) p.VoiceHits |= 1;
+        if (f.Voices.MidHit) p.VoiceHits |= 2;
+        if (f.Voices.HighHit) p.VoiceHits |= 4;
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
