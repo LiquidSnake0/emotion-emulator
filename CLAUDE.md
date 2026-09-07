@@ -135,6 +135,25 @@ ni le beat tracking ni le HPSS. Le C++ reste justifié **pour le rendu GPU uniqu
 conteneuriser l'analyse ajouterait un runtime et une frontière IPC pour un gain nul,
 l'écriture d'un message coûtant 2,9 µs.
 
+## Le tempo, plafond connu du système
+
+Il n'est publié que sur **4 à 11 % des fenêtres** d'un vrai set. La grille métrique s'en
+accommode — une fois calée elle garde sa période — mais tout ce qui suit en dépend.
+
+**Tentative faite et annulée.** Le vote regroupe les écarts par cases de 10 ms, soit
+1,4 % d'un temps à 87 BPM : une frappe humaine en sort en permanence. Regrouper par
+tolérance relative (±4 %) fait effectivement monter la détection de 4 % à 17 % des
+fenêtres — et **dégrade tout le reste** : verrouillage du temps fort de 54 % à 15 %,
+intervalle de mesure de 2688 ms à 11926. Le tempo est trouvé plus souvent mais il saute,
+et la grille le suit.
+
+> **Un tempo instable est pire qu'un tempo absent.** Absent, la grille garde sa période et
+> continue ; instable, elle court après.
+
+Le chantier reste ouvert et il est à traiter pour lui-même, pas en ajustant une constante :
+il demande un lissage du tempo publié, ou une hystérésis, ou de voter sur l'histogramme
+cumulé plutôt que sur les écarts récents.
+
 ## Structure
 
 | Projet | Rôle | Dépendances |
