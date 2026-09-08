@@ -29,7 +29,7 @@ export class Calibrate {
 
   toggle() { this.on = !this.on; }
 
-  draw(ctx, w, h, f, latencyMs) {
+  draw(ctx, w, h, f, latencyMs, avanceMs = null, volSonMs = 0) {
     if (!this.on) return;
 
     const hit = f.hits ?? {};
@@ -107,13 +107,27 @@ export class Calibrate {
       ctx.fill();
     }
 
-    // Le chiffre qui compte : le retard annonce entre le son et l'image.
+    // Les deux chiffres qui comptent : ce que la chaine coute, et ce qu'on lui rend.
     ctx.font = '13px ui-monospace, Menlo, monospace';
     ctx.fillStyle = latencyMs > 40 ? '#ea4335' : '#34a853';
-    ctx.fillText(`retard analyse ${latencyMs ?? '—'} ms`, 24, h - 24);
+    ctx.fillText(`retard analyse ${latencyMs ?? '—'} ms`, 24, h - 42);
+
+    // L'AVANCE SE REGLE ICI, ET NULLE PART AILLEURS.
+    //
+    // Tout ce qui separe le son du mur s'additionne en un seul nombre — chaine d'analyse,
+    // unite de rendu, videoprojecteur, et le temps que met le son a traverser la piece.
+    // Personne ne connait le retard d'affichage de son projecteur ni la distance moyenne
+    // de son public ; mais tout le monde voit si une forme tombe avec la frappe ou apres.
+    // Un curseur, un repere, et l'oeil tranche.
+    if (avanceMs !== null) {
+      ctx.fillStyle = '#e8eaed';
+      const salle = volSonMs > 0 ? ` · salle ${volSonMs.toFixed(0)} ms deduits` : '';
+      ctx.fillText(`avance ${avanceMs.toFixed(0)} ms${salle}   ← →  pour regler`, 24, h - 24);
+    }
 
     ctx.fillStyle = '#5f6368';
-    ctx.fillText('disque = kick · carre = clap · trait = charley · vert = grille du tempo',
+    ctx.fillText('disque = kick · carre = clap · trait = charley · vert = grille du tempo'
+                 + ' · une forme qui traine = avance trop faible',
                  24, h - 6);
 
     ctx.restore();

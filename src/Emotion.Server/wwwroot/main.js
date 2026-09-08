@@ -90,6 +90,29 @@ addEventListener('keydown', (e) => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
   }
+
+  // UN SEUL CURSEUR, REGLE A L'OEIL, UNE FOIS PAR SALLE.
+  //
+  // Tout ce qui separe le son du mur s'additionne en un seul nombre : la chaine
+  // d'analyse, l'unite de rendu, le videoprojecteur, et le temps que met le son a
+  // traverser la piece. Demander a quelqu'un de saisir ces quatre valeurs reviendrait a
+  // lui demander de connaitre le retard d'affichage de son projecteur et la distance
+  // moyenne de son public — deux choses que personne ne sait.
+  //
+  // En revanche, tout le monde <b>voit</b> si une forme tombe avec la frappe ou apres.
+  // C'est ce que font les jeux de rythme et les amplis home cinema : un curseur, un
+  // repere, et l'oeil tranche. L'ecran de calage — touche C — est justement fait pour
+  // cela : tout y est immobile sauf ce que le son declenche.
+  //
+  // Les fleches deplacent l'avance de cinq millisecondes. La valeur est gardee d'une
+  // soiree a l'autre : une salle qu'on retrouve n'a pas a etre recalee.
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    const pas = e.key === 'ArrowRight' ? 5 : -5;
+    visual.leadMs = Math.max(0, Math.min(200, visual.leadMs + pas));
+    try { localStorage.setItem('emotion.lead', String(visual.leadMs)); } catch {}
+    if (!visual.calibrate.on) { visual.calibrate.toggle(); }
+    armAutoHide();
+  }
 });
 
 // Le bouton de mode : trois etats, pour verifier a l'oeil qu'un eclair tombe bien sur

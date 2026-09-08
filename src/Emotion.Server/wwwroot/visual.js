@@ -475,9 +475,18 @@ export class Visual {
         ? Math.min(80, salleM / 343 * 1000)
         : 0;
 
+    // L'ordre des sources : ce qui est demande dans l'adresse, puis ce qui a ete regle a
+    // l'oeil la derniere fois, puis le calcul theorique. Une valeur reglee sur place vaut
+    // toujours mieux qu'une valeur deduite, puisqu'elle englobe ce qu'on n'a pas mesure.
     const leadDemande = Number(reglages.get('lead'));
-    this.leadMs = Math.max(0,
-        (Number.isFinite(leadDemande) && leadDemande > 0 ? leadDemande : 54) - this.volSonMs);
+    let garde = NaN;
+    try { garde = Number(localStorage.getItem('emotion.lead')); } catch { /* mode prive */ }
+
+    this.leadMs = Number.isFinite(leadDemande) && leadDemande > 0
+        ? Math.max(0, leadDemande - this.volSonMs)
+        : Number.isFinite(garde) && garde > 0
+            ? garde
+            : Math.max(0, 54 - this.volSonMs);
 
     this.clips = new ClipLibrary();
     this.clips.load();
@@ -689,7 +698,7 @@ export class Visual {
     this.diag.draw(ctx, w, h, frame);
     this.signals.push(frame);
     this.signals.draw(ctx, w, h, { ...frame, sceneName: this.kindName });
-    this.calibrate.draw(ctx, w, h, frame, this.latencyMs);
+    this.calibrate.draw(ctx, w, h, frame, this.latencyMs, this.leadMs, this.volSonMs);
   }
 
   // ------------------------------------------------------------- TENSION
