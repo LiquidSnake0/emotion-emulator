@@ -438,7 +438,24 @@ tranche — c'est ce que font les jeux de rythme et les amplis home cinéma.
 
 L'écran de calage (touche `C`) est l'instrument : **tout y est immobile sauf ce que le son
 déclenche**. Les flèches `←` `→` déplacent l'avance de 5 ms, et la valeur est gardée d'une
-soirée à l'autre.
+soirée à l'autre. Il affiche quatre chiffres, et un seul est réglable :
+
+| Affiché | Sens | Réglable |
+|---|---|---|
+| **retard perçu** | ce qui reste après avance et vol du son | — |
+| **grille** | verrouillée ou en recherche, avec sa fiabilité | — |
+| **retard analyse** | ce que la chaîne coûte | — |
+| **avance** | ce qu'on lui rend | **oui, `←` `→`** |
+
+**Ne devient réglable que ce qui se juge à l'œil sur place.** L'avance, oui : on voit une
+forme tomber avec la frappe ou après. La fenêtre d'analyse, l'anticipation du sommet, le
+nombre de sources séparées — non. Les mettre sous un curseur reviendrait à demander
+d'arbitrer, en pleine installation, entre vingt millisecondes de latence et quinze points de
+verrouillage, sans rien pour en juger. Ces choix-là se tranchent sur des mesures hors ligne,
+et le dépôt garde la trace de ceux qui ont été testés puis rejetés.
+
+En revanche ils **s'affichent**, et c'est ce qui permet de dire, avant que les gens
+arrivent, si la chaîne tient dans cette salle-là.
 
 **Mais le réglage dépend d'où l'on écoute**, et c'est un piège :
 

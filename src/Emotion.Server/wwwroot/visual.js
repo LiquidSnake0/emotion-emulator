@@ -698,7 +698,12 @@ export class Visual {
     this.diag.draw(ctx, w, h, frame);
     this.signals.push(frame);
     this.signals.draw(ctx, w, h, { ...frame, sceneName: this.kindName });
-    this.calibrate.draw(ctx, w, h, frame, this.latencyMs, this.leadMs, this.volSonMs);
+    this.calibrate.draw(ctx, w, h, frame, this.latencyMs, {
+      avanceMs: this.leadMs,
+      volSonMs: this.volSonMs,
+      verrouille: this.clock.locked,
+      fiabilite: this.clock.confidence,
+    });
   }
 
   // ------------------------------------------------------------- TENSION

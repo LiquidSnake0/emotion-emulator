@@ -29,7 +29,12 @@ export class Calibrate {
 
   toggle() { this.on = !this.on; }
 
-  draw(ctx, w, h, f, latencyMs, avanceMs = null, volSonMs = 0) {
+  /**
+   * @param {object} etat  ce qui decide, mesure en direct : avance, vol du son dans la
+   *   salle, verrouillage de la grille, cout d'une image.
+   */
+  draw(ctx, w, h, f, latencyMs, etat = {}) {
+    const { avanceMs = null, volSonMs = 0, verrouille = false, fiabilite = 0 } = etat;
     if (!this.on) return;
 
     const hit = f.hits ?? {};
@@ -107,8 +112,33 @@ export class Calibrate {
       ctx.fill();
     }
 
-    // Les deux chiffres qui comptent : ce que la chaine coute, et ce qu'on lui rend.
+    // CE QUI SE REGLE ET CE QUI SE CONSTATE, SEPARES.
+    //
+    // Ne devient reglable que ce qui se juge a l'oeil sur place : l'avance, parce qu'on
+    // voit une forme tomber avec la frappe ou apres. Tout le reste — la fenetre
+    // d'analyse, l'anticipation du sommet, le nombre de sources — se decide sur des
+    // mesures hors ligne, et le mettre sous un curseur reviendrait a demander d'arbitrer
+    // en pleine installation entre vingt millisecondes et quinze points de verrouillage,
+    // avec rien pour en juger.
+    //
+    // En revanche ces grandeurs-la <b>s'affichent</b>. C'est ce qui permet de dire, avant
+    // que les gens arrivent, si la chaine tient dans cette salle.
     ctx.font = '13px ui-monospace, Menlo, monospace';
+
+    const bilan = (avanceMs ?? 0) + volSonMs;
+    const percu = Math.max(0, (latencyMs ?? 0) + 27 - bilan);   // 27 : rendu + affichage
+    const couleur = percu <= 20 ? '#34a853' : percu <= 45 ? '#fbbc04' : '#ea4335';
+
+    ctx.fillStyle = couleur;
+    ctx.fillText(`retard percu ~${percu.toFixed(0)} ms`
+                 + (percu <= 20 ? '  imperceptible'
+                    : percu <= 45 ? '  detectable'
+                                  : '  au-dela du seuil'), 24, h - 78);
+
+    ctx.fillStyle = verrouille ? '#34a853' : '#fbbc04';
+    ctx.fillText(`grille ${verrouille ? 'verrouillee' : 'en recherche'}`
+                 + `  ${(fiabilite * 100).toFixed(0)} %`, 24, h - 60);
+
     ctx.fillStyle = latencyMs > 40 ? '#ea4335' : '#34a853';
     ctx.fillText(`retard analyse ${latencyMs ?? '—'} ms`, 24, h - 42);
 
