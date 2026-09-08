@@ -20,9 +20,15 @@ public static class DeckEndpoints
         // Cale une face au casque. N'a aucun effet sur la projection : le public ne
         // doit pas voir le beatmatch commencer.
         app.MapPost("/deck/cue", async (TrackContext track, DeckState deck,
-                                        IHubContext<VisualHub> hub) =>
+                                        IHubContext<VisualHub> hub, IAudioSource source,
+                                        TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Cue(track));
+
+            // Une face arrive au casque. Si c'est la meme qu'avant — l'aiguille repasse
+            // pour verifier le tempo — rien n'est remis a zero : ce passage vient s'ajouter
+            // aux precedents, et c'est la que le systeme apprend le plus.
+            if (Cue(source) is { } casque) memory.Cue(track, casque);
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
@@ -50,17 +56,31 @@ public static class DeckEndpoints
             // decrivent le disque, pas l'instant — ils sont ranges, et ceux du disque qui
             // arrive sont repris. Un disque deja passe dans la soiree recommence donc la
             // ou il s'etait arrete au lieu de tout redecouvrir.
-            if (source is ILearnsTracks learner)
-                memory.Switch(TrackMemory.MasterLane, next.Playing, learner);
+            // CE QUE LE CASQUE A APPRIS SUIT LE DISQUE JUSQU'AUX ENCEINTES.
+            //
+            // NewTrack efface les estimateurs, et il le faut : ils decrivent le son qui
+            // vient de s'arreter. Mais les portraits des sources et le tempo etabli
+            // decrivent la face, pas l'instant — et cette face vient de passer une minute
+            // au casque. Les recalculer serait payer deux fois, au seul moment ou l'on n'a
+            // pas le temps.
+            //
+            // C'est le seul instant du systeme ou quoi que ce soit est recopie. Une
+            // transition est un geste ; rien de ceci ne tourne pendant l'analyse.
+            if (Master(source) is { } platine) memory.Handover(next.Playing, platine, Cue(source));
 
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
         // Renoncement : la face calee est abandonnee.
-        app.MapPost("/deck/drop", async (DeckState deck, IHubContext<VisualHub> hub) =>
+        app.MapPost("/deck/drop", async (DeckState deck, IHubContext<VisualHub> hub,
+                                         IAudioSource source, TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Drop());
+
+            // Le vinyle est range : ce qu'on savait de lui part avec. Le garder ne servirait
+            // qu'a occuper de la place pour une face qui ne reviendra pas ce soir.
+            memory.Forget(cue: true, Cue(source));
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
@@ -73,12 +93,23 @@ public static class DeckEndpoints
         {
             var next = deck.Apply(_ => new Deck(track, null));
             source.NewTrack();
-            if (source is ILearnsTracks learner)
-                memory.Switch(TrackMemory.MasterLane, next.Playing, learner);
+            if (Master(source) is { } platine) memory.Play(track, platine);
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
         app.MapGet("/deck", (DeckState deck) => Results.Ok(deck.Current));
     }
+
+    /// <summary>La face qui joue, si elle sait apprendre.</summary>
+    private static ILearnsTracks? Master(IAudioSource source) => source switch
+    {
+        DualAudioSource d => d.Master as ILearnsTracks,
+        ILearnsTracks l => l,
+        _ => null,
+    };
+
+    /// <summary>La face calee au casque, si elle sait apprendre.</summary>
+    private static ILearnsTracks? Cue(IAudioSource source) =>
+        source is DualAudioSource d ? d.Cue as ILearnsTracks : null;
 }

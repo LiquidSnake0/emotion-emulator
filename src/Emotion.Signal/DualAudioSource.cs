@@ -135,6 +135,15 @@ public sealed class DualAudioSource : IAudioSource
                     }
                 }
 
+                // PENDANT LE FONDU, LE MASTER SUIT MAIS N'APPREND PLUS.
+                //
+                // Les deux disques sonnent ensemble : ce qu'il entend est une somme qui
+                // n'existe dans aucun des deux. Former un portrait la-dessus ecraserait
+                // celui que le casque vient de transmettre, qui lui est propre et deja
+                // constitue. Le rendu ne s'interrompt pas pour autant — seule la formation
+                // du portrait attend que le fader soit arrive au bout.
+                if (_master is PulseAudioSource maitre) maitre.Fondu = blend;
+
                 yield return frame with { Blend = blend };
             }
         }

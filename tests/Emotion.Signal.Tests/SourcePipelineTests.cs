@@ -393,57 +393,93 @@ public class ConnaissanceTests
                     $"apres {jalons[^1]} : {ecarts[^1]:F5}");
     }
 
-    /// <summary>Ce qu'on range se relit tel quel, y compris apres un aller-retour disque.</summary>
+    /// <summary>
+    /// CE QUE LE CASQUE A APPRIS SUIT LE DISQUE JUSQU'AUX ENCEINTES.
+    ///
+    /// C'est le seul transfert du systeme, et le seul qui compte : les seize temps passes a
+    /// caler ne doivent pas etre recalcules au moment de la transition, qui est justement
+    /// l'instant ou l'on n'a pas le temps.
+    /// </summary>
     [Fact]
-    public void La_connaissance_survit_au_disque()
+    public void Ce_qui_est_appris_au_casque_passe_au_master()
     {
-        var dossier = Path.Combine(Path.GetTempPath(), "emotion-test-" + Guid.NewGuid());
-        try
-        {
-            var magasin = new KnowledgeStore(dossier);
-            var tracker = new VoiceTracker(48_000, 1024);
+        var casque = new VoiceTracker(48_000, 1024);
 
-            var spectre = new float[512];
-            for (var i = 0; i < spectre.Length; i++) spectre[i] = 0.4f + (i % 7) * 0.08f;
-            for (var t = 0; t < 400; t++) tracker.Feed(spectre);
+        var spectre = new float[512];
+        for (var i = 0; i < spectre.Length; i++) spectre[i] = 0.4f + (i % 7) * 0.08f;
+        for (var t = 0; t < 400; t++) casque.Feed(spectre);
 
-            tracker.Nommer(2, 42);
-            var avant = tracker.Portraits();
-            magasin.Save(new TrackKnowledge("Macroblank — two sided", avant, 87.6f, 900, 24f));
+        casque.Nommer(2, 42);
+        var appris = new TrackKnowledge("two sided", casque.Portraits(), 87.6f, 900, 24f);
 
-            var relu = magasin.Load("Macroblank — two sided");
-            Assert.True(relu.Any);
-            Assert.Equal(87.6f, relu.Bpm);
-            Assert.Equal(24f, relu.SecondsHeard);
+        var master = new VoiceTracker(48_000, 1024);
+        master.Reprendre(appris);
 
-            var suite = new VoiceTracker(48_000, 1024);
-            suite.Reprendre(relu);
+        for (var r = 0; r < Voices.Registers; r++)
+            Assert.Equal(casque.PortraitDe(r).Observations, master.PortraitDe(r).Observations);
 
-            for (var r = 0; r < Voices.Registers; r++)
-                Assert.Equal(avant[r].Observations, suite.PortraitDe(r).Observations);
+        Assert.Equal((byte)42, appris.Sources[2].Label);
 
-            Assert.Equal((byte)42, relu.Sources[2].Label);
-        }
-        finally
-        {
-            if (Directory.Exists(dossier)) Directory.Delete(dossier, true);
-        }
+        // Et le master continue d'affiner au lieu de repartir : le compteur monte.
+        for (var t = 0; t < 50; t++) master.Feed(spectre);
+        Assert.True(master.PortraitDe(0).Observations > casque.PortraitDe(0).Observations);
     }
 
-    /// <summary>Un morceau jamais entendu ne rend rien, et surtout pas une erreur.</summary>
+    /// <summary>
+    /// Une face jamais entendue ne rend rien, et surtout pas une erreur. C'est le cas du
+    /// premier disque d'un set.
+    /// </summary>
     [Fact]
-    public void Un_morceau_inconnu_part_de_rien()
+    public void Une_face_inconnue_part_de_rien()
     {
-        var dossier = Path.Combine(Path.GetTempPath(), "emotion-test-" + Guid.NewGuid());
-        try
-        {
-            var k = new KnowledgeStore(dossier).Load("jamais entendu");
-            Assert.False(k.Any);
-            Assert.Equal(0f, k.Bpm);
-        }
-        finally
-        {
-            if (Directory.Exists(dossier)) Directory.Delete(dossier, true);
-        }
+        var vide = TrackKnowledge.Empty("jamais entendue");
+        Assert.False(vide.Any);
+        Assert.Equal(0f, vide.Bpm);
+
+        var tracker = new VoiceTracker(48_000, 1024);
+        tracker.Reprendre(vide);
+        Assert.Equal(0, tracker.PortraitDe(0).Observations);
+    }
+}
+
+public class FonduTests
+{
+    private static float[] Bruit(int seed)
+    {
+        var rng = new Random(seed);
+        var s = new float[512];
+        for (var i = 0; i < s.Length; i++) s[i] = (float)rng.NextDouble();
+        return s;
+    }
+
+    /// <summary>
+    /// PENDANT LE FONDU, LE PORTRAIT RECU DU CASQUE NE DOIT PAS BOUGER.
+    ///
+    /// Le master entend les deux disques a la fois : une somme qui n'existe dans aucun des
+    /// deux. Apprendre la-dessus ecraserait ce que le casque vient de transmettre, qui est
+    /// justement ce qu'on cherchait a ne pas recalculer.
+    /// </summary>
+    [Fact]
+    public void Le_master_suit_sans_apprendre_pendant_un_fondu()
+    {
+        var v = new VoiceTracker(48_000, 1024);
+        for (var t = 0; t < 300; t++) v.Feed(Bruit(t));
+
+        var avant = v.PortraitDe(0).Observations;
+
+        // Fader a mi-course : les deux disques sonnent ensemble.
+        v.Apprend = false;
+        for (var t = 300; t < 600; t++) v.Feed(Bruit(t));
+
+        Assert.Equal(avant, v.PortraitDe(0).Observations);
+
+        // Le rendu, lui, ne s'est pas interrompu : les niveaux continuent de sortir.
+        Assert.True(v.EtatDe(0).Level > 0f);
+
+        // Fader arrive au bout : on reprend l'apprentissage la ou on l'avait laisse.
+        v.Apprend = true;
+        for (var t = 600; t < 700; t++) v.Feed(Bruit(t));
+
+        Assert.True(v.PortraitDe(0).Observations > avant);
     }
 }

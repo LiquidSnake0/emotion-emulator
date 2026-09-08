@@ -102,6 +102,22 @@ public sealed class RegisterLane : ISourceLane
         _onset = new OnsetDetector(minGap: 8);
     }
 
+    /// <summary>
+    /// La voie apprend-elle de ce qu'elle entend, ou se contente-t-elle de le suivre ?
+    ///
+    /// PENDANT UN FONDU, ON SUIT SANS APPRENDRE.
+    ///
+    /// Les deux disques sonnent ensemble, et le master entend une somme qui n'existe dans
+    /// aucun des deux : deux basses se superposent, deux nappes se recouvrent. Un portrait
+    /// forme la-dessus ne decrirait ni l'un ni l'autre — et il ecraserait justement celui
+    /// que le casque vient de transmettre, qui lui est propre et deja forme.
+    ///
+    /// Le rendu, lui, ne s'interrompt pas : les niveaux, les contours et les attaques
+    /// continuent de partir a cadence pleine. Seule la formation du portrait est suspendue,
+    /// et elle reprend d'elle-meme une fois le fader arrive au bout.
+    /// </summary>
+    public bool Learning { get; set; } = true;
+
     public void Feed(ReadOnlySpan<float> spectrum)
     {
         var hi = Math.Min(_hi, spectrum.Length);
@@ -157,7 +173,7 @@ public sealed class RegisterLane : ISourceLane
 
         // Le portrait se forme ici, sur le meme fil que le reste de la voie : il ne coute
         // qu'un passage sur la bande, et il ne sort jamais de la voie.
-        _identity.Feed(spectrum, _lo, hi, _level);
+        if (Learning) _identity.Feed(spectrum, _lo, hi, _level);
 
         State = new LaneState(_level, position, hit,
                               _identity.Confidence, _identity.Brightness, _identity.Texture);

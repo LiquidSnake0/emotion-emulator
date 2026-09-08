@@ -181,6 +181,18 @@ public sealed class VoiceTracker
         return p;
     }
 
+    /// <summary>
+    /// Les voies forment-elles leur portrait, ou se contentent-elles de suivre ?
+    ///
+    /// On suspend pendant un fondu : le master y entend les deux disques a la fois, et un
+    /// portrait forme sur ce melange ne decrirait ni l'un ni l'autre. Ce que le casque
+    /// vient de transmettre reste alors intact, et sert immediatement.
+    /// </summary>
+    public bool Apprend
+    {
+        set { foreach (var l in _pipeline.Lanes) if (l is RegisterLane r) r.Learning = value; }
+    }
+
     /// <summary>Le portrait d'une voie, pour la sonde et le reglage.</summary>
     public SourceIdentity PortraitDe(int registre) =>
         _pipeline.Lanes[registre] is RegisterLane lane ? lane.Identity : new SourceIdentity();

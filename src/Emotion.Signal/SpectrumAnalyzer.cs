@@ -85,6 +85,15 @@ public sealed class SpectrumAnalyzer
     /// qu'arreter un morceau et le relancer ne perd rien, et que les seize temps du cue
     /// servent encore une fois le disque passe au master.
     /// </summary>
+    /// <summary>
+    /// Part du disque entrant deja passee au master, 0 a 1. Au-dela de zero et en deca de
+    /// un, les deux disques sonnent ensemble : les voies suivent mais n'apprennent plus.
+    /// </summary>
+    public float Fondu
+    {
+        set => _voices.Apprend = value <= 0.02f || value >= 0.98f;
+    }
+
     public void Reprendre(in TrackKnowledge connaissance)
     {
         _voices.Reprendre(connaissance);

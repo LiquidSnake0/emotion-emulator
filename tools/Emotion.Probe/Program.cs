@@ -38,21 +38,11 @@ var analyzer = new SpectrumAnalyzer(rate, separate);
 // avant. Sert a comparer les deux regimes sur le meme morceau.
 if (args.Contains("inline")) analyzer.Separation.ApprentissageEnLigne = true;
 
-// « memoire » en argument : reprend ce qu'on savait deja de ce disque et range ce qu'on
-// vient d'apprendre. Sert a verifier qu'une seconde ecoute corrige la premiere au lieu de
-// tout recommencer.
-var memoire = args.Contains("memoire")
-    ? new KnowledgeStore(Path.Combine(Path.GetTempPath(), "emotion-connaissance"))
-    : null;
-var connu = memoire?.Load(Path.GetFileNameWithoutExtension(path)) ?? default;
-if (memoire is not null)
-{
-    analyzer.Reprendre(connu);
-    Console.WriteLine(connu.Any
-        ? $"reprise             {connu.SecondsHeard:F0} s deja entendues · " +
-          $"{connu.Sources.Sum(x => x.Observations)} observations · tempo connu {connu.Bpm:F1}"
-        : "reprise             premiere ecoute de ce disque");
-}
+// « memoire » en argument : joue l'extrait DEUX FOIS de suite dans le meme processus, la
+// seconde reprenant ce que la premiere a etabli. C'est ainsi que la reprise se produit
+// vraiment — en memoire vive, sans jamais toucher au disque dur — et cela reproduit ce qui
+// arrive quand on repose l'aiguille au debut pendant un calage.
+var deuxPassages = args.Contains("memoire");
 Console.WriteLine(separate ? "separation active" : "separation COUPEE");
 const int hop = SpectrumAnalyzer.Window;
 
@@ -98,6 +88,22 @@ var annonces = new List<(long T, float Bpm)>();
 var murAt = new long[Voices.Registers];
 Array.Fill(murAt, -1L);
 var chronoImage = new System.Diagnostics.Stopwatch();
+
+// Premier passage, quand on demande la reprise : on ecoute une fois, on garde ce qu'on a
+// appris, et la boucle qui suit repart dessus.
+if (deuxPassages)
+{
+    for (var i = 0; i + hop <= mono.Length; i += hop)
+        analyzer.Analyze(mono.AsSpan(i, hop), (long)(i * 1000L / rate));
+
+    var appris = analyzer.Connaissance(Path.GetFileNameWithoutExtension(path), default);
+    Console.WriteLine($"premier passage     {appris.SecondsHeard:F0} s · " +
+                      $"{appris.Sources.Sum(x => x.Observations)} observations · " +
+                      $"tempo {appris.Bpm:F1}");
+
+    analyzer.NewTrack();
+    analyzer.Reprendre(appris);
+}
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
@@ -153,7 +159,14 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
                             .Select(i => N(f.Voices.LevelAt(i)))) + "]," +
                      "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
                             .Select(i => N(f.Voices.PitchAt(i)))) + "]," +
-                     f.Voices.Hits + "]");
+                     f.Voices.Hits + "," +
+                     // Ce que chaque source sait d'elle-meme : la maturite monte a son
+                     // rythme, sans jamais retenir le reste de l'image.
+                     "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
+                            .Select(i => N(f.Voices.LaneAt(i).Confidence))) + "]," +
+                     "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
+                            .Select(i => (int)f.Voices.LabelAt(i))) + "]," +
+                     $"{N(f.AnnouncedBpm)},{(f.TempoAnnounce ? 1 : 0)},{N(f.DriftVisible)}]");
     }
 
     var s = f.Structure;
@@ -352,13 +365,6 @@ Console.WriteLine($"cout d'une image    median {coutImage[coutImage.Count / 2]:F
                   $"99e centile {p99:F2} ms · pire {pireImage:F1} ms · " +
                   $"{enRetard} images au-dessus du pas de 21 ms");
 
-if (memoire is not null)
-{
-    var apres = analyzer.Connaissance(Path.GetFileNameWithoutExtension(path), connu);
-    memoire.Save(apres);
-    Console.WriteLine($"range               {apres.SecondsHeard:F0} s cumulees · " +
-                      $"{apres.Sources.Sum(x => x.Observations)} observations");
-}
 Console.WriteLine($"annonces de tempo   {annonces.Count} : " +
                   string.Join(" · ", annonces.Take(12).Select(a => $"{a.T / 1000f:F0}s {a.Bpm:F1}")));
 Console.WriteLine("maturite des sources  (confiance 0,6 atteinte a)");
@@ -384,7 +390,7 @@ if (exportTo is not null)
         ",\"latenceMs\":" + analyzer.LatencyMs.ToString("F0") +
         ",\"champs\":[\"t\",\"rms\",\"bandes\",\"drapeaux\",\"voixGrave\"," +
         "\"voixMedium\",\"voixAigue\",\"ouverture\",\"brillance\",\"densite\"," +
-        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\",\"pitchGrave\",\"pitchMedium\",\"pitchAigu\",\"registres\",\"contours\",\"attaques\"]" +
+        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\",\"pitchGrave\",\"pitchMedium\",\"pitchAigu\",\"registres\",\"contours\",\"attaques\",\"maturites\",\"noms\",\"bpmAnnonce\",\"annonce\",\"derive\"]" +
         ",\"images\":[\n" + string.Join(",\n", exported) + "\n]}");
     Console.WriteLine($"\n{exported.Count} images exportees vers {exportTo}");
 }

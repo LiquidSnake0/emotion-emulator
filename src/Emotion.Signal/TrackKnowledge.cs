@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Emotion.Signal;
 
 /// <summary>
@@ -18,6 +16,18 @@ namespace Emotion.Signal;
 /// disque. Le piano qui s'ajoute au master se calcule alors sur le tas, mais tout ce qui
 /// avait deja ete etabli n'est pas recalcule — c'est autant de latence en moins au moment
 /// ou elle coute le plus cher.
+///
+/// EN MEMOIRE VIVE, ET NULLE PART AILLEURS.
+///
+/// Cette connaissance ne va pas sur le disque dur. Une premiere version ecrivait un
+/// fichier par face toutes les dix secondes — 996 octets, ce qui parait indolore. La
+/// mesure a dit autre chose : le cout median d'une image passait de <b>2,0 a 3,2 ms</b>,
+/// soit soixante pour cent de plus, et le pire cas de 17 a 34 ms — au-dessus du pas de
+/// 21 ms. Payer cela pour retrouver un disque la semaine prochaine est un mauvais
+/// echange : ce qu'on optimise, c'est la soiree en cours.
+///
+/// Une face rangee est donc oubliee. Ce qui compte, c'est la duree pendant laquelle le
+/// disque est sur une platine — et pendant ce temps-la, tout est deja en memoire.
 ///
 /// POURQUOI LA CONVERGENCE N'ETAIT PAS ACQUISE.
 ///
@@ -45,80 +55,4 @@ public readonly record struct TrackKnowledge(
 
     /// <summary>Y a-t-il quelque chose a reprendre, ou part-on de rien ?</summary>
     public bool Any => SecondsHeard > 0f;
-}
-
-/// <summary>
-/// Range et reprend la connaissance des morceaux, un fichier par disque.
-///
-/// Un fichier par morceau et non une base : ce sont quelques centaines d'octets, ils se
-/// lisent d'un coup au chargement du disque, et un fichier corrompu ne coute que le
-/// morceau qu'il decrit. Le format est lisible — on doit pouvoir regarder ce que le
-/// systeme croit savoir sans outil.
-/// </summary>
-public sealed class KnowledgeStore
-{
-    private readonly string _root;
-
-    private static readonly JsonSerializerOptions Format = new()
-    {
-        WriteIndented = true,
-    };
-
-    public KnowledgeStore(string root)
-    {
-        _root = root;
-        Directory.CreateDirectory(_root);
-    }
-
-    /// <summary>
-    /// Chemin du fichier d'un morceau. L'identifiant est nettoye : il vient d'un nom de
-    /// fichier ou d'une fiche, et rien ne garantit qu'il tienne dans un nom de fichier.
-    /// </summary>
-    private string PathOf(string id)
-    {
-        var safe = new string(id.Select(
-            c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
-        if (safe.Length > 120) safe = safe[..120];
-        return Path.Combine(_root, safe + ".json");
-    }
-
-    /// <summary>
-    /// Reprend ce qu'on sait de ce morceau, ou une connaissance vide s'il est nouveau.
-    ///
-    /// Un fichier illisible est traite comme une absence : mieux vaut reapprendre que
-    /// s'arreter, et un disque qui refuserait de se lancer parce qu'un cache est abime
-    /// serait un mauvais echange pendant un set.
-    /// </summary>
-    public TrackKnowledge Load(string id)
-    {
-        var path = PathOf(id);
-        if (!File.Exists(path)) return TrackKnowledge.Empty(id);
-
-        try
-        {
-            var k = JsonSerializer.Deserialize<TrackKnowledge>(File.ReadAllText(path));
-            if (k.Sources is not { Length: Voices.Registers }) return TrackKnowledge.Empty(id);
-            return k;
-        }
-        catch (Exception e) when (e is JsonException or IOException)
-        {
-            return TrackKnowledge.Empty(id);
-        }
-    }
-
-    /// <summary>
-    /// Range ce qu'on vient d'apprendre. Une ecriture ratee est silencieuse : perdre un
-    /// cache est sans consequence, interrompre un set n'en est pas une.
-    /// </summary>
-    public void Save(in TrackKnowledge knowledge)
-    {
-        try
-        {
-            File.WriteAllText(PathOf(knowledge.Id),
-                              JsonSerializer.Serialize(knowledge, Format));
-        }
-        catch (IOException)
-        {
-        }
-    }
 }

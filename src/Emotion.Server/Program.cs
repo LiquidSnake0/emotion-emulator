@@ -18,16 +18,13 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters
 
 builder.Services.AddSingleton<DeckState>();
 
-// CE QUE LE SYSTEME A APPRIS SURVIT A L'ARRET DU SERVEUR.
+// CE QUE LE SYSTEME APPREND VIT EN MEMOIRE, ET S'ARRETE AVEC LE DISQUE.
 //
-// Un disque passe hier doit etre reconnu ce soir : les portraits de ses sources et son
-// tempo sont ranges sur le disque dur, un fichier par morceau. Sans cette persistance, la
-// preparation au casque ne servirait que la soiree en cours et chaque set repartirait de
-// rien.
-builder.Services.AddSingleton(new KnowledgeStore(
-    Path.Combine(builder.Environment.ContentRootPath, "connaissance")));
+// Une premiere version rangeait les portraits sur le disque dur, un fichier par face
+// toutes les dix secondes. La mesure a tranche : le cout median d'une image passait de 2,0
+// a 3,2 ms et le pire cas de 17 a 34 ms, soit au-dessus du pas de 21 ms. Reconnaitre un
+// disque la semaine prochaine ne vaut pas d'alourdir la soiree en cours.
 builder.Services.AddSingleton<TrackMemory>();
-builder.Services.AddHostedService<MemoryKeeper>();
 
 // Le bus de diffusion : un producteur, plusieurs consommateurs, aucun ne pouvant
 // ralentir les autres.

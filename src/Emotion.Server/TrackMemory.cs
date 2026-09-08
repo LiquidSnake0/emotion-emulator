@@ -3,109 +3,102 @@ using Emotion.Signal;
 namespace Emotion.Server;
 
 /// <summary>
-/// Fait le lien entre un disque qui commence et ce qu'on savait deja de lui.
+/// Ce que le systeme sait des faces posees en ce moment. <b>En memoire vive, et rien de
+/// plus.</b>
 ///
-/// POURQUOI CE SERVICE PLUTOT QU'UN APPEL DANS LES COMMANDES.
+/// CE QUI EST GARDE, ET CE QUI EST JETE.
 ///
-/// Deux gestes changent le disque — poser directement, ou basculer ce qui etait cale — et
-/// tous deux doivent ranger ce qui vient de finir avant de reprendre ce qui commence. Ecrit
-/// deux fois, cet enchainement finit par diverger : c'est deja arrive dans ce projet avec
-/// le nombre de cotes du polygone, calcule a deux endroits qui ne rendaient pas la meme
-/// valeur. Il vit donc ici, une fois.
+/// Une face sur une platine est connue : tant qu'elle tourne, ou qu'on repasse l'aiguille
+/// pour caler, tout ce qu'on apprend d'elle s'accumule. Une face rangee est oubliee — la
+/// connaissance part avec le disque.
 ///
-/// L'ORDRE COMPTE, ET IL N'EST PAS INTERCHANGEABLE. On range d'abord, on reprend ensuite :
-/// l'inverse ecraserait ce qu'on vient d'apprendre du disque precedent avec ce qu'on savait
-/// du suivant.
+/// Une premiere version ecrivait ces portraits sur le disque dur, un fichier par face. La
+/// mesure a tranche : le cout median d'une image passait de 2,0 a 3,2 ms et le pire cas de
+/// 17 a 34 ms, au-dessus du pas de 21 ms. Retrouver un disque la semaine prochaine ne vaut
+/// pas d'alourdir la soiree en cours.
+///
+/// LE SEUL TRANSFERT QUI COMPTE : DU CASQUE AUX ENCEINTES.
+///
+/// C'est au casque qu'on apprend le plus, parce que c'est la que l'aiguille repasse.
+/// Quand la face calee devient celle qui joue, sa connaissance <b>la suit</b> : le master
+/// reprend un disque deja decrit au lieu de tout redecouvrir au moment ou il en a le moins
+/// le temps. C'est le seul instant ou quoi que ce soit est copie — une transition est un
+/// geste, pas une boucle, et rien de tout cela ne tourne pendant l'analyse.
 /// </summary>
 public sealed class TrackMemory
 {
-    private readonly KnowledgeStore _store;
     private readonly ILogger<TrackMemory> _log;
 
-    /// <summary>
-    /// Une entree par voie : ce qui joue et ce qui se prepare apprennent chacun de leur
-    /// cote. Les melanger ferait ranger le portrait d'une face sous le nom de l'autre.
-    /// </summary>
-    private readonly Dictionary<string, (string Id, TrackKnowledge Knowledge)> _lanes = new();
+    /// <summary>Ce qui joue et ce qui se prepare. Deux entrees, jamais davantage.</summary>
+    private (string Id, TrackKnowledge Knowledge) _master;
+    private (string Id, TrackKnowledge Knowledge) _cue;
 
-    public TrackMemory(KnowledgeStore store, ILogger<TrackMemory> log)
-    {
-        _store = store;
-        _log = log;
-    }
+    public TrackMemory(ILogger<TrackMemory> log) => _log = log;
 
     /// <summary>
-    /// Un disque commence. Ce qu'on a appris du precedent part sur le disque, et ce qu'on
-    /// savait du nouveau revient dans l'analyse.
-    ///
-    /// <paramref name="learner"/> est passe plutot que resolu ici : ce service ne doit pas
-    /// dependre d'une source audio particuliere, et une source de test doit pouvoir prendre
-    /// sa place sans rien changer.
+    /// La face calee devient celle qui joue. Ce qu'on a appris au casque part avec elle ;
+    /// ce qu'on savait de la face precedente est oublie, puisqu'elle est rangee.
     /// </summary>
-    public void Switch(string lane, TrackContext track, ILearnsTracks learner)
+    public void Handover(TrackContext playing, ILearnsTracks master, ILearnsTracks? cue)
     {
-        var id = Identify(track);
-        if (_lanes.TryGetValue(lane, out var held) && held.Id == id) return;
+        var id = Identify(playing);
 
-        Park(lane, learner);
+        // Ce que le casque avait appris de cette face, s'il s'agit bien de la meme.
+        var carried = _cue.Id == id && cue is not null
+            ? cue.Park(id, _cue.Knowledge)
+            : TrackKnowledge.Empty(id);
 
-        var knowledge = _store.Load(id);
-        _lanes[lane] = (id, knowledge);
-        learner.Resume(knowledge);
+        _master = (id, carried);
+        master.Resume(carried);
+
+        // La face n'est plus au casque : le casque repart de rien.
+        _cue = default;
+        cue?.Resume(TrackKnowledge.Empty(""));
 
         _log.LogInformation(
-            knowledge.Any
-                ? "{Lane} · reprise de {Track} : {Seconds:F0} s deja entendues, tempo connu {Bpm:F1}"
-                : "{Lane} · premiere ecoute de {Track}",
-            lane, id, knowledge.SecondsHeard, knowledge.Bpm);
+            carried.Any
+                ? "{Track} passe au master avec {Seconds:F0} s de casque, tempo {Bpm:F1}"
+                : "{Track} passe au master sans preparation",
+            id, carried.SecondsHeard, carried.Bpm);
     }
 
     /// <summary>
-    /// Range ce qu'on sait du disque en cours, sans changer de disque.
-    ///
-    /// APPELE EN CONTINU, ET C'EST INDISPENSABLE.
-    ///
-    /// Ranger seulement au changement de disque perdrait tout ce qu'on apprend pendant la
-    /// preparation, qui est justement le moment ou l'on apprend le plus. Caler une face au
-    /// casque veut dire remettre l'aiguille au debut plusieurs fois de suite pour verifier
-    /// le tempo : chaque passage est une ecoute de plus du meme passage, et cumulees, ces
-    /// reprises font bien plus que les vingt-quatre secondes d'un seul essai.
-    ///
-    /// Rien de tout cela ne doit dependre d'un geste. Un rangement periodique attrape ces
-    /// reprises comme le reste, et une coupure de courant en plein set ne coute alors que
-    /// les quelques secondes ecoulees depuis le dernier.
+    /// Une face est calee au casque. Si c'est la meme qu'avant — l'aiguille repasse pour
+    /// verifier le tempo — on ne touche a rien : ce passage vient s'ajouter aux precedents.
     /// </summary>
-    public void Park(string lane, ILearnsTracks learner)
+    public void Cue(TrackContext track, ILearnsTracks cue)
     {
-        if (!_lanes.TryGetValue(lane, out var held)) return;
+        var id = Identify(track);
+        if (_cue.Id == id) return;
 
-        var updated = learner.Park(held.Id, held.Knowledge);
-        _lanes[lane] = (held.Id, updated);
-        _store.Save(updated);
+        _cue = (id, TrackKnowledge.Empty(id));
+        cue.Resume(_cue.Knowledge);
     }
 
+    /// <summary>Une face est abandonnee ou rangee : on oublie ce qu'on savait d'elle.</summary>
+    public void Forget(bool cue, ILearnsTracks? learner)
+    {
+        if (cue) _cue = default; else _master = default;
+        learner?.Resume(TrackKnowledge.Empty(""));
+    }
+
+    /// <summary>Une face est posee directement au master, sans passer par le casque.</summary>
+    public void Play(TrackContext track, ILearnsTracks master)
+    {
+        var id = Identify(track);
+        _master = (id, TrackKnowledge.Empty(id));
+        master.Resume(_master.Knowledge);
+    }
+
+    /// <summary>Ce qui joue en ce moment, ou une chaine vide.</summary>
+    public string Playing => _master.Id ?? "";
+
+    /// <summary>Ce qui est cale en ce moment, ou une chaine vide.</summary>
+    public string Cued => _cue.Id ?? "";
+
     /// <summary>
-    /// Un disque est pose sans transition — au demarrage, ou pour la face qu'on prepare.
-    /// Utile quand la connaissance doit commencer a s'accumuler avant que le disque ne
-    /// passe au master.
-    /// </summary>
-    public void Follow(string lane, TrackContext track, ILearnsTracks learner) =>
-        Switch(lane, track, learner);
-
-    /// <summary>Le disque suivi sur une voie, ou une chaine vide.</summary>
-    public string CurrentOn(string lane) =>
-        _lanes.TryGetValue(lane, out var held) ? held.Id : "";
-
-    /// <summary>Les deux voies, nommees une fois pour toutes.</summary>
-    public const string MasterLane = "master";
-    public const string CueLane = "cue";
-
-    /// <summary>
-    /// Ce qui identifie un disque d'une ecoute a l'autre.
-    ///
-    /// Le titre, faute de mieux : c'est la seule chose qu'une fiche porte toujours. Deux
-    /// faces homonymes se melangeraient, ce qui est un defaut connu et sans consequence
-    /// tant qu'un crate reste celui d'une personne.
+    /// Ce qui identifie une face. Le titre, faute de mieux : c'est la seule chose qu'une
+    /// fiche porte toujours.
     /// </summary>
     private static string Identify(TrackContext track) =>
         string.IsNullOrWhiteSpace(track.Title) ? "sans-titre" : track.Title.Trim();

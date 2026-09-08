@@ -50,6 +50,9 @@ public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
 
     public void NewTrack() => _analyzer.NewTrack();
 
+    /// <summary>Ou en est le fondu. Pendant, les voies suivent sans former leur portrait.</summary>
+    public float Fondu { set => _analyzer.Fondu = value; }
+
     /// <summary>Reprend ce qu'on savait de ce disque : portraits des sources et tempo.</summary>
     public void Resume(in TrackKnowledge knowledge) => _analyzer.Reprendre(knowledge);
 
