@@ -132,7 +132,7 @@ public sealed class ContinuityWatch
     /// A quel point on peut se fier a la structure, 0 a 1. <b>Elle monte par paliers, et
     /// ce sont ceux du metier.</b>
     ///
-    /// Selim decrit sa propre facon de valider un calage : il laisse tourner deux temps,
+    /// Le DJ decrit sa propre facon de valider un calage : il laisse tourner deux temps,
     /// puis quatre, puis seize avant de se declarer sur. Ce n'est pas une precaution
     /// arbitraire — deux temps confirment qu'on n'a pas rate le calage d'une croche,
     /// quatre qu'on tient la mesure, seize qu'on tient la phrase et que les deux disques

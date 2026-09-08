@@ -20,7 +20,7 @@ export class ClipLibrary {
 
   /**
    * Charge le manifeste et prepare les elements. Un manifeste absent ou vide n'est pas
-   * une erreur : c'est l'etat normal tant que Selim n'a rien depose.
+   * une erreur : c'est l'etat normal tant que le DJ n'a rien depose.
    */
   async load(url = 'assets/manifest.json') {
     let manifest;

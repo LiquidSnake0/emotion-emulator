@@ -249,7 +249,7 @@ public struct GpuPacket
     /// La forme a donner a cette source. <b>Elle vient de la fiche, pas de l'analyse.</b>
     ///
     /// L'analyse sait separer et decrire ; elle ne sait pas laquelle des six merite une
-    /// bouche. Ce choix est musical et appartient a Selim : sur un morceau feutre c'est la
+    /// bouche. Ce choix est musical et appartient au DJ : sur un morceau feutre c'est la
     /// voix qu'on veut voir respirer, sur un morceau dense c'est la frappe. Le paquet le
     /// transporte tel quel jusqu'a l'unite de rendu, qui n'a plus qu'a le lire.
     /// </summary>

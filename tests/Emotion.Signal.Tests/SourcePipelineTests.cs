@@ -153,7 +153,7 @@ public class SourceIdentityTests
 
     /// <summary>
     /// Deux timbres qui se relaient dans la meme bande ne doivent pas produire une source
-    /// sure d'elle : c'est precisement le cas que Selim decrivait — « piano et saxophone
+    /// sure d'elle : c'est precisement le cas que le DJ decrivait — « piano et saxophone
     /// qui s'additionnent, ca donne un truc illisible ». Une bande partagee doit se
     /// declarer inconnue plutot que de recevoir un nom qui vaudra pour la moitie du temps.
     ///
@@ -205,7 +205,7 @@ public class TempoReferenceTests
     ///
     /// 87,6 contre 88,6 fait 1,1 % : un ecart dont on jurerait qu'il ne se voit pas. Sur
     /// les seize temps du palier — onze secondes — la grille a deja glisse d'un sixieme de
-    /// temps, et au bout d'une minute d'un temps entier. C'est exactement ce que Selim
+    /// temps, et au bout d'une minute d'un temps entier. C'est exactement ce que le DJ
     /// demande a voir.
     /// </summary>
     [Fact]
@@ -306,7 +306,7 @@ public class ConnaissanceTests
     }
 
     /// <summary>
-    /// LA PROPRIETE QUE SELIM DEMANDE, ENONCEE COMME UN TEST.
+    /// LA PROPRIETE QUE LE DJ DEMANDE, ENONCEE COMME UN TEST.
     ///
     /// Arreter le son a mi-parcours, le relancer et laisser tourner doit donner ce que
     /// donnerait une ecoute continue : la seconde moitie <b>corrige</b> ce que la premiere
@@ -498,7 +498,7 @@ public class FormeDeLaFicheTests
     /// <summary>
     /// C'EST LA FICHE QUI CHOISIT LA FORME, PAS L'ANALYSE.
     ///
-    /// Sur un morceau feutre, Selim veut voir la voix respirer ; sur un morceau dense,
+    /// Sur un morceau feutre, le DJ veut voir la voix respirer ; sur un morceau dense,
     /// c'est la frappe. L'analyse sait separer six sources et dire ce qu'elle sait de
     /// chacune — elle ne sait pas, et n'a pas a savoir, laquelle merite une bouche.
     /// </summary>

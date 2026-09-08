@@ -1,6 +1,6 @@
 # L'architecture d'une soiree
 
-Decrite par Selim, le 8 septembre 2026. C'est le plan d'ensemble : ce qui suit ne
+Decrite par le DJ, le 8 septembre 2026. C'est le plan d'ensemble : ce qui suit ne
 concerne plus un algorithme mais la facon dont le son traverse le systeme, du telephone au
 mur.
 
@@ -24,7 +24,7 @@ matieres differentes, et c'est ce qui equilibre la charge.**
 
 Rien n'est branche. Le set vit sur le telephone.
 
-Selim choisit sur son telephone le morceau qui ouvrira la soiree. Il part a l'analyse, et
+Le DJ choisit sur son telephone le morceau qui ouvrira la soiree. Il part a l'analyse, et
 le GPU en tire de quoi generer une image animee — **avant que la salle ne se remplisse**.
 
 Le GPU n'attend pas d'avoir tout entendu. Passe un certain seuil, il decide qu'il en sait
@@ -39,7 +39,7 @@ en direct.
 
 ### 2. Le cue
 
-Selim charge le disque suivant au casque et cale. Quand l'oreille lui dit que ca tient, il
+Le DJ charge le disque suivant au casque et cale. Quand l'oreille lui dit que ca tient, il
 **laisse tourner** — et ce temps-la n'est pas perdu : c'est celui dont le systeme a besoin
 pour atteindre son seuil sur le morceau entrant.
 
@@ -107,7 +107,7 @@ pu connaitre.
 
 ## Le seuil : tranche
 
-Selim propose un pourcentage du morceau — « peut-etre 15 % ». La question merite d'etre
+Le DJ propose un pourcentage du morceau — « peut-etre 15 % ». La question merite d'etre
 posee autrement, parce que les mesures de la journee donnent des chiffres :
 
 | Grandeur | Temps avant qu'elle ne se stabilise |
@@ -125,7 +125,7 @@ colle a ce que le systeme sait reellement, au prix d'une attente imprevisible.
 **Decide : convergence, plafonnee a 30 secondes.**
 
 Le plafond vient du metier et non de la technique. Le palier de validation d'un calage est
-de seize temps — c'est celui que Selim emploie a l'oreille — et seize temps a 96 BPM font
+de seize temps — c'est celui que le DJ emploie a l'oreille — et seize temps a 96 BPM font
 une quarantaine de secondes de cue en comptant l'approche. **Trente secondes est donc le
 temps qu'il accepte de laisser tourner**, pas une contrainte de calcul.
 

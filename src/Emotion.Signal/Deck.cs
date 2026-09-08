@@ -3,7 +3,7 @@ namespace Emotion.Signal;
 /// <summary>
 /// L'etat des platines : ce qui joue, et ce qui se prepare.
 ///
-/// <b>Le morceau prepare ne doit jamais atteindre le mur.</b> Selim cale son prochain
+/// <b>Le morceau prepare ne doit jamais atteindre le mur.</b> Le DJ cale son prochain
 /// disque au casque ; si la projection changeait au moment ou il le selectionne, le
 /// public verrait le beatmatch commencer, c'est-a-dire la coulisse. Le visuel ne bascule
 /// donc qu'au signal explicite de <c>POST /deck/take</c>, quand la transition est faite.
@@ -20,7 +20,7 @@ public sealed record Deck(TrackContext Playing, TrackContext? Cued)
 {
     public static readonly Deck Empty = new(TrackContext.Silence, null);
 
-    /// <summary>Selim pose une face au casque.</summary>
+    /// <summary>Le DJ pose une face au casque.</summary>
     public Deck Cue(TrackContext next) => this with { Cued = next };
 
     /// <summary>
@@ -30,6 +30,6 @@ public sealed record Deck(TrackContext Playing, TrackContext? Cued)
     /// </summary>
     public Deck Take() => Cued is null ? this : new Deck(Cued, null);
 
-    /// <summary>Selim renonce a la face calee.</summary>
+    /// <summary>Le DJ renonce a la face calee.</summary>
     public Deck Drop() => this with { Cued = null };
 }

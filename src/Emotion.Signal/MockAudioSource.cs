@@ -177,7 +177,7 @@ public sealed class MockAudioSource : IAudioSource
             Lanes: voies, Labels: noms);
 
         // Le filtre s'ouvre et se ferme lentement, sur seize mesures : c'est le geste que
-        // Selim fera le plus souvent a la table, et il doit pouvoir le regler sans table.
+        // le DJ fera le plus souvent a la table, et il doit pouvoir le regler sans table.
         var cycle = (float)((t / 1000.0 / (beatMs * 64 / 1000.0)) % 1.0);
         var openness = 0.45f + 0.55f * (0.5f - 0.5f * MathF.Cos(cycle * MathF.Tau));
         var timbre = new Timbre(

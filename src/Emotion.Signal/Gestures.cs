@@ -3,7 +3,7 @@ namespace Emotion.Signal;
 /// <summary>
 /// Les gestes du DJ, ramenes a des <b>etats</b> plutot qu'a des grandeurs.
 ///
-/// POURQUOI CETTE COUCHE EXISTE. Selim la formule par un exemple de tempo : passer de 93 a
+/// POURQUOI CETTE COUCHE EXISTE. Le DJ la formule par un exemple de tempo : passer de 93 a
 /// 94 BPM ne s'entend pas, donc rien ne doit bouger a l'ecran pour si peu. La regle
 /// generale qu'il decrit est plus large — <i>« un intervalle pour chaque changement de
 /// vitesse, filtre applique, basse mutee »</i> — et elle ne porte pas sur des amplitudes
@@ -17,7 +17,7 @@ namespace Emotion.Signal;
 /// par seconde quand la grandeur traine autour de son seuil, et le motif clignote.
 ///
 /// Chaque etat a donc deux seuils : un pour entrer, un autre pour sortir. Entre les deux,
-/// rien ne change — c'est precisement l'intervalle que Selim demande.
+/// rien ne change — c'est precisement l'intervalle que le DJ demande.
 /// </summary>
 /// <param name="FilterClosed">Le passe-bas est ferme : le son a perdu ses aigus.</param>
 /// <param name="BassCut">Le registre grave est retire, au fader ou a l'EQ.</param>

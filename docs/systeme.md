@@ -15,7 +15,7 @@ telephone au mur. Ce document fixe qui fait quoi et ce qui passe entre les trois
    └─────────────┘  notif └──────────────────┘        └────────────────────┘
         ▲                          ▲                            │
         │                          │                            │
-     Selim                   table de mixage              retroprojecteur
+     Le DJ                   table de mixage              retroprojecteur
                              master + cue
 ```
 
@@ -25,7 +25,7 @@ telephone au mur. Ce document fixe qui fait quoi et ce qui passe entre les trois
 
 | | `crate` | `emotion-emulator` | `emotion-renderer` |
 |---|---|---|---|
-| Ce qu'il detient | ce que Selim **possede** et a **saisi** | ce qui **sonne**, maintenant | ce qui s'**affiche** |
+| Ce qu'il detient | ce que le DJ **possede** et a **saisi** | ce qui **sonne**, maintenant | ce qui s'**affiche** |
 | Famille, Camelot, pochette | source unique | jamais detectes | recus |
 | Tempo, frappes, timbre | jamais stockes | mesures | recus |
 | Formes, couleurs, mouvement | — | decrits | decides |
@@ -79,7 +79,7 @@ Le canal de retour, rare et asynchrone. Le GPU dit ou il en est.
     « j'ai assez pour faire, je connais les informations de la piste
       et j'ai charge ce que je sais du signal »
 
-Cette notification arrive sur le telephone. C'est elle qui autorise Selim a lancer la
+Cette notification arrive sur le telephone. C'est elle qui autorise le DJ a lancer la
 bascule, et elle repond a une question qu'aucun des deux autres ne peut trancher : *le GPU
 est-il pret ?*
 

@@ -24,7 +24,7 @@ namespace Emotion.Signal;
 /// On ne nomme rien. Cette classe produit une empreinte et une confiance, pas un mot :
 /// decider que la source 3 est un piano supposerait de reconnaitre un piano, et la bande 3
 /// porte un saxophone au disque suivant. Le nom viendra d'ailleurs — de la fiche du crate,
-/// ou de Selim lui-meme — et se posera sur une empreinte assez stable pour le supporter.
+/// ou du DJ lui-meme — et se posera sur une empreinte assez stable pour le supporter.
 /// L'empreinte est ce qui permet ce rapprochement ; elle n'en est pas le resultat.
 /// </summary>
 public sealed class SourceIdentity
@@ -137,7 +137,7 @@ public sealed class SourceIdentity
     ///
     /// C'est une question de <b>duree</b>, et elle se resout vite : sur un morceau du
     /// crate, les six sources y arrivent entre 4,8 et 8,5 secondes — avant les seize temps
-    /// qui font le palier de travail de Selim.
+    /// qui font le palier de travail du DJ.
     /// </summary>
     public float Heard { get; private set; }
 

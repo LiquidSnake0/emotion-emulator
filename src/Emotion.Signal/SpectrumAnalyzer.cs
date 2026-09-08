@@ -391,7 +391,7 @@ public sealed class SpectrumAnalyzer
             // Ils n'etaient calcules que dans sa branche, si bien que la couper les a
             // supprimes d'un coup — et avec eux le disque des graves, le polygone de la
             // voix et les triangles des aigues, soit les deux tiers de ce qui se voit.
-            // Selim l'a dit en trois mots : « il manque plein de sons ».
+            // Le DJ l'a dit en trois mots : « il manque plein de sons ».
             //
             // Sans separation, on leur donne le spectre entier. C'est moins net qu'une
             // moitie harmonique — un coup de caisse claire fera bouger les trois
@@ -477,7 +477,7 @@ public sealed class SpectrumAnalyzer
             //
             // Puis normalisation sur le maximum recent de cette bande, qui redescend
             // lentement. C'est un controle de gain : le visuel garde son relief que le
-            // morceau soit pousse ou feutre, sans que Selim ait a toucher a un niveau.
+            // morceau soit pousse ou feutre, sans que le DJ ait a toucher a un niveau.
             _bandPeak[b] = MathF.Max(peak, _bandPeak[b] * PeakDecay);
             var reference = MathF.Max(_bandPeak[b], MinReference);
             bands[b] = Clamp01(MathF.Pow(peak / reference, 0.7f));

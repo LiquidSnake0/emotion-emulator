@@ -19,7 +19,7 @@ public readonly record struct Readiness(
 /// <summary>
 /// Le seuil de connaissance : quand annoncer qu'on en sait assez sur un disque.
 ///
-/// LE MOMENT OU CETTE QUESTION SE POSE. Selim charge un disque au casque et cale. Quand
+/// LE MOMENT OU CETTE QUESTION SE POSE. Le DJ charge un disque au casque et cale. Quand
 /// l'oreille lui dit que ca tient, il laisse tourner — et ce temps-la n'est pas perdu :
 /// c'est celui dont le systeme a besoin pour apprendre le morceau entrant. La bascule
 /// visuelle attend ce feu vert, parce qu'un visuel qui basculerait sur un morceau qu'il ne
@@ -36,7 +36,7 @@ public readonly record struct Readiness(
 /// l'on se trouve.
 ///
 /// LE PLAFOND VIENT DU METIER. Trente secondes, parce que seize temps est le palier auquel
-/// Selim valide un calage a l'oreille et qu'il n'acceptera pas d'attendre davantage.
+/// le DJ valide un calage a l'oreille et qu'il n'acceptera pas d'attendre davantage.
 /// Passe ce delai, on annonce ce qu'on a — <b>un feu vert tardif ne sert a rien, la
 /// transition sera deja passee</b>.
 ///

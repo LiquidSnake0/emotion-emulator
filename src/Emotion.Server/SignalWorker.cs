@@ -47,7 +47,7 @@ public sealed class SignalWorker : BackgroundService
             //
             // C'est la reponse a la seule question qu'aucun autre maillon ne peut
             // trancher : le systeme en sait-il assez sur ce disque pour qu'on bascule
-            // dessus. Elle part vers le telephone, ou Selim decide.
+            // dessus. Elle part vers le telephone, ou le DJ decide.
             //
             // Une fois : republier a chaque image ferait vibrer une notification
             // cinquante fois par seconde pour un evenement qui n'arrive qu'une seule.

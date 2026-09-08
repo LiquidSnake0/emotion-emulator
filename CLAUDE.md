@@ -1,6 +1,6 @@
 # Emotion Emulator
 
-Moteur de projection temps réel pour les sets vinyle de Selim. Compagnon de
+Moteur de projection temps réel pour les sets vinyle du DJ. Compagnon de
 [crate](https://github.com/LiquidSnake0/crate), qui reste la base de données du bac.
 Les deux se parlent par HTTP, ils ne fusionnent jamais.
 
@@ -179,7 +179,7 @@ empêche un kick de compter comme clap, laquelle compare les deux registres entr
 
 ## Deux corrections trouvées par une vérité terrain
 
-Selim donne un morceau de Macroblank à **87 BPM**. Le système en annonçait **108,4**.
+Le DJ donne un morceau de Macroblank à **87 BPM**. Le système en annonçait **108,4**.
 Deux défauts empilés, dont aucun n'était visible sur le set.
 
 ### 1. La séparation détruisait la pulsation
@@ -211,7 +211,7 @@ tempo, à un quart d'octave d'écart-type — comme le sont déjà les bandes et
 
 | Vérité terrain | Avant | Après |
 |---|---|---|
-| Macroblank, 87 BPM (Selim) | 108,4 | **87,6** |
+| Macroblank, 87 BPM (le DJ) | 108,4 | **87,6** |
 | le set, 96,1 BPM (`aubiotrack`) | 96,6 | 94,2 |
 
 ## Le tempo, par autocorrélation
@@ -333,12 +333,12 @@ l'emportait deux fois sur trois.
 **Sur signal structuré, ça marche parfaitement.** Ressemblance mesurée : **0,999** pour
 une phrase de 8 régulière, **0,092** sur du bruit. Un facteur dix.
 
-**Sur le set de Selim, la confiance est nulle.** Meilleur score 0,002. Le suivi dit qu'il
+**Sur le set du DJ, la confiance est nulle.** Meilleur score 0,002. Le suivi dit qu'il
 ne sait pas, ce qui est la bonne réponse — mais ça reste un résultat négatif :
 
 > Sur le master, **deux morceaux se superposent**. La signature d'une mesure y mélange ce
 > qui sort et ce qui entre, et aucune phrase ne peut se corréler avec elle-même. C'est
-> l'argument de Selim pour le cue : au casque le morceau est **seul**, et c'est là que sa
+> l'argument du DJ pour le cue : au casque le morceau est **seul**, et c'est là que sa
 > structure est lisible. La structure longue est probablement une mesure de cue, pas de
 > master.
 
@@ -620,7 +620,7 @@ valeur sans la retoucher. Garder les deux amortirait deux fois et rendrait tout 
 Le renderer est en canvas 2D sans cadriciel : 60 images par seconde, aucun DOM, aucun
 état. Angular ou React n'y apporteraient rien et coûteraient sur un chemin où l'on veut
 zéro surcoût. **En revanche le futur panneau de contrôle DJ** — listes, formulaires,
-état — est un bon candidat Angular, et Selim souhaite en avoir au dossier.
+état — est un bon candidat Angular, et le DJ souhaite en avoir au dossier.
 
 ## Façon de travailler
 
@@ -628,6 +628,6 @@ Questions ciblées avant de partir sur une solution. Mesurer avant de corriger, 
 la mesure dans le commit. Pas de refactor non demandé, pas de nouvelle dépendance sans le
 dire. Commits petits, nommés par fonctionnalité, en français sans accents.
 
-**Ce dépôt est une vitrine.** Selim le présentera en entretien comme le projet dont il est
+**Ce dépôt est une vitrine.** Le DJ le présentera en entretien comme le projet dont il est
 le plus fier. Le README doit donc défendre chaque choix, y compris les échecs — et ne
 jamais réclamer un motif d'architecture qu'il n'applique pas.

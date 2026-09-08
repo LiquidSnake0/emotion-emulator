@@ -8,7 +8,7 @@ namespace Emotion.Signal;
 /// L'apprentissage tournait dans la meme boucle que l'analyse. Sur un morceau du crate, il
 /// coutait <b>268 ms en moyenne et 359 ms au pire</b>, toutes les 1,4 seconde. Une image
 /// d'analyse en dure 21. Autrement dit, treize images d'affilee etaient bloquees, deux
-/// fois par phrase — puis rattrapees d'un coup. C'est exactement ce que Selim decrivait a
+/// fois par phrase — puis rattrapees d'un coup. C'est exactement ce que le DJ decrivait a
 /// l'ecran : « ca vient en retard comme quand tu regardes un stream sur twitch, ca
 /// s'entasse les valeurs les unes apres les autres ».
 ///

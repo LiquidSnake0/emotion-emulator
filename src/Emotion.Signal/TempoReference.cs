@@ -11,7 +11,7 @@ namespace Emotion.Signal;
 /// donc une <b>reference</b>, et l'analyse n'a plus a la retrouver.
 ///
 /// Mais une reference n'est pas une verite. Un vinyle n'est pas un fichier : le plateau
-/// derive, le pitch bouge sous les doigts, un disque chauffe. Selim le dit ainsi : « si le
+/// derive, le pitch bouge sous les doigts, un disque chauffe. Le DJ le dit ainsi : « si le
 /// bpm est a 87.6 sur mon cue, c'est bon, il faudra pas le recalculer — mais s'il passe a
 /// 88.6, faudra qu'on le sente, qu'on le voie ». Une reference qui ferait taire la mesure
 /// serait pire que pas de reference du tout : elle rendrait le systeme aveugle a
@@ -25,7 +25,7 @@ namespace Emotion.Signal;
 /// Un ecart en BPM ne dit rien a l'oeil. 87,6 contre 88,6, c'est 1,1 % — un chiffre qui a
 /// l'air negligeable et qui ne l'est pas du tout. La periode passe de 685 a 677
 /// millisecondes : <b>huit millisecondes perdues a chaque temps</b>. Sur les seize temps
-/// du palier de Selim, cela fait 130 ms, soit un cinquieme de temps ; au bout d'une
+/// du palier du DJ, cela fait 130 ms, soit un cinquieme de temps ; au bout d'une
 /// minute, la grille a gliss d'un temps entier et le motif tombe a cote du son.
 ///
 /// C'est cette accumulation qu'on publie, comptee en fractions de temps. Elle a la
@@ -51,7 +51,7 @@ public sealed class TempoReference
     /// De combien le tempo doit s'ecarter de la derniere annonce pour qu'on en fasse une
     /// nouvelle.
     ///
-    /// LA VALEUR SORT DU PALIER DE SELIM, ELLE N'EST PAS CHOISIE.
+    /// LA VALEUR SORT DU PALIER DU DJ, ELLE N'EST PAS CHOISIE.
     ///
     /// Son unite de travail fait seize temps. Sur seize temps, un ecart de <c>d</c> BPM
     /// deplace la grille de <c>16 · d / bpm</c> temps ; pour que ce deplacement atteigne le
@@ -59,7 +59,7 @@ public sealed class TempoReference
     /// soit <b>0,68 BPM</b>. En dessous, l'annonce porterait sur un changement que personne
     /// ne pourrait voir sur la duree ou il compte.
     ///
-    /// Selim avait avance 1 BPM en precisant l'avoir dit au jugé. La mesure le place un peu
+    /// Le DJ avait avance 1 BPM en precisant l'avoir dit au jugé. La mesure le place un peu
     /// plus bas, et c'est cette valeur-la qu'on garde.
     /// </summary>
     public float Step { get; set; } = 0.68f;

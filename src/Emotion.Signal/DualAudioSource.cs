@@ -1,7 +1,7 @@
 namespace Emotion.Signal;
 
 /// <summary>
-/// Deux entrees : le master, qui sort en salle, et le cue, ce que Selim ecoute au
+/// Deux entrees : le master, qui sort en salle, et le cue, ce que le DJ ecoute au
 /// casque pendant qu'il cale son prochain disque.
 ///
 /// La seconde entree est ce qui permet au visuel de <b>suivre une transition au lieu de

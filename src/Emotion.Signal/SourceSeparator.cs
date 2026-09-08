@@ -6,7 +6,7 @@ namespace Emotion.Signal;
 /// LE PROBLEME QU'AUCUN FILTRE DE FREQUENCE NE RESOUT. Un piano et un saxophone qui jouent
 /// dans la meme octave tombent dans la meme bande : quelle que soit la finesse du
 /// decoupage, on additionne leurs deux niveaux et l'on obtient une grandeur qui ne decrit
-/// ni l'un ni l'autre. Selim l'a dit ainsi : « piano et saxophone qui s'additionnent, ca
+/// ni l'un ni l'autre. Le DJ l'a dit ainsi : « piano et saxophone qui s'additionnent, ca
 /// donne un truc illisible ».
 ///
 /// Deux sons peuvent partager une hauteur ; ils ne partagent pas leur <b>timbre</b>. Un
@@ -27,7 +27,7 @@ namespace Emotion.Signal;
 ///   suivre       W fige, H seul, sur l'image courante. Quelques milliers d'operations,
 ///                donc gratuit a l'echelle d'une fenetre d'analyse.
 ///
-/// Selim autorise « des centaines de millisecondes » pour la separation, a condition
+/// Le DJ autorise « des centaines de millisecondes » pour la separation, a condition
 /// qu'elle soit juste. L'apprentissage les prend ; le suivi n'en prend aucune.
 /// </summary>
 public sealed class SourceSeparator

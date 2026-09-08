@@ -42,7 +42,7 @@ Tout ceci est mesurable au casque et **immuable** ensuite.
 |---|---|
 | Position de chaque temps fort | l'accent de mesure, sans rien detecter en direct |
 | Frontieres de phrase | changer de motif **sur** la frontiere, pas apres |
-| Entrees et sorties de basse | le cas de Selim : la basse du cue est deja connue |
+| Entrees et sorties de basse | le cas du DJ : la basse du cue est deja connue |
 | Montees et ruptures | la scene se tend avant que le drop n'arrive |
 | Attaques : kicks, claps, charleys | les formes partent a l'instant juste, pas 43 ms plus tard |
 | Changements d'accord | la teinte tourne sur l'accord, pas apres l'avoir constate |
@@ -141,7 +141,7 @@ Trois facons de s'en sortir, par ordre de solidite :
 | Accumuler par passages, en reconnaissant ou l'on est | Marche sans preparation prealable, mais demande de savoir se localiser dans un disque a partir de quelques mesures |
 | Analyser au cue en direct | Le plus simple et le moins fiable, pour la raison ci-dessus |
 
-La premiere rejoint une idee deja presente : le crate est la memoire de ce que Selim
+La premiere rejoint une idee deja presente : le crate est la memoire de ce que le DJ
 possede. Une carte de morceau y a sa place a cote de la tonalite et de la famille.
 
 ## La confiance monte par paliers, et ce sont ceux du metier

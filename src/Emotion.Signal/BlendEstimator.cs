@@ -4,7 +4,7 @@ namespace Emotion.Signal;
 /// Mesure quelle part du morceau prepare est deja passee dans le master.
 ///
 /// <b>C'est ce qui remplace le bouton de bascule.</b> Jusqu'ici la projection changeait
-/// sur une commande : Selim appuyait, le mur basculait d'un coup. Or une transition de
+/// sur une commande : le DJ appuyait, le mur basculait d'un coup. Or une transition de
 /// DJ n'est pas un instant, c'est un geste — le fader monte pendant huit ou seize
 /// mesures. Le visuel doit suivre ce geste, pas l'annoncer.
 ///
@@ -58,7 +58,7 @@ public sealed class BlendEstimator
         // fader ferme. On la ramene donc sur zero plutot que de la laisser osciller.
         var target = Clamp01((raw - 0.15f) / 0.70f);
 
-        // Montee plus vive que la descente : quand Selim ouvre son fader, le visuel doit
+        // Montee plus vive que la descente : quand le DJ ouvre son fader, le visuel doit
         // suivre sans trainer ; quand il le referme parce que le calage ne va pas, mieux
         // vaut que le mur ne reparte pas brutalement en arriere.
         var rate = target > _smoothed ? 0.06f : 0.02f;

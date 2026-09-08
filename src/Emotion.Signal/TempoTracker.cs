@@ -77,7 +77,7 @@ public sealed class TempoTracker
     /// <summary>
     /// Pas minimal du tempo publie, en BPM.
     ///
-    /// <b>Ordre de grandeur, pas valeur mesuree.</b> Selim l'a donne de memoire — « passer
+    /// <b>Ordre de grandeur, pas valeur mesuree.</b> Le DJ l'a donne de memoire — « passer
     /// de 93 a 94 ca va meme pas se sentir » — et le principe est juste : le seuil du
     /// perceptible est un ecart de tempo et non une proportion, sans quoi la grille serait
     /// plus nerveuse sur un morceau lent que sur un rapide. Le chiffre lui-meme reste a
@@ -331,7 +331,7 @@ public sealed class TempoTracker
 
         // Hysteresis d'un BPM, en valeur absolue et non en pourcentage.
         //
-        // C'est la formulation de Selim, et elle est meilleure : « passer de 93 a 94 ca va
+        // C'est la formulation du DJ, et elle est meilleure : « passer de 93 a 94 ca va
         // meme pas se sentir ». Le seuil du perceptible est un ecart de tempo, pas une
         // proportion — un pourcentage rendrait la grille plus nerveuse sur un morceau lent
         // que sur un morceau rapide, alors que l'oreille les juge pareil.

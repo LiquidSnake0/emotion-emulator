@@ -32,7 +32,7 @@ public class KnowledgeGateTests
     [Fact]
     public void Le_feu_vert_arrive_bien_avant_le_plafond()
     {
-        // L'interet du critere : sur un morceau lisible, on ne fait pas attendre Selim
+        // L'interet du critere : sur un morceau lisible, on ne fait pas attendre le DJ
         // trente secondes pour rien.
         var gate = new KnowledgeGate();
         long at = -1;

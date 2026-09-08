@@ -22,7 +22,7 @@ public readonly record struct Voices(
     /// TROIS NE SUFFISAIENT PAS, ET LA RAISON EST MUSICALE. Un piano et un saxophone qui
     /// jouent dans la meme octave tombaient dans le meme registre : ils devenaient une
     /// seule grandeur, donc une seule forme, et tout ce que l'oreille distingue entre eux
-    /// disparaissait. Selim l'a dit ainsi : « a l'oreille je vois tellement de choses et
+    /// disparaissait. Le DJ l'a dit ainsi : « a l'oreille je vois tellement de choses et
     /// t'en affiches pas autant ».
     ///
     /// Six bandes d'une octave chacune, de 100 Hz a 6,4 kHz. Assez fin pour que deux
@@ -147,7 +147,7 @@ public sealed class VoiceTracker
     /// Pose un nom sur une source, ou l'efface avec zero.
     ///
     /// L'analyse ne nomme rien d'elle-meme : elle transporte. Ce nom vient de la fiche du
-    /// crate ou de Selim, et il se pose sur une empreinte que la voie a mise plusieurs
+    /// crate ou du DJ, et il se pose sur une empreinte que la voie a mise plusieurs
     /// secondes a former — c'est la confiance publiee par la voie qui dit si elle est
     /// prete a le porter.
     /// </summary>

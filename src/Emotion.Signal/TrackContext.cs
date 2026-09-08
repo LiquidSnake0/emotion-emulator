@@ -12,7 +12,7 @@ namespace Emotion.Signal;
 /// </summary>
 /// <param name="Title">Titre, pour le bandeau de reglage. Jamais projete.</param>
 /// <param name="Disc">Disque, pour le bandeau.</param>
-/// <param name="Side">Sigle de face : A, B, C, D. C'est par la que Selim reconnait un morceau.</param>
+/// <param name="Side">Sigle de face : A, B, C, D. C'est par la que le DJ reconnait un morceau.</param>
 /// <param name="Camelot">Tag Camelot, par exemple 8A. Pilote la geometrie, pas la vitesse.</param>
 /// <param name="Family">Famille de couleur du crate : M-, M, M+, B-, B, B+, R, V, S-, S.</param>
 /// <param name="ColorHex">Couleur mesuree de la famille, telle qu'elle sort des pastilles physiques.</param>
@@ -29,7 +29,7 @@ public sealed record TrackContext(
     /// <summary>
     /// La forme a donner a chaque source, decidee dans la fiche et non par l'analyse.
     ///
-    /// C'EST SELIM QUI CHOISIT, PAS LE SIGNAL.
+    /// C'EST LE DJ QUI CHOISIT, PAS LE SIGNAL.
     ///
     /// L'analyse sait separer six sources et dire ce qu'elle sait de chacune ; elle ne sait
     /// pas, et n'a pas a savoir, laquelle merite une bouche et laquelle un anneau. Ce choix
@@ -46,7 +46,7 @@ public sealed record TrackContext(
     byte[]? Shapes = null,
 
     /// <summary>
-    /// Le nom pose sur chaque source, quand Selim en a pose un. Zero signifie anonyme.
+    /// Le nom pose sur chaque source, quand le DJ en a pose un. Zero signifie anonyme.
     ///
     /// L'analyse ne nomme rien d'elle-meme : ce qui joue dans une bande change d'un disque
     /// a l'autre, et annoncer un piano la ou passe un saxophone est pire que ne rien

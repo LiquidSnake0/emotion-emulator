@@ -125,7 +125,7 @@ let latest = null;
 
 conn.on('frame', (f) => { latest = f; });
 
-// L'etat des platines. Seul `playing` atteint le mur : `cued` est ce que Selim cale au
+// L'etat des platines. Seul `playing` atteint le mur : `cued` est ce que le DJ cale au
 // casque, et l'afficher reviendrait a montrer le beatmatch au public.
 conn.on('deck', (d) => {
   visual.setTrack(d.playing);
@@ -150,7 +150,7 @@ conn.on('source', (name) => {
 });
 
 // L'etat de preparation du disque cale au casque. Il ne touche jamais au rendu : c'est
-// un tableau de bord pour Selim, affiche sur son telephone et jamais projete.
+// un tableau de bord pour le DJ, affiche sur son telephone et jamais projete.
 conn.on('cue', (f) => {
   if (!f) return;
   const pret = f.bpm != null;

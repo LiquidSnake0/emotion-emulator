@@ -116,7 +116,7 @@ const bloc = (v) => BLOCS[Math.max(0, Math.min(8, Math.round(v * 8)))];
 // Les six registres partageaient un seul dessin — une colonne qui montait — avec pour
 // seule difference leur couleur et leur caractere de remplissage. Six colonnes identiques
 // ne se comparent pas : l'oeil doit lire une legende pour savoir laquelle il regarde,
-// alors que six silhouettes se reconnaissent sans y penser. Selim l'avait dit sur la
+// alors que six silhouettes se reconnaissent sans y penser. Le DJ l'avait dit sur la
 // premiere version : « le delire pour les levres en ascii c'etait super, cercle pour la
 // basse c'etait super aussi ».
 //
@@ -718,7 +718,7 @@ export class Visual {
   }
 
   // --------------------------------------------------------------- GRAVE
-  // Un anneau de caracteres qui respire. La seule forme que Selim ait dite bonne.
+  // Un anneau de caracteres qui respire. La seule forme que le DJ ait dite bonne.
   drawGrave(ctx, b) {
     const v = this.bass.value + this.bassHit.value * 0.5;
     const G = grille(b, 7);

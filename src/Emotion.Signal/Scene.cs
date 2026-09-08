@@ -6,7 +6,7 @@ namespace Emotion.Signal;
 ///
 /// <b>Cette table est une proposition, pas une regle du domaine.</b> Elle vient de la
 /// forme de la palette — deux voies paralleles, les bleus et les verts, chacune du
-/// clair au fonce, plus quatre familles a part — et pas d'une intention que Selim
+/// clair au fonce, plus quatre familles a part — et pas d'une intention que le DJ
 /// aurait ecrite. Elle est faite pour etre corrigee famille par famille, a l'ecoute.
 ///
 /// La lecture proposee : le suffixe donne l'intensite, la lettre donne l'element.

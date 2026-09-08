@@ -1,6 +1,6 @@
 // Ecran de calage, touche C.
 //
-// Sa raison d'etre tient a une remarque de Selim : « l'orbe au milieu est le seul truc
+// Sa raison d'etre tient a une remarque du DJ : « l'orbe au milieu est le seul truc
 // bien cale, les eclairs c'est trop chelou ». Il avait raison, et la cause etait un
 // retard de 128 ms. Mais il manquait aussi de quoi en juger : dans un visuel ou tout
 // bouge en permanence, l'oeil ne sait pas dire ce qui est declenche par le son et ce
