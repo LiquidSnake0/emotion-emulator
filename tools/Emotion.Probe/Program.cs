@@ -449,9 +449,76 @@ for (var r = 0; r < Voices.Registers; r++)
     Console.WriteLine($"  {"─── total",-17} {new string(' ', 46)} {cumul,6:F1} ms   "
                       + (cumul <= 40 ? "sous le seuil ou l'oeil decroche (40 ms)"
                                      : "AU-DESSUS du seuil de 40 ms"));
+    // ------------------------------------------------------ LA CHAINE ENTIERE
+    //
+    // Ce que le projet maitrise, ce qu'il subit, et ce qui reste a l'unite de rendu. Le
+    // budget se compte a partir du seuil ou l'oeil cesse de lier l'image au son.
+    // LES SEUILS VIENNENT DE LA LITTERATURE, PAS D'UNE INTUITION.
+    //
+    // Notre cas est celui d'une image qui suit un son : le son sort de la table, le mur
+    // reagit. C'est l'asynchronie « video en retard », et elle est mieux toleree que
+    // l'inverse — l'oeil pardonne une image tardive plus qu'un son tardif.
+    //
+    //   EBU R37 (2007)        video en retard > 40 ms  : hors norme de diffusion
+    //   ITU-R BT.1359-1       video en retard > 45 ms  : detectable
+    //                         video en retard > 90 ms  : inacceptable
+    //   Laboratoire           des 20 ms sur stimulus controle et transitoire net
+    //
+    // Un kick est un transitoire net, donc on vise le bas de la fourchette.
+    const float SeuilNorme = 40f;      // EBU R37
+    const float SeuilDetect = 45f;     // ITU-R BT.1359-1, detectabilite
+    const float SeuilLimite = 90f;     // ITU-R BT.1359-1, acceptabilite
+
+    var chaine = new (string Nom, float Ms, string Qui)[]
+    {
+        ("capture PulseAudio",  20f,               "subi · --latency-msec=20, reglable"),
+        ("fenetre d'analyse",   pasMs,             "incompressible · 1024 echantillons"),
+        ("sommet d'attaque",    pasMs,             "incompressible · un pic se voit apres"),
+        ("calcul",              (float)(total / 1000), "maitrise · 8,8 % du pas"),
+        ("anneau partage",      0.0015f,           "maitrise · 1,5 us, sans verrou"),
+    };
+
     Console.WriteLine();
-    Console.WriteLine($"  L'horloge a verrouillage de phase annule ce retard sur le kick :");
-    Console.WriteLine($"  elle n'attend pas la frappe, elle la prevoit. Le reste le subit.");
+    Console.WriteLine("LA CHAINE ENTIERE, DU MICRO AU PAQUET");
+    Console.WriteLine();
+
+    var avantGpu = 0f;
+    foreach (var (nom, ms, qui) in chaine)
+    {
+        avantGpu += ms;
+        var n = (int)Math.Round(ms / 25f * 30);
+        Console.WriteLine($"  {nom,-19} {new string('#', Math.Min(30, n))}"
+                          + $"{new string('.', Math.Max(0, 30 - Math.Min(30, n)))} "
+                          + $"{ms,6:F1} ms   {qui}");
+    }
+
+    Console.WriteLine($"  {"─── avant le GPU",-19} {new string(' ', 30)} {avantGpu,6:F1} ms");
+    Console.WriteLine();
+    Console.WriteLine("  CE QU'IL RESTE POUR LE RENDU ET L'ECRAN");
+    Console.WriteLine();
+
+    foreach (var (nom, seuil) in new[]
+             {
+                 ("EBU R37 · norme de diffusion", SeuilNorme),
+                 ("ITU-R BT.1359 · detectable", SeuilDetect),
+                 ("ITU-R BT.1359 · inacceptable", SeuilLimite),
+             })
+    {
+        var reste = seuil - avantGpu;
+        Console.WriteLine($"  {nom,-30} seuil {seuil,3:F0} ms → reste {reste,6:F1} ms"
+                          + (reste < 0 ? "   DEPASSE" : reste < 20 ? "   tres serre" : ""));
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("  Un videoprojecteur consomme a lui seul 16 a 33 ms selon son mode de");
+    Console.WriteLine("  traitement d'image — soit tout ce qui reste, et souvent davantage.");
+    Console.WriteLine();
+    Console.WriteLine("  CE QUI SAUVE LA MISE : on ne reagit pas au kick, on l'attend.");
+    Console.WriteLine("  L'horloge a verrouillage de phase le declenche a l'instant prevu et");
+    Console.WriteLine("  peut meme partir en avance. Sur cet evenement-la, le budget GPU n'est");
+    Console.WriteLine("  plus borne par le seuil mais par la stabilite du tempo. Tout ce qui");
+    Console.WriteLine("  n'est pas periodique — clap irregulier, voix, rupture — subit les");
+    Console.WriteLine($"  {avantGpu:F0} ms ci-dessus et n'a plus de marge.");
 }
 
 var sep = analyzer.Separation;

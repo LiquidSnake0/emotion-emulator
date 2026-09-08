@@ -26,6 +26,19 @@ public sealed class OnsetDetector
     /// </summary>
     public const int Lookahead = 1;
 
+    // ZERO A ETE TESTE, ET IL COUTE PLUS QU'IL NE RAPPORTE.
+    //
+    // Supprimer l'anticipation retirerait 21,3 ms du retard total, ce qui est la plus grosse
+    // economie disponible dans toute la chaine. Mais sans la valeur suivante, on ne peut plus
+    // distinguer un sommet d'une montee : le detecteur declenche sur la pente et manque le
+    // pic. Sur trente secondes du repertoire, les detections tombent de 1003 a 683 — un tiers
+    // perdu — les intervalles justes de 31 a 23 %, et le verrouillage de la grille de 85 a
+    // 70 %.
+    //
+    // Quinze points de verrouillage pour 21 ms : le marche est mauvais, parce que c'est
+    // justement le verrouillage qui permet a l'horloge de <b>predire</b> le kick, et donc
+    // d'annuler ces 21 ms et bien davantage. Raccourcir ici casserait ce qui compense.
+
     private readonly float[] _window = new float[Lookahead * 2 + 1];
     private int _filled;
 
