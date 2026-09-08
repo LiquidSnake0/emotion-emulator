@@ -39,6 +39,18 @@ var analyzer = new SpectrumAnalyzer(rate, separate);
 if (args.Contains("inline")) analyzer.Separation.ApprentissageEnLigne = true;
 analyzer.Etapes.Actif = true;
 
+// « complexe » en argument : juge les attaques dans le domaine complexe plutot que sur le
+// flux d'energie. Sert a comparer les deux sur la meme matiere.
+if (args.Contains("complexe")) analyzer.FluxComplexeActif = true;
+
+// « poids=X » : part du domaine complexe dans le jugement du kick, pour la regler par
+// la mesure plutot que de la choisir.
+foreach (var a in args)
+    if (a.StartsWith("poids=") && float.TryParse(a[6..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var w))
+        analyzer.PoidsComplexe = w;
+
 // « memoire » en argument : joue l'extrait DEUX FOIS de suite dans le meme processus, la
 // seconde reprenant ce que la premiere a etabli. C'est ainsi que la reprise se produit
 // vraiment — en memoire vive, sans jamais toucher au disque dur — et cela reproduit ce qui
@@ -85,6 +97,8 @@ var lastReason = "";
 // chaine tient le direct : une image qui depasse le pas de 21 ms fait prendre du retard,
 // et ce retard s'accumule.
 var coutImage = new List<double>();
+var fluxE = new List<float>();
+var fluxC = new List<float>();
 var annonces = new List<(long T, float Bpm)>();
 var murAt = new long[Voices.Registers];
 var assezAt = new long[Voices.Registers];
@@ -126,6 +140,8 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
+    fluxE.Add(analyzer.DernierFluxEnergie);
+    fluxC.Add(analyzer.DernierFluxComplexe);
 
     if (f.Hits.Kick)
     {
@@ -379,6 +395,21 @@ Console.WriteLine($"cout d'une image    median {coutImage[coutImage.Count / 2]:F
 
 Console.WriteLine($"annonces de tempo   {annonces.Count} : " +
                   string.Join(" · ", annonces.Take(12).Select(a => $"{a.T / 1000f:F0}s {a.Bpm:F1}")));
+// Les deux fonctions de detection se ressemblent-elles ? Une correlation proche de 1
+// signifierait qu'elles prennent les memes decisions, et qu'en changer ne sert a rien.
+if (fluxE.Count > 10)
+{
+    double mE = fluxE.Average(), mC = fluxC.Average();
+    double num = 0, dE = 0, dC = 0;
+    for (var i = 0; i < fluxE.Count; i++)
+    {
+        double a = fluxE[i] - mE, b = fluxC[i] - mC;
+        num += a * b; dE += a * a; dC += b * b;
+    }
+    var r = dE > 0 && dC > 0 ? num / Math.Sqrt(dE * dC) : 0;
+    Console.WriteLine($"flux energie/complexe  correlation {r:F3} · " +
+                      $"moyennes {mE:F1} et {mC:F1}");
+}
 Console.WriteLine("maturite des sources  (confiance 0,6 atteinte a)");
 for (var r = 0; r < Voices.Registers; r++)
 {

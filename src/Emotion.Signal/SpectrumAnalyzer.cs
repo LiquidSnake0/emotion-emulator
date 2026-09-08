@@ -93,6 +93,42 @@ public sealed class SpectrumAnalyzer
     public Etapes Etapes { get; } = new();
 
     /// <summary>
+    /// Employer le domaine complexe plutot que le flux d'energie pour juger une attaque.
+    /// Le temps de comparer les deux sur le meme signal.
+    /// </summary>
+    public bool FluxComplexeActif { get; set; }
+
+    /// <summary>
+    /// Part du domaine complexe dans le jugement du kick. Zero le desactive, et il ne coute
+    /// alors rien.
+    ///
+    /// NUL PAR DEFAUT, ET C'EST LA MESURE QUI L'A DECIDE.
+    ///
+    /// L'idee etait bonne et le mecanisme fonctionne : une note qui commence repart d'une
+    /// phase arbitraire, ce qu'un flux d'energie ne voit pas, et c'est exactement ce qui
+    /// manque sur une frappe etouffee sous un sample sature.
+    ///
+    /// Le resultat est reel mais inegal. A poids 0,2, sur quatre morceaux : un enregistrement
+    /// de set passe de 14 a 26 % de frappes bien calees et son verrouillage de 58 a 75 % ; un
+    /// extrait propre passe de 69 a 80 % de verrouillage. Mais <b>Macroblank, le repertoire de
+    /// reference, se degrade</b> — verrouillage de 62 a 49 %, frappes calees de 23 a 18.
+    ///
+    /// Et le reglage n'est pas stable : entre 0,2 et 0,3, le verrouillage moyen tombe de 64 a
+    /// 45 %. Un optimum aussi etroit se regle sur du bruit, pas sur une propriete du signal.
+    ///
+    /// On garde donc le mecanisme et on le laisse eteint : il est disponible pour une matiere
+    /// ou il aide, et il ne degrade rien tant que personne ne l'allume. Le figer a une valeur
+    /// de compromis aurait empire le seul disque qu'on connaisse bien.
+    /// </summary>
+    public float PoidsComplexe { get; set; }
+
+    private readonly ComplexFlux _fluxComplexe = new(Window / 2);
+
+    /// <summary>Les deux fonctions de detection, pour les comparer sur la meme image.</summary>
+    public float DernierFluxEnergie { get; private set; }
+    public float DernierFluxComplexe { get; private set; }
+
+    /// <summary>
     /// Ce que la fiche du cue affirmait du tempo, confronte a ce que le disque fait.
     ///
     /// Poser <c>Reference.Expected</c> depuis la fiche evite de recalculer ce qui a deja
@@ -382,6 +418,11 @@ public sealed class SpectrumAnalyzer
         // La separation rend les deux composantes. On garde la percussive pour les
         // bandes et les attaques, et on donne l'harmonique aux registres tonals : sans
         // elle, chaque coup de caisse claire ferait bondir les trois a la fois.
+        // Le domaine complexe se calcule ici, tant que la transformee est encore intacte :
+        // il lui faut la phase, que le module a jetee. Rien n'est calcule quand son poids
+        // est nul — il coute une racine, un arc-tangente et un cosinus par bin.
+        if (PoidsComplexe > 0f) _fluxComplexe.Feed(_re, _im, Math.Min(half, _edges[3]));
+
         var voices = Voices.None;
         Span<float> full = stackalloc float[half];
         spectrum.CopyTo(full);
@@ -471,7 +512,12 @@ public sealed class SpectrumAnalyzer
             _prevSpectrum[i] = spectrum[i];
         }
 
-        var onset = _onsets.Feed(flux);
+        var fluxC = _fluxComplexe.DernierTotal;
+
+        DernierFluxEnergie = flux;
+        DernierFluxComplexe = fluxC;
+
+        var onset = _onsets.Feed(FluxComplexeActif ? fluxC : flux);
         Etapes.Fin(6);                       // flux spectral et detection d'attaque
         if (onset) _tempo.Mark(tMs);
 
@@ -503,7 +549,14 @@ public sealed class SpectrumAnalyzer
         // Les tranches ne se chevauchent plus : la bande 3 appartenait aux deux, et un
         // kick y bavait assez pour declencher le detecteur de clap. Mesure a l'ecran de
         // diagnostic : 80 kicks et 81 claps, tombant aux memes instants.
-        var rKick = Smooth(0, BandRise(bands, 0, 3));
+        // LE KICK SE JUGE SUR DEUX SIGNAUX, PAS UN.
+        //
+        // La montee des bandes voit ce qui monte en energie ; elle est aveugle a une frappe
+        // etouffee sous un sample sature, ce qui est la moitie du repertoire. Le domaine
+        // complexe, lui, voit qu'une note repart d'une phase arbitraire meme quand son
+        // amplitude bouge peu. Les deux sont ramenes a un rapport sans dimension avant
+        // d'etre melanges, sinon le poids du melange dependrait du volume du disque.
+        var rKick = Smooth(0, BandRise(bands, 0, 3) + PoidsComplexe * _fluxComplexe.Rapport);
         var rClap = Smooth(1, BandRise(bands, 4, 9));
         // LES CHARLEYS GARDENT LA DIFFERENCE, ET CE N'EST PAS UNE EXCEPTION DE CONFORT.
         //

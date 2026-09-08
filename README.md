@@ -1212,7 +1212,18 @@ serveur, sans carte son et sans navigateur**.
   nommer.
 - **Structure du morceau** — densité et énergie sur fenêtre glissante, détection de
   rupture pour repérer les sections.
-- **Le détecteur d'attaques reste le maillon faible.** Sur un répertoire aux kicks
+- **Le détecteur d'attaques reste le maillon faible**, et une piste sérieuse a été
+  explorée sans être retenue. Le flux d'énergie ne voit que ce qui monte en amplitude ; il
+  est aveugle à une frappe étouffée sous un sample saturé, ce qui est la moitié du
+  répertoire. La détection *en domaine complexe* (Bello & Sandler, 2004) regarde aussi la
+  phase : une note qui commence repart d'une phase arbitraire même quand son énergie bouge
+  peu. Le mécanisme est implémenté et fonctionne — sur un enregistrement de set, les frappes
+  bien calées passent de 14 à 26 % et le verrouillage de 58 à 75 %. Mais **Macroblank, le
+  répertoire de référence, se dégrade** : verrouillage de 62 à 49 %. Et le réglage n'est pas
+  stable — entre 0,2 et 0,3 de poids, le verrouillage moyen tombe de 64 à 45 %, ce qui
+  trahit un optimum réglé sur du bruit. Le mécanisme reste disponible et éteint par défaut :
+  figer un compromis aurait empiré le seul disque qu'on connaisse bien.
+- **Le reste du détecteur.** Sur un répertoire aux kicks
   étouffés, 28 % seulement des intervalles entre frappes tombent sur un temps entier. Régler
   l'écart minimal sur le tempo plutôt que sur une constante a fait passer ce chiffre de 23 à
   28 % et les frappes bien calées de 12 à 20 %, mais filtrer ne crée pas les détections
