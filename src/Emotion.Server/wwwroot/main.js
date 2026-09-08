@@ -148,6 +148,15 @@ let latest = null;
 
 conn.on('frame', (f) => { latest = f; });
 
+// L'avance reglee depuis le telephone. Elle arrive par le hub comme le reste, parce que
+// celui qui cale se tient dans la salle et non devant le clavier — c'est de la piste que
+// le jugement est juste, pas de la table.
+conn.on('lead', (ms) => {
+  visual.leadMs = Math.max(0, Math.min(200, Number(ms) || 0));
+  try { localStorage.setItem('emotion.lead', String(visual.leadMs)); } catch {}
+  if (!visual.calibrate.on) visual.calibrate.toggle();
+});
+
 // L'etat des platines. Seul `playing` atteint le mur : `cued` est ce que le DJ cale au
 // casque, et l'afficher reviendrait a montrer le beatmatch au public.
 conn.on('deck', (d) => {

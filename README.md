@@ -429,6 +429,35 @@ du public aux enceintes, et l'avance s'ajuste.
 mètres, la chaîne actuelle est déjà synchrone sans aucune avance. C'est en petit club, le
 public collé aux enceintes, que le budget se resserre.
 
+### Le calage se fait depuis la piste, pas depuis la table
+
+Tout ce qui sépare le son du mur s'additionne en un seul nombre, et personne ne connaît le
+retard d'affichage de son projecteur ni la distance moyenne de son public. Mais **tout le
+monde voit si une forme tombe avec la frappe ou après**. Un curseur, un repère, et l'œil
+tranche — c'est ce que font les jeux de rythme et les amplis home cinéma.
+
+L'écran de calage (touche `C`) est l'instrument : **tout y est immobile sauf ce que le son
+déclenche**. Les flèches `←` `→` déplacent l'avance de 5 ms, et la valeur est gardée d'une
+soirée à l'autre.
+
+**Mais le réglage dépend d'où l'on écoute**, et c'est un piège :
+
+| Position | Vol du son |
+|---|---|
+| à la table, collé aux enceintes | 5,8 ms |
+| au bord de la piste | 14,6 ms |
+| au milieu du public | 29,2 ms |
+
+Régler depuis la table pour un public à dix mètres fait **précéder le mur de 23 ms** — un
+écart plus grand que tout ce que l'analyse a gagné en une soirée de mesures. Le réglage
+passe donc aussi par le téléphone (`POST /lead`) : on se place où sera le public, on regarde
+le mur, on corrige. C'est le seul endroit d'où le jugement soit juste.
+
+**Et il faut le master ouvert, pas le casque.** Au casque le son est à l'oreille
+instantanément, donc le vol disparaît et l'avance obtenue serait trop grande une fois dans
+les enceintes. Le cue passe d'ailleurs par un second analyseur : ce n'est pas le chemin
+qu'on cherche à caler.
+
 ### Ce qui reste non mesuré
 
 **Le trajet table de mixage → carte son.** Une sortie booth analogique n'ajoute

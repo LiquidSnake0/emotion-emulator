@@ -98,8 +98,29 @@ public static class DeckEndpoints
             return Results.Ok(next);
         });
 
+        // LE CALAGE SE FAIT DEPUIS LA PISTE, PAS DEPUIS LA TABLE.
+        //
+        // L'avance a donner au visuel depend d'ou l'on ecoute : le son met 5,8 ms pour
+        // atteindre celui qui regle a la table, et 29 pour le public a dix metres. Regler
+        // depuis la table revient donc a faire preceder le mur de vingt-trois
+        // millisecondes pour tout le monde d'autre — un ecart plus grand que tout ce que
+        // l'analyse a gagne en une soiree de mesures.
+        //
+        // Le reglage passe donc par le telephone : on se place ou sera le public, on
+        // regarde le mur, et l'on corrige jusqu'a ce que la forme tombe avec la frappe.
+        // C'est le seul endroit d'ou le jugement soit juste.
+        app.MapPost("/lead", async (LeadRequest r, IHubContext<VisualHub> hub) =>
+        {
+            var ms = Math.Clamp(r.Ms, 0, 200);
+            await hub.Clients.All.SendAsync("lead", ms);
+            return Results.Ok(new { ms });
+        });
+
         app.MapGet("/deck", (DeckState deck) => Results.Ok(deck.Current));
     }
+
+    /// <summary>L'avance demandee au visuel, en millisecondes.</summary>
+    public sealed record LeadRequest(float Ms);
 
     /// <summary>La face qui joue, si elle sait apprendre.</summary>
     private static ILearnsTracks? Master(IAudioSource source) => source switch
