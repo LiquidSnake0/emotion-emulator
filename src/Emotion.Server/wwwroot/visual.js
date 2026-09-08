@@ -27,6 +27,35 @@ import * as S from './shapes.js';
 
 const TAU = Math.PI * 2;
 
+// LA PALETTE DES SOURCES, ET ELLE EST FIXE.
+//
+// Chaque source garde sa couleur d'un disque a l'autre : c'est ce qui permet d'apprendre
+// a lire la scene. Si le kick changeait de teinte a chaque morceau, l'oeil devrait tout
+// reapprendre a chaque transition, et le vocabulaire ne servirait plus a rien.
+//
+// La couleur du disque, elle, n'a pas disparu — elle teinte la <b>trame de fond et
+// l'horizon</b>. L'identite du morceau devient l'ambiance, les sources gardent leur nom.
+// Pendant un fondu, la trame passe d'une couleur a l'autre : le mix se voit sans que la
+// lecture se brouille.
+//
+// Aucun rouge nulle part.
+const SRC = {
+  basse: { r: 53,  g: 208, b: 127 },
+  kick:  { r: 244, g: 246, b: 244 },
+  voix:  { r: 77,  g: 217, b: 232 },
+  piano: { r: 167, g: 139, b: 232 },
+  aigu:  { r: 232, g: 200, b: 77  },
+  hat:   { r: 140, g: 148, b: 145 },
+};
+
+// LE REGISTRE COMMANDE LA HAUTEUR.
+//
+// Empiler toutes les formes au centre les rendait illisibles, et les separer par la
+// couleur seule ne suffisait pas. L'ordre vertical resout les deux d'un coup parce qu'il
+// est deja dans l'oreille : le grave est bas et large, l'aigu est haut et fin. La scene
+// se lit alors comme un spectre debout.
+const HAUTEUR = { aigu: 0.13, voix: 0.31, piano: 0.50, sol: 0.68 };
+
 export class Visual {
   constructor(canvas) {
     this.canvas = canvas;
@@ -228,42 +257,45 @@ export class Visual {
     ctx.fillStyle = `rgb(${c.r * 0.05 | 0}, ${c.g * 0.05 | 0}, ${c.b * 0.06 | 0})`;
     ctx.fillRect(0, 0, w, h);
 
-    const cx = w / 2, cy = h / 2;
-    const unit = Math.min(w, h);
+    const cx = w / 2, unit = Math.min(w, h);
+    const sol = h * HAUTEUR.sol;
+
+    // TRAME — quelques verticales tres pales, teintees par le disque en cours. Les formes
+    // ont besoin d'un fond a quoi se mesurer ; sans elle, tout flotte dans le vide.
+    ctx.strokeStyle = S.rgba(c, 0.05 + this.level.value * 0.05);
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 12; i++) {
+      const x = Math.round(w * i / 12) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, h * 0.06); ctx.lineTo(x, h * 0.94); ctx.stroke();
+    }
 
     // L'OUVERTURE DU FILTRE PILOTE TOUT LE RENDU.
     //
     // Quand le passe-bas se ferme, le son perd ses aigus : le visuel doit perdre ses
-    // details de la meme facon. On l'obtient en trois gestes simultanes, parce qu'un
-    // seul ne se lirait pas — la scene se contracte, elle se trouble, et tout ce qui
-    // est aigu s'efface. C'est le geste le plus frequent d'un set, il merite d'occuper
-    // tout l'ecran.
+    // details de la meme facon. Trois gestes simultanes, parce qu'un seul ne se lirait
+    // pas — la scene se contracte, elle se trouble, et tout ce qui est aigu s'efface.
     const open = this.open.value;
 
     ctx.save();
-    // 1. Contraction : la scene se replie vers son centre.
-    //
-    // La tension joue contre elle : une montee ecarte les formes, une rupture les pousse
-    // d'un coup. Les deux gestes s'opposent volontairement sur le meme axe — c'est ce qui
-    // rend le retour des graves aussi lisible, la scene ayant passe huit mesures a se
-    // gonfler avant d'etre relachee.
-    const swell = 1 + this.tension.value * 0.16 + this.drop.value * 0.14;
-    const shrink = (0.72 + open * 0.28) * swell;
-    ctx.translate(cx, cy);
-    ctx.scale(shrink, shrink);
-    ctx.translate(-cx, -cy);
+    // La tension joue contre la contraction : une montee ecarte les formes, une rupture
+    // les relache d'un coup. Les deux gestes s'opposent sur le meme axe, ce qui rend le
+    // retour des graves lisible apres huit mesures de gonflement.
+    const swell = 1 + this.tension.value * 0.10 + this.drop.value * 0.10;
+    const shrink = (0.80 + open * 0.20) * swell;
+    ctx.translate(cx, sol); ctx.scale(shrink, shrink); ctx.translate(-cx, -sol);
 
-    // 2. Trouble : les contours se perdent, comme les aigus.
-    const blur = (1 - open) * 14;
+    const blur = (1 - open) * 9;
     if (blur > 0.5) ctx.filter = `blur(${blur.toFixed(1)}px)`;
 
-    this.drawTension(ctx, cx, cy, unit, c);
-    this.drawBass(ctx, cx, cy, unit, c);
-    this.drawKickWave(ctx, cx, cy, unit, c);
-    this.drawVoice(ctx, cx, cy, unit, c, sides);
-    this.drawBells(ctx, w, h, unit, c);
-    this.drawClap(ctx, cx, cy, unit, c);
-    this.drawHat(ctx, w, h, unit, c, bands);
+    this.drawTension(ctx, w, h, sol, unit);
+    this.drawHorizon(ctx, w, sol, c);
+    this.drawBass(ctx, cx, sol, w, unit);
+    this.drawKick(ctx, cx, sol, w, unit);
+    this.drawClaps(ctx, cx, sol, w, unit);
+    this.drawPiano(ctx, cx, h, unit);
+    this.drawVoice(ctx, cx, h, unit, sides);
+    this.drawHighs(ctx, w, h, unit, open);
+    this.drawHats(ctx, w, h, unit, open);
     this.drawSweep(ctx, w, h, c);
     ctx.restore();
 
@@ -278,137 +310,168 @@ export class Visual {
   }
 
   // ------------------------------------------------------------- TENSION
-  // Un halo diffus qui enfle pendant la montee, et un eclat bref au relachement.
+  // Une lueur qui monte du sol, comme une chaleur avant la rupture.
   //
-  // C'est la seule chose du rendu qui ne reagisse pas a un evenement mais l'annonce. Un
-  // halo plutot qu'un contour : une montee n'a pas de bord net, elle se sent avant de se
+  // C'est la seule chose du rendu qui n'obeisse pas a un evenement mais l'annonce. Une
+  // lueur plutot qu'un contour : une montee n'a pas de bord net, elle se sent avant de se
   // voir, et une forme dessinee donnerait une precision que la mesure n'a pas.
-  drawTension(ctx, cx, cy, unit, c) {
-    const t = this.tension.value;
-    const d = this.drop.value;
+  drawTension(ctx, w, h, sol, unit) {
+    const t = this.tension.value, d = this.drop.value;
     if (t < 0.02 && d < 0.02) return;
 
-    if (t > 0.02) {
-      const r = unit * (0.20 + t * 0.55);
-      S.disc(ctx, cx, cy, r, S.lighten(c, 0.35), t * 0.16, 0.95);
-    }
+    const haut = sol - unit * 0.4;
+    const g = ctx.createLinearGradient(0, h, 0, haut);
+    g.addColorStop(0, S.rgba(SRC.basse, t * 0.20 + d * 0.25));
+    g.addColorStop(1, S.rgba(SRC.basse, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, haut, w, h - haut);
+  }
 
-    // La rupture : un anneau large qui part du centre, distinct de l'onde du kick par sa
-    // taille et sa lenteur. Elle ne doit se produire que quelques fois par set — un effet
-    // qu'on voit souvent cesse d'etre un evenement.
-    if (d > 0.02) {
-      const r = unit * (0.15 + (1 - d) * 0.75);
-      S.ring(ctx, cx, cy, r, unit * 0.02 * d, S.lighten(c, 0.6), d * 0.5);
-    }
+  // ------------------------------------------------------------- HORIZON
+  // La ligne sur laquelle tout repose, teintee par le disque en cours. Elle epaissit sur
+  // chaque kick : c'est elle qui donne le sol a la composition.
+  drawHorizon(ctx, w, sol, c) {
+    ctx.strokeStyle = S.rgba(c, 0.18 + this.kick.value * 0.30);
+    ctx.lineWidth = 1 + this.kick.value * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.04, sol); ctx.lineTo(w * 0.96, sol);
+    ctx.stroke();
   }
 
   // ---------------------------------------------------------------- BASSE
-  // Un cercle plein au centre, qui respire. C'est la masse du morceau : lourde, lente,
-  // toujours au meme endroit. Elle enfle sur chaque note grave et se degonfle seule.
-  drawBass(ctx, cx, cy, unit, c) {
-    const r = unit * (0.06 + this.bass.value * 0.14 + this.bassHit.value * 0.05);
-    S.disc(ctx, cx, cy, r, c, 0.20 + this.bass.value * 0.35, 0.55);
-    S.disc(ctx, cx, cy, r * 0.45, S.lighten(c, 0.35), 0.15 + this.bassHit.value * 0.35);
+  // Un arc plein pose sur l'horizon, qui enfle et retombe. Une masse, pas une tache : le
+  // degrade monte, le contour reste net, et rien ne s'estompe dans le vide.
+  drawBass(ctx, cx, sol, w, unit) {
+    const r = unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07);
+    if (r <= 0) return;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, sol); ctx.clip();
+
+    const g = ctx.createLinearGradient(0, sol - r, 0, sol);
+    g.addColorStop(0, S.rgba(SRC.basse, 0.10 + this.bass.value * 0.18));
+    g.addColorStop(1, S.rgba(SRC.basse, 0.42 + this.bass.value * 0.40));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, sol, r, Math.PI, 0); ctx.fill();
+
+    ctx.strokeStyle = S.rgba(SRC.basse, 0.55 + this.bass.value * 0.45);
+    ctx.lineWidth = Math.max(1.5, unit * 0.005);
+    ctx.beginPath(); ctx.arc(cx, sol, r, Math.PI, 0); ctx.stroke();
+    ctx.restore();
   }
 
   // ----------------------------------------------------------------- KICK
-  // Une onde circulaire qui part du centre et s'ouvre. Elle ne remplit rien : c'est un
-  // front qui passe, la pulsation qu'on suit du regard.
-  drawKickWave(ctx, cx, cy, unit, c) {
+  // Deux traits blancs qui partent du centre et filent vers les bords, le long de
+  // l'horizon.
+  //
+  // La seule chose blanche de la scene, et la seule qui traverse : impossible a
+  // confondre avec le reste, ce qui compte pour l'evenement le plus frequent d'un set.
+  // Le premier temps de la mesure porte un accent supplementaire au centre — c'est le
+  // seul endroit ou le rang du temps se voit directement.
+  drawKick(ctx, cx, sol, w, unit) {
     const k = this.kick.value;
-    if (k < 0.02) return;
-    // Le temps fort porte une onde plus large et plus nette. C'est un accent, pas une
-    // forme de plus : la mesure se lit dans le relief du kick, comme a l'oreille.
-    const reach = 0.42 * (0.85 + this.onOne * 0.3);
-    const r = unit * (0.10 + (1 - k) * reach);
-    S.ring(ctx, cx, cy, r, Math.max(1.5, unit * 0.012 * k * (0.7 + this.onOne * 0.6)),
-           S.lighten(c, 0.25), k * this.onOne);
+    if (k < 0.015) return;
+
+    const d = (1 - k) * w * 0.52;
+    const ht = unit * 0.075 * k * (0.55 + this.onOne * 0.75);
+
+    ctx.strokeStyle = S.rgba(SRC.kick, k * this.onOne * 0.95);
+    ctx.lineWidth = Math.max(2, unit * 0.011 * k * (0.6 + this.onOne * 0.6));
+    ctx.lineCap = 'round';
+    for (const s of [-1, 1]) {
+      const x = cx + s * d;
+      ctx.beginPath(); ctx.moveTo(x, sol - ht); ctx.lineTo(x, sol + ht * 0.45); ctx.stroke();
+    }
+
+    if (this.onOne > 0.9) {
+      ctx.strokeStyle = S.rgba(SRC.kick, k * 0.5);
+      ctx.lineWidth = Math.max(1, unit * 0.004);
+      ctx.beginPath();
+      ctx.moveTo(cx, sol - ht * 1.5); ctx.lineTo(cx, sol + ht * 0.7); ctx.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------- CLAPS
+  // Deux cercles ouverts qui gonflent depuis les bords, a hauteur d'horizon. Rien d'autre
+  // ne va la : un clap se reconnait a sa place autant qu'a sa forme.
+  drawClaps(ctx, cx, sol, w, unit) {
+    const v = this.clap.value;
+    if (v < 0.015) return;
+
+    const r = unit * (0.045 + v * 0.085), o = w * 0.30;
+    ctx.strokeStyle = S.rgba(SRC.piano, v * 0.85);
+    ctx.lineWidth = Math.max(2, unit * 0.009 * v);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(cx + s * o, sol, r, 0, TAU); ctx.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------- PIANO
+  // Un octogone violet en rotation lente, au milieu de la scene.
+  //
+  // Il ne clignote pas : il tourne, et son epaisseur suit le medium. Une forme qui tourne
+  // se remarque sans agresser — ce qui convient a un registre presque toujours present,
+  // la ou un clignotement permanent fatiguerait.
+  drawPiano(ctx, cx, h, unit) {
+    const m = this.voice.value, hit = this.voiceHit.value;
+    const r = unit * (0.105 + m * 0.045 + hit * 0.03);
+    const y = h * HAUTEUR.piano;
+
+    S.polygon(ctx, cx, y, r, 8, this.spin * 0.5, SRC.piano, 0.18 + m * 0.55,
+              false, Math.max(1.5, unit * 0.005 * (0.6 + m)));
+    if (hit > 0.04)
+      S.polygon(ctx, cx, y, r * (1 + hit * 0.18), 8, this.spin * 0.5, SRC.piano,
+                hit * 0.4, false, 1.5);
   }
 
   // ------------------------------------------------------------------ VOIX
-  // Des anneaux concentriques, dont le nombre de cotes vient du Camelot. C'est la seule
-  // forme qui porte la tonalite du morceau, et c'est voulu : la voix et le corps du
-  // piano sont ce qui chante.
-  drawVoice(ctx, cx, cy, unit, c, sides) {
-    const m = this.voice.value;
-    if (m < 0.02 && this.voiceHit.value < 0.02) return;
+  // Un triangle cyan, pointe en haut, qui monte legerement quand la voix pousse.
+  //
+  // Son nombre de cotes vient du Camelot : c'est la seule forme qui porte la tonalite du
+  // disque, et c'est voulu — la voix et le corps du piano sont ce qui chante.
+  drawVoice(ctx, cx, h, unit, sides) {
+    const m = this.voice.value, hit = this.voiceHit.value;
+    const r = unit * (0.055 + m * 0.05 + hit * 0.045);
+    const y = h * HAUTEUR.voix - m * unit * 0.03;
+    const n = sides === 6 ? 3 : sides;
 
-    const base = unit * (0.20 + m * 0.06);
-    for (let i = 0; i < 3; i++) {
-      const r = base * (1 + i * 0.16) + this.voiceHit.value * unit * 0.02;
-      const a = (0.10 + m * 0.30 + this.voiceHit.value * 0.25) * (1 - i * 0.28);
-      S.polygon(ctx, cx, cy, r, sides, this.spin * (1 - i * 0.3),
-                S.lighten(c, 0.2), a, false, Math.max(1, unit * 0.0035));
+    S.polygon(ctx, cx, y, r, n, 0, SRC.voix, 0.22 + m * 0.6, true);
+    S.polygon(ctx, cx, y, r * 1.35, n, 0, SRC.voix, 0.10 + hit * 0.5, false, 1.4);
+  }
+
+  // ---------------------------------------------------------------- AIGUES
+  // Petits losanges jaunes disperses en haut, effaces des que le filtre ferme.
+  drawHighs(ctx, w, h, unit, open) {
+    const coupe = Math.pow(open, 1.5);
+    const v = this.bells.value * 0.55 + this.bellHit.value;
+    if (v < 0.03 || coupe < 0.05) return;
+
+    for (let i = 0; i < 6; i++) {
+      const p = S.scatter(i);
+      S.polygon(ctx, w * (0.10 + p.x * 0.80), h * (HAUTEUR.aigu - 0.04 + p.y * 0.14),
+                unit * 0.020 * (0.45 + v), 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
     }
   }
 
-  // ------------------------------------------------------------ XYLOPHONE
-  // Des triangles disperses dans le haut. Places par une suite deterministe : deux
-  // appels de meme rang donnent le meme point, sinon ils danseraient d'une image a
-  // l'autre et seraient illisibles.
-  drawBells(ctx, w, h, unit, c) {
-    const b = this.bells.value;
-    const pulse = this.bellHit.value;
-    if (b < 0.02 && pulse < 0.02) return;
+  // -------------------------------------------------------------- CHARLEYS
+  // Une reglette de traits fins tout en haut, comme une graduation. Ils etaient meles aux
+  // aigues et l'on confondait les deux ; les separer suffit a les distinguer.
+  drawHats(ctx, w, h, unit, open) {
+    const coupe = Math.pow(open, 1.5), v = this.hat.value;
+    if (v < 0.015 || coupe < 0.05) return;
 
-    const count = 9;
-    const tint = S.lighten(c, 0.55);
-
-    // Le xylophone est ce qu'un passe-bas coupe en premier. Sa disparition est donc le
-    // signe le plus fidele d'un filtre qui ferme.
-    const cut = Math.pow(this.open.value, 1.6);
-
-    for (let i = 0; i < count; i++) {
-      const p = S.scatter(i, 3);
-      const x = p.x * w;
-      const y = h * (0.06 + p.y * 0.30);
-
-      // Chaque triangle a sa propre phase : ils ne s'allument pas ensemble, ce qui
-      // ferait un flash. Ils se repondent.
-      const phase = i / count;
-      const amp = b * 0.6 + pulse * (0.5 + 0.5 * Math.cos(phase * TAU - this.spin * 2));
-      if (amp < 0.03) continue;
-
-      const r = unit * (0.012 + amp * 0.022);
-      S.triangle(ctx, x, y, r, this.spin * 0.6 + phase * TAU, tint,
-                 Math.min(0.85, amp) * cut);
+    ctx.strokeStyle = S.rgba(SRC.hat, v * coupe * 0.7);
+    ctx.lineWidth = Math.max(1, unit * 0.0035);
+    ctx.lineCap = 'butt';
+    for (let i = 0; i < 16; i++) {
+      const x = w * (0.10 + i * 0.0533);
+      ctx.beginPath();
+      ctx.moveTo(x, h * 0.045);
+      ctx.lineTo(x, h * 0.045 + unit * 0.022 * (0.35 + v * 0.65));
+      ctx.stroke();
     }
   }
 
-  // ------------------------------------------------------------------ CLAP
-  // Deux losanges, a gauche et a droite. Forme et place distinctes du reste : on ne peut
-  // pas les confondre du coin de l'oeil avec le kick, qui est central et rond.
-  drawClap(ctx, cx, cy, unit, c) {
-    const a = this.clap.value;
-    if (a < 0.02) return;
-    const r = unit * (0.020 + a * 0.035);
-    const dx = unit * (0.30 + (1 - a) * 0.05);
-    const tint = S.lighten(c, 0.45);
-    S.diamond(ctx, cx - dx, cy, r, tint, a * 0.8);
-    S.diamond(ctx, cx + dx, cy, r, tint, a * 0.8);
-  }
-
-  // --------------------------------------------------------------- CHARLEY
-  // Des traits courts en bas, dont la hauteur suit les bandes aigues. Discrets : ils
-  // tombent souvent, et c'est ce qui donne le grain sans occuper le regard.
-  drawHat(ctx, w, h, unit, c, bands) {
-    const a = this.hat.value;
-    if (a < 0.02) return;
-
-    const n = 8;
-    const y = h * 0.86;
-    const tint = S.lighten(c, 0.3);
-    for (let i = 0; i < n; i++) {
-      const band = bands[Math.min(bands.length - 1, 6 + (i % 6))] ?? 0;
-      const x = w * (0.14 + (i / (n - 1)) * 0.72);
-      S.tick(ctx, x, y, unit * (0.008 + band * 0.020) * a,
-             Math.max(1, unit * 0.0025), tint, a * 0.5 * Math.pow(this.open.value, 1.4));
-    }
-  }
-
-  // -------------------------------------------------------------- NOUVEAUTE
-  // Une barre qui traverse. Le seul geste horizontal du vocabulaire : un evenement qui
-  // n'est ni une frappe ni une note merite une forme qui n'appartient qu'a lui.
   drawSweep(ctx, w, h, c) {
     if (this.sweep < 0) return;
     const x = (this.sweep * 1.4 - 0.2) * w;

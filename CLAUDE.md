@@ -540,6 +540,33 @@ m'a fait diagnostiquer à côté une collision de ports.
 **Mesurer en `Release`.** En `Debug`, l'écriture vers l'anneau coûte trois fois plus, et
 toute conclusion sur la latence serait fausse.
 
+## Le vocabulaire visuel
+
+**Le registre commande la hauteur.** Empiler les formes au centre les rendait illisibles —
+basse, kick et voix se recouvraient — et les séparer par la couleur seule ne suffisait pas.
+L'ordre vertical résout les deux d'un coup parce qu'il est déjà dans l'oreille : le grave
+est bas et large, l'aigu est haut et fin. La scène se lit comme un **spectre debout**.
+
+| Source | Forme | Couleur | Hauteur |
+|---|---|---|---|
+| charleys | réglette de traits | gris | tout en haut |
+| aiguës | losanges pleins | jaune | haut |
+| voix | triangle (côtés = Camelot) | cyan | haut-milieu |
+| piano | octogone en rotation lente | violet | milieu |
+| kick | onde qui traverse l'horizon | **blanc** | ligne d'horizon |
+| claps | cercles ouverts | violet | sur l'horizon, aux bords |
+| basse | arc plein posé au sol | vert | bas |
+
+**La palette des sources est fixe d'un disque à l'autre** — sinon l'œil devrait tout
+réapprendre à chaque transition. La couleur du disque n'a pas disparu : elle teinte la
+**trame de fond et l'horizon**. L'identité du morceau devient l'ambiance, les sources
+gardent leur nom, et pendant un fondu la trame passe d'une couleur à l'autre. Aucun rouge.
+
+Trois détails qui font la différence à l'écran : le kick est **la seule chose blanche et
+la seule qui traverse** ; le piano **tourne au lieu de clignoter**, ce qui convient à un
+registre presque toujours présent ; et une trame verticale très pâle donne aux formes
+quelque chose à quoi se mesurer — sans elle, tout flotte.
+
 ## Front
 
 Le renderer est en canvas 2D sans cadriciel : 60 images par seconde, aucun DOM, aucun
