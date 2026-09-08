@@ -330,8 +330,8 @@ export class Visual {
     this.drawBass(ctx, cx, sol, w, unit);
     this.drawKick(ctx, cx, sol, w, unit);
     this.drawClaps(ctx, cx, sol, w, unit);
+    this.drawVoice(ctx, cx, h, unit, sides, w);
     this.drawPiano(ctx, cx, h, unit);
-    this.drawVoice(ctx, cx, h, unit, sides);
     this.drawHighs(ctx, w, h, unit, open);
     this.drawHats(ctx, w, h, unit, open);
     this.drawSweep(ctx, w, h, c);
@@ -467,28 +467,46 @@ export class Visual {
   }
 
   // ------------------------------------------------------------------ VOIX
-  // Un triangle cyan, pointe en haut, qui monte legerement quand la voix pousse.
+  // Une bande lumineuse qui plane et se deplace avec le contour melodique.
   //
-  // Son nombre de cotes vient du Camelot : c'est la seule forme qui porte la tonalite du
-  // disque, et c'est voulu — la voix et le corps du piano sont ce qui chante.
-  drawVoice(ctx, cx, h, unit, sides) {
+  // C'etait un petit triangle, et l'on ne voyait rien : une voix qui plane n'a pas de
+  // bord, elle occupe. Trois pour cent de l'ecran en trait fin ne peuvent pas rendre ce
+  // qu'on entend comme la chose la plus large du morceau.
+  //
+  // La bande traverse toute la scene, son bord haut et son bord bas se perdent en fondu,
+  // et c'est sa <b>hauteur</b> qui porte la melodie. Le triangle demeure, mais reduit au
+  // rang de reperer : il marque le centre de la bande et donne au Camelot sa forme.
+  drawVoice(ctx, cx, h, unit, sides, w) {
     const m = this.voice.value, hit = this.voiceHit.value;
-    const r = unit * (0.055 + m * 0.05 + hit * 0.045);
+    const force = m + hit * 0.5;
+    if (force < 0.02) return;
 
-    // LE TRIANGLE MONTE ET DESCEND AVEC LA MELODIE.
-    //
-    // C'est le geste que Selim ne voyait pas : « un instrument qui monte dans les notes
-    // et redescend, c'est a peine perceptible ». Il l'etait parce que seule l'amplitude
-    // etait rendue, et qu'une melodie qui monte ne change pas de volume. Le deplacement
-    // reste dans la bande de la voix — assez pour se voir, pas assez pour qu'on la
-    // confonde avec une autre source.
-    const y = h * HAUTEUR.voix
-            - (this.midPitch.value - 0.5) * h * 0.13
-            - m * unit * 0.02;
+    // LE GESTE QUE SELIM NE VOYAIT PAS. Monter dans les notes ne change pas le volume :
+    // seul un deplacement peut le rendre. La bande occupe la moitie haute de la scene.
+    const y = h * (HAUTEUR.voix + 0.10) - (this.midPitch.value - 0.5) * h * 0.30;
+    const ep = unit * (0.045 + m * 0.075 + hit * 0.05);
+
+    const g = ctx.createLinearGradient(0, y - ep, 0, y + ep);
+    g.addColorStop(0,    S.rgba(SRC.voix, 0));
+    g.addColorStop(0.45, S.rgba(SRC.voix, 0.10 + force * 0.30));
+    g.addColorStop(0.5,  S.rgba(SRC.voix, 0.16 + force * 0.44));
+    g.addColorStop(0.55, S.rgba(SRC.voix, 0.10 + force * 0.30));
+    g.addColorStop(1,    S.rgba(SRC.voix, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y - ep, w, ep * 2);
+
+    // Un trait net au coeur de la bande : sans lui, la lueur n'aurait aucune position
+    // precise et le contour redeviendrait vague.
+    ctx.strokeStyle = S.rgba(SRC.voix, 0.25 + force * 0.5);
+    ctx.lineWidth = Math.max(1, unit * 0.0025 * (0.5 + force));
+    ctx.beginPath();
+    ctx.moveTo(w * 0.05, y); ctx.lineTo(w * 0.95, y);
+    ctx.stroke();
+
+    // Le repere : la seule forme qui porte la tonalite du disque.
     const n = sides === 6 ? 3 : sides;
-
-    S.polygon(ctx, cx, y, r, n, 0, SRC.voix, 0.22 + m * 0.6, true);
-    S.polygon(ctx, cx, y, r * 1.35, n, 0, SRC.voix, 0.10 + hit * 0.5, false, 1.4);
+    const r = unit * (0.028 + force * 0.030);
+    S.polygon(ctx, cx, y, r, n, 0, SRC.voix, 0.30 + force * 0.55, true);
   }
 
   // ---------------------------------------------------------------- AIGUES
@@ -510,21 +528,33 @@ export class Visual {
   }
 
   // -------------------------------------------------------------- CHARLEYS
-  // Une reglette de traits fins tout en haut, comme une graduation. Ils etaient meles aux
-  // aigues et l'on confondait les deux ; les separer suffit a les distinguer.
+  // De la poussiere qui scintille en haut de la scene.
+  //
+  // C'etait une reglette de seize traits qui clignotaient ensemble : une graduation, pas
+  // un instrument. Or un charley n'est pas une mesure, c'est un <b>grain</b> — un frisson
+  // bref et fin, qui revient sans jamais peser.
+  //
+  // Chaque point a sa propre phase, tiree d'une suite deterministe : ils scintillent donc
+  // en desordre au lieu de battre ensemble, ce qui ressemble a la chose plutot qu'a un
+  // metronome. Deterministe et non aleatoire — sans quoi la poussiere danserait d'une
+  // image a l'autre et l'on ne verrait plus que le bruit.
   drawHats(ctx, w, h, unit, open) {
     const coupe = Math.pow(open, 1.5), v = this.hat.value;
     if (v < 0.015 || coupe < 0.05) return;
 
-    ctx.strokeStyle = S.rgba(SRC.hat, v * coupe * 0.7);
-    ctx.lineWidth = Math.max(1, unit * 0.0035);
-    ctx.lineCap = 'butt';
-    for (let i = 0; i < 16; i++) {
-      const x = w * (0.10 + i * 0.0533);
+    for (let i = 0; i < 26; i++) {
+      const p = S.scatter(i, 3);
+
+      // Chaque grain brille a son tour : la phase decale son eclat dans le temps.
+      const phase = (i * 0.618) % 1;
+      const eclat = Math.max(0, 1 - Math.abs(((v + phase) % 1) - 0.5) * 2.6);
+      if (eclat < 0.05) continue;
+
+      const r = unit * (0.004 + eclat * 0.006 * (0.5 + v));
+      ctx.fillStyle = S.rgba(SRC.hat, eclat * v * coupe * 0.9);
       ctx.beginPath();
-      ctx.moveTo(x, h * 0.045);
-      ctx.lineTo(x, h * 0.045 + unit * 0.022 * (0.35 + v * 0.65));
-      ctx.stroke();
+      ctx.arc(w * (0.06 + p.x * 0.88), h * (0.03 + p.y * 0.13), r, 0, TAU);
+      ctx.fill();
     }
   }
 
