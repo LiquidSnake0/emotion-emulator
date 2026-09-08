@@ -70,8 +70,13 @@ C'est une regle generale deguisee en detail de reglage. **Une grandeur qui bouge
 seuil du perceptible ne doit pas bouger a l'ecran** : elle ne communique rien et coute un
 flottement.
 
-Elle vaut au-dela du tempo — l'ouverture d'un filtre, un niveau de basse, une densite. Tout
-ce qui traverse le paquet GPU devrait franchir un pas minimal avant d'etre publie.
+Le chiffre est un ordre de grandeur donne de memoire, a verifier sur le mur. Le principe,
+lui, tient : le seuil du perceptible est un ecart de tempo et non une proportion.
+
+**Attention a ne pas confondre avec la cadence d'envoi.** Le paquet part au GPU **a chaque
+instant t**, sans condition. Le pas minimal ne decide pas d'envoyer ou non, il decide si la
+valeur transportee bouge. Un flux qui ne parlerait qu'en cas de changement priverait le
+renderer de son horloge.
 
 ---
 
@@ -100,7 +105,7 @@ pu connaitre.
 
 ---
 
-## Le seuil : pourcentage ou convergence ?
+## Le seuil : tranche
 
 Selim propose un pourcentage du morceau — « peut-etre 15 % ». La question merite d'etre
 posee autrement, parce que les mesures de la journee donnent des chiffres :
@@ -117,8 +122,26 @@ d'un refrain** : un morceau qui commence par trente secondes de nappe ne dira ri
 grille. Un critere de convergence — publier quand chaque estimateur a cesse de bouger —
 colle a ce que le systeme sait reellement, au prix d'une attente imprevisible.
 
-Les deux se combinent : **converger, avec un plafond de temps**. Le systeme annonce ce
-qu'il sait quand il a cesse d'apprendre, et au plus tard passe un delai.
+**Decide : convergence, plafonnee a 30 secondes.**
+
+Le plafond vient du metier et non de la technique. Le palier de validation d'un calage est
+de seize temps — c'est celui que Selim emploie a l'oreille — et seize temps a 96 BPM font
+une quarantaine de secondes de cue en comptant l'approche. **Trente secondes est donc le
+temps qu'il accepte de laisser tourner**, pas une contrainte de calcul.
+
+Ce que ce plafond emporte :
+
+| Grandeur | Prete a temps ? |
+|---|---|
+| couleur, registre de basse, densite | oui, en quelques secondes |
+| tempo | oui, ~8 s |
+| grille et temps fort | oui, avec la reserve qu'il plafonne a une fenetre sur deux |
+| **structure longue** | **non** — deux phrases font 40 s |
+
+La structure longue n'entrera donc pas dans ce que le GPU recoit au moment de la bascule.
+Elle continuera de se construire apres, en direct, et servira plus tard dans le morceau.
+C'est une consequence a assumer, pas un defaut a corriger : **le systeme livre ce qu'il
+sait a l'instant ou l'on en a besoin, et continue d'apprendre ensuite.**
 
 ---
 

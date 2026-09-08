@@ -72,7 +72,18 @@ public sealed class TempoTracker
     /// </summary>
     private const float DecisiveCorrelation = 0.35f;
 
-    /// <summary>Pas minimal du tempo publie, en BPM. Sous cet ecart, rien ne bouge.</summary>
+    /// <summary>
+    /// Pas minimal du tempo publie, en BPM.
+    ///
+    /// <b>Ordre de grandeur, pas valeur mesuree.</b> Selim l'a donne de memoire — « passer
+    /// de 93 a 94 ca va meme pas se sentir » — et le principe est juste : le seuil du
+    /// perceptible est un ecart de tempo et non une proportion, sans quoi la grille serait
+    /// plus nerveuse sur un morceau lent que sur un rapide. Le chiffre lui-meme reste a
+    /// verifier a l'oreille, sur le mur.
+    ///
+    /// Il ne conditionne d'ailleurs aucun envoi : le paquet part a chaque instant t, quoi
+    /// qu'il arrive. Ce pas ne fait que decider si la valeur publiee bouge.
+    /// </summary>
     private const float TempoStep = 1f;
 
     private const float PublishAbove = 0.35f;
