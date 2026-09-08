@@ -29,9 +29,9 @@ var exported = new List<string>();
 var (mono, rate) = Wav.ReadMono(path, startS, lengthS);
 Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} s a {rate} Hz");
 
-// Cinquieme argument : « nosep » coupe la separation harmonique/percussive, pour savoir
-// si un tempo introuvable manque au signal ou lui a ete retire en chemin.
-var separate = !(args.Length > 4 && args[4] == "nosep");
+// Cinquieme argument : « sep » force la separation harmonique/percussive, coupee par
+// defaut depuis qu'on l'a mesuree. Sert a comparer les deux sur la meme matiere.
+var separate = args.Length > 4 && args[4] == "sep";
 var analyzer = new SpectrumAnalyzer(rate, separate);
 Console.WriteLine(separate ? "separation active" : "separation COUPEE");
 const int hop = SpectrumAnalyzer.Window;

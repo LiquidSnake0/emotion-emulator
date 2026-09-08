@@ -152,6 +152,31 @@ ni le beat tracking ni le HPSS. Le C++ reste justifié **pour le rendu GPU uniqu
 conteneuriser l'analyse ajouterait un runtime et une frontière IPC pour un gain nul,
 l'écriture d'un message coûtant 2,9 µs.
 
+## La séparation HPSS est coupée par défaut
+
+Elle avait été introduite pour empêcher le piano de déclencher les claps, et elle le fait —
+le nombre de claps monte de 91 à 113 quand on la coupe. Mais mesurée ailleurs, elle coûte
+bien plus qu'elle ne rapporte.
+
+| Verrouillage du temps fort | Macroblank | 640 s | 900 s | 1500 s | moyenne | **pire cas** |
+|---|---|---|---|---|---|---|
+| avec | 20 % | **84 %** | 52 % | 35 % | 48 % | **20 %** |
+| **sans** | **86 %** | 49 % | **60 %** | **43 %** | **60 %** | **43 %** |
+
+Et la latence d'analyse tombe de **43 ms à 21**.
+
+La raison est celle du répertoire : le barber beats étouffe et filtre ses kicks jusqu'à les
+noyer, si bien que ce que la séparation retient comme percussif y est surtout du
+crépitement de bande — qui n'a ni période ni accent. Elle retire du grave la basse, qui
+porte la pulsation autant que la frappe.
+
+`Signal__Separate=true` la réactive, et le restera : sur un répertoire aux kicks francs et
+au piano bavard, le calcul pourrait s'inverser.
+
+**Une voie mixte a été essayée et abandonnée** — kick avant séparation, claps après. Elle
+donne 40 / 33 / 75 / 33, moins bon que les deux autres, et casse au passage la garde qui
+empêche un kick de compter comme clap, laquelle compare les deux registres entre eux.
+
 ## Deux corrections trouvées par une vérité terrain
 
 Selim donne un morceau de Macroblank à **87 BPM**. Le système en annonçait **108,4**.

@@ -33,7 +33,7 @@ public sealed class PulseAudioSource : IAudioSource
     /// Separer le percussif de l'harmonique avant analyse. Coute 64 ms de latence : on
     /// doit pouvoir couper pour comparer avec et sans sur le meme morceau.
     /// </param>
-    public PulseAudioSource(string? device = null, Action<string>? log = null, bool separate = true)
+    public PulseAudioSource(string? device = null, Action<string>? log = null, bool separate = false)
     {
         _device = string.IsNullOrWhiteSpace(device) ? null : device;
         _analyzer = new SpectrumAnalyzer(SampleRate, separate);

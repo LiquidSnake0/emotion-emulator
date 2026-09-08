@@ -69,12 +69,31 @@ public sealed class SpectrumAnalyzer
     // regarder par le trou de la serrure.
     private readonly TimbreTracker _timbre;
 
-    // Separation harmonique / percussive, appliquee avant tout le reste. Les bandes et
-    // les attaques travaillent alors sur le percussif seul : le piano ne remplit plus
-    // les mediums de flux, et un clap redevient detectable pour ce qu'il est.
+    // Separation harmonique / percussive. Les bandes et les attaques travaillent alors
+    // sur le percussif seul : le piano ne remplit plus les mediums de flux, et un clap
+    // redevient detectable pour ce qu'il est.
     //
-    // Optionnelle : elle coute 64 ms de latence, et on doit pouvoir comparer avec et
-    // sans sur le meme morceau pour juger si le gain les vaut.
+    // COUPEE PAR DEFAUT DEPUIS QU'ON L'A MESUREE SUR PLUSIEURS SOURCES.
+    //
+    // Elle a ete introduite pour empecher le piano de declencher les claps, et elle le
+    // fait — le nombre de claps monte de 91 a 113 quand on la coupe. Mais elle coute
+    // beaucoup plus qu'elle ne rapporte des qu'on regarde ailleurs.
+    //
+    // Verrouillage du temps fort, avec puis sans, sur quatre passages : 20 puis 86 % sur
+    // un Macroblank, 84 puis 49 sur un passage du set, 52 puis 60, 35 puis 43. Moyenne
+    // 48 contre 60, et surtout <b>pire cas 20 contre 43</b> — c'est le pire cas qui
+    // decide en direct, un passage ou le systeme ignore le temps fort quatre fois sur
+    // cinq se voyant bien davantage qu'une moyenne.
+    //
+    // Et elle coute la moitie de la latence d'analyse : <b>43 ms avec, 21 sans</b>.
+    //
+    // La raison de fond tient au repertoire. Le barber beats etouffe et filtre ses kicks
+    // jusqu'a les noyer ; ce que la separation retient comme percussif y est surtout du
+    // crepitement de bande, qui n'a ni periode ni accent. Elle retire du grave la basse,
+    // laquelle porte la pulsation autant que la frappe.
+    //
+    // Reste activable par `Signal__Separate=true`, et le restera : sur un repertoire aux
+    // kicks francs et au piano bavard, le calcul pourrait s'inverser.
     private readonly Hpss? _hpss;
 
     // La grille metrique et la tension. Elles ne regardent aucun echantillon : elles ne
@@ -119,7 +138,7 @@ public sealed class SpectrumAnalyzer
     /// Separer le percussif de l'harmonique avant analyse. Coute la latence annoncee par
     /// <see cref="Hpss.LatencyFrames"/>, soit 64 ms sur le reglage par defaut.
     /// </param>
-    public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = true)
+    public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false)
     {
         _sampleRate = sampleRate;
         _edges = BuildEdges(sampleRate);

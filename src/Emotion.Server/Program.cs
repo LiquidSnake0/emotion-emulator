@@ -35,7 +35,7 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
     {
         "pulse" => new PulseAudioSource(cfg["Signal:Device"],
-                                        separate: cfg.GetValue("Signal:Separate", true)),
+                                        separate: cfg.GetValue("Signal:Separate", false)),
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 
@@ -45,7 +45,7 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     if (string.IsNullOrWhiteSpace(cueDevice)) return master;
 
     return new DualAudioSource(master,
-        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", true)));
+        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", false)));
 });
 
 builder.Services.AddHostedService<SignalWorker>();
