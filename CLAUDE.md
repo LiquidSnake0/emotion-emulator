@@ -547,21 +547,27 @@ basse, kick et voix se recouvraient — et les séparer par la couleur seule ne 
 L'ordre vertical résout les deux d'un coup parce qu'il est déjà dans l'oreille : le grave
 est bas et large, l'aigu est haut et fin. La scène se lit comme un **spectre debout**.
 
+**L'horizon sépare, il ne rassemble pas.** La basse et le kick partaient tous deux du sol
+*vers le haut* : ils se croisaient à chaque frappe, quel que soit le découpage qu'on leur
+donnait. Aucune zone ne pouvait les séparer tant qu'ils partageaient la même direction. La
+basse monte au-dessus de l'horizon, le kick descend en dessous — ils se touchent sur la
+ligne, ce qui est juste puisqu'une frappe grave est bien les deux à la fois.
+
 **Chaque source a sa bande, et n'en sort pas.** Donner une position ne suffit pas : sans
 borne, une forme qui bouge finit dans celle du voisin — la bande de la voix, avec sa course
 d'un tiers de hauteur, entrait dans l'octogone du piano. Les zones se touchent sans se
 recouvrir, et chaque forme est dimensionnée pour tenir dans la sienne, contour mélodique
 compris.
 
-| Source | Forme | Couleur | Hauteur |
+| Source | Forme | Couleur | Zone (fraction de hauteur) |
 |---|---|---|---|
-| charleys | réglette de traits | gris | tout en haut |
-| aiguës | losanges pleins | jaune | haut |
-| voix | triangle (côtés = Camelot) | cyan | haut-milieu |
-| piano | octogone en rotation lente | violet | milieu |
-| kick | onde qui traverse l'horizon | **blanc** | ligne d'horizon |
+| charleys | poussière qui scintille | gris | 0,02 – 0,10 |
+| aiguës | losanges pleins | jaune | 0,13 – 0,24 |
+| voix | bande lumineuse + repère | cyan | 0,27 – 0,42 |
+| piano | octogone en rotation lente | violet | 0,45 – 0,58 |
+| basse | arc plein, monte de l'horizon | vert | 0,61 – 0,78 |
+| kick | traits qui descendent sous l'horizon | **blanc** | 0,78 – 0,91 |
 | claps | cercles ouverts | violet | sur l'horizon, aux bords |
-| basse | arc plein posé au sol | vert | bas |
 
 **Le contour mélodique déplace les formes.** Trois amplitudes ne décrivent aucun
 mouvement : quand une mélodie monte, le médium baisse et l'aigu monte — deux faits

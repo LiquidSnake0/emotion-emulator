@@ -61,12 +61,23 @@ const SRC = {
 // l'octogone du piano. Les zones se touchent sans se recouvrir, et chaque forme est
 // dimensionnee pour tenir dans la sienne.
 const ZONE = {
-  hat:   { de: 0.02, a: 0.13 },
-  aigu:  { de: 0.17, a: 0.29 },
-  voix:  { de: 0.34, a: 0.55 },
-  piano: { de: 0.59, a: 0.73 },
-  sol:   0.82,
+  hat:   { de: 0.02, a: 0.10 },
+  aigu:  { de: 0.13, a: 0.24 },
+  voix:  { de: 0.27, a: 0.42 },
+  piano: { de: 0.45, a: 0.58 },
+  basse: 0.61,     // plafond de l'arc : il ne remonte jamais au-dela
+  sol:   0.78,     // l'horizon
 };
+
+// L'HORIZON SEPARE, IL NE RASSEMBLE PAS.
+//
+// La basse et le kick partaient tous deux du sol vers le haut : ils se croisaient a
+// chaque frappe, quelles que soient les zones qu'on leur donnait. Aucun decoupage ne
+// pouvait les separer tant qu'ils partageaient la meme direction.
+//
+// La basse monte donc au-dessus de l'horizon, le kick descend en dessous. Ils se touchent
+// sur la ligne — ce qui est juste, une frappe grave est bien les deux a la fois — et
+// n'empietent plus l'un sur l'autre.
 
 export class Visual {
   constructor(canvas) {
@@ -339,7 +350,7 @@ export class Visual {
 
     this.drawTension(ctx, w, h, sol, unit);
     this.drawHorizon(ctx, w, sol, c);
-    this.drawBass(ctx, cx, sol, w, unit);
+    this.drawBass(ctx, cx, sol, w, h, unit);
     this.drawKick(ctx, cx, sol, w, unit);
     this.drawClaps(ctx, cx, sol, w, unit);
     this.drawVoice(ctx, cx, h, unit, sides, w);
@@ -391,15 +402,15 @@ export class Visual {
   // ---------------------------------------------------------------- BASSE
   // Un arc plein pose sur l'horizon, qui enfle et retombe. Une masse, pas une tache : le
   // degrade monte, le contour reste net, et rien ne s'estompe dans le vide.
-  drawBass(ctx, cx, sol, w, unit) {
+  drawBass(ctx, cx, sol, w, h, unit) {
     // La basse ne se deplace pas : elle est posee au sol, c'est ce qui la rend stable.
     // Son contour melodique elargit l'arc au lieu de le monter — une note grave qui monte
     // occupe plus de place, elle ne quitte pas le sol.
     const large = 1 + (this.lowPitch.value - 0.5) * 0.30;
-    // Bornee a la hauteur disponible sous l'horizon augmentee d'un tiers : la masse peut
-    // enfler franchement sans jamais atteindre la zone du piano.
-    const plafond = (ZONE.sol - ZONE.piano.a) * 1.35;
-    const r = Math.min(plafond * unit * 1.4,
+    // Le plafond est la distance qui separe l'horizon de la zone du piano, en pixels.
+    // La masse peut enfler franchement sans jamais y toucher.
+    const plafond = (ZONE.sol - ZONE.basse) * h;
+    const r = Math.min(plafond,
                        unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07) * large);
     if (r <= 0) return;
 
@@ -430,22 +441,22 @@ export class Visual {
     const k = this.kick.value;
     if (k < 0.015) return;
 
-    const d = (1 - k) * w * 0.52;
-    const ht = unit * 0.075 * k * (0.55 + this.onOne * 0.75);
+    const d = (1 - k) * w * 0.56;
+    const ht = unit * 0.085 * k * (0.55 + this.onOne * 0.75);
 
     ctx.strokeStyle = S.rgba(SRC.kick, k * this.onOne * 0.95);
-    ctx.lineWidth = Math.max(2, unit * 0.011 * k * (0.6 + this.onOne * 0.6));
+    ctx.lineWidth = Math.max(2, unit * 0.012 * k * (0.6 + this.onOne * 0.6));
     ctx.lineCap = 'round';
     for (const s of [-1, 1]) {
       const x = cx + s * d;
-      ctx.beginPath(); ctx.moveTo(x, sol - ht); ctx.lineTo(x, sol + ht * 0.45); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, sol); ctx.lineTo(x, sol + ht); ctx.stroke();
     }
 
     if (this.onOne > 0.9) {
-      ctx.strokeStyle = S.rgba(SRC.kick, k * 0.5);
+      ctx.strokeStyle = S.rgba(SRC.kick, k * 0.55);
       ctx.lineWidth = Math.max(1, unit * 0.004);
       ctx.beginPath();
-      ctx.moveTo(cx, sol - ht * 1.5); ctx.lineTo(cx, sol + ht * 0.7); ctx.stroke();
+      ctx.moveTo(cx, sol); ctx.lineTo(cx, sol + ht * 1.5); ctx.stroke();
     }
   }
 
@@ -456,7 +467,7 @@ export class Visual {
     const v = this.clap.value;
     if (v < 0.015) return;
 
-    const r = unit * (0.045 + v * 0.085), o = w * 0.30;
+    const r = unit * (0.045 + v * 0.085), o = w * 0.38;
     ctx.strokeStyle = S.rgba(SRC.piano, v * 0.85);
     ctx.lineWidth = Math.max(2, unit * 0.009 * v);
     for (const s of [-1, 1]) {
@@ -549,7 +560,7 @@ export class Visual {
 
     for (let i = 0; i < 6; i++) {
       const p = S.scatter(i);
-      S.polygon(ctx, w * (0.10 + p.x * 0.80),
+      S.polygon(ctx, w * (0.06 + p.x * 0.88),
                 h * (centre + (p.y - 0.5) * etendue),
                 r, 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
     }
@@ -581,7 +592,7 @@ export class Visual {
       const r = unit * (0.004 + eclat * 0.006 * (0.5 + v));
       ctx.fillStyle = S.rgba(SRC.hat, eclat * v * coupe * 0.9);
       ctx.beginPath();
-      ctx.arc(w * (0.06 + p.x * 0.88),
+      ctx.arc(w * (0.04 + p.x * 0.92),
               h * (ZONE.hat.de + p.y * (ZONE.hat.a - ZONE.hat.de)), r, 0, TAU);
       ctx.fill();
     }
