@@ -675,10 +675,22 @@ export class Visual {
     const coupe = Math.pow(open, 1.5);
 
     ctx.save();
-    // Le filtre contracte et trouble la scene entiere sans deplacer les cases les unes
-    // par rapport aux autres : elles restent lisibles meme fermees.
+    // LA GRILLE NE SUIT PAS L'ENERGIE, ET C'EST UNE CORRECTION.
+    //
+    // L'ouverture du filtre pilotait l'echelle de la scene entiere. Mesure en direct :
+    // le facteur oscillait entre 0,979 et 1,000 <b>a chaque image</b>, parce que
+    // `openness` est un descripteur de timbre calcule toutes les 21 ms et qu'il n'etait
+    // lisse par rien. Sur 1536 px de large, cela fait une trentaine de pixels de
+    // battement sur les bords, en permanence, au rythme du morceau.
+    //
+    // Le defaut n'etait pas l'amplitude mais la nature du signal choisi. Les cases sont
+    // une grille de lecture : l'oeil s'y ancre pour comparer une source a sa voisine, et
+    // une grille qui respire empeche exactement cela. Ce qui a le droit de deplacer le
+    // cadre, ce sont les gestes — une montee sur huit mesures, une rupture — pas une
+    // mesure par fenetre. Le filtre, lui, agit toujours, mais <b>a l'interieur</b> des
+    // cases, par `coupe`.
     const swell = 1 + this.tension.value * 0.08 + this.drop.value * 0.08;
-    const shrink = (0.90 + open * 0.10) * swell;
+    const shrink = swell;
     ctx.translate(w / 2, h / 2); ctx.scale(shrink, shrink); ctx.translate(-w / 2, -h / 2);
 
     this.drawTension(ctx, w, h);
