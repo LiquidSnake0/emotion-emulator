@@ -112,7 +112,15 @@ public readonly record struct VisualFrame(
     int EventFamily = -1,
 
     /// <summary>L'empreinte de cette frappe : brillance, etalement, piquant.</summary>
-    EventSignature EventPrint = default)
+    EventSignature EventPrint = default,
+
+    /// <summary>
+    /// A quel point les familles de frappes confirment le tempo, 0 a 1.
+    ///
+    /// Les familles se forment sur le timbre, sans jamais consulter la grille : leur accord
+    /// avec elle est donc une verification independante, la seule dont le projet dispose.
+    /// </summary>
+    float GridAgreement = 0f)
 {
     /// <summary>Nombre de bandes emises. Fixe : le shader dimensionne ses uniformes dessus.</summary>
     public const int BandCount = 12;

@@ -769,6 +769,33 @@ est plus modeste et plus robuste : savoir que *cette frappe-ci est la même que 
 deux mesures*. Le rendu peut donner à chacune son traitement ; savoir laquelle est une caisse
 claire ne l'intéresse pas.
 
+### Vérifier le tempo par une voie qui ne le connaît pas
+
+Tout le projet mesure, mais **rien ne disait si le tempo trouvé était le bon**. La confiance
+publiée vient de l'autocorrélation elle-même : elle dit à quel point le pic choisi ressort,
+pas s'il est au bon endroit. Une confiance calculée par celui qu'on veut vérifier ne vérifie
+rien.
+
+Les familles de frappes donnent cette seconde voie, parce qu'elles sont formées **sur le
+timbre et n'ont jamais consulté le tempo**. Or une percussion joue en mesure : ses intervalles
+tombent sur des multiples ou des divisions du temps. Sur un morceau du crate à 87,4 BPM :
+
+```
+  famille 0 :  85.2 BPM  (×0.97)   le kick, sur le temps
+  famille 3 : 175.4 BPM  (×2.01)   les croches, exactement
+  famille 5 :  48.5 BPM  (×0.55)   les blanches
+```
+
+Trois rapports francs obtenus sans jamais regarder la grille — **c'est une confirmation
+indépendante du tempo**, la première dont le projet dispose.
+
+**Mais l'indicateur ne discrimine pas encore, et il faut le dire.** L'accord mesuré va de 0,07
+à 0,38 selon les morceaux, ce qui est bas partout. La cause est en amont : les familles ne
+sont régulières qu'à 0,21–0,54, parce qu'elles héritent des détections du détecteur
+d'attaques — le maillon faible. **La vérification dépend donc de ce qu'elle devrait
+vérifier.** Le mécanisme est juste et testé ; il deviendra utile le jour où le détecteur
+s'améliorera, et pas avant.
+
 ## Le parallélisme, et ce que la mesure en a dit
 
 La demande était directe : faire calculer les six sources en parallèle, chacune écrivant sa

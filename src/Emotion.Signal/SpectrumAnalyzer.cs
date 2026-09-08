@@ -128,6 +128,17 @@ public sealed class SpectrumAnalyzer
     /// <summary>Les familles de frappes rencontrees sur ce disque, pour la sonde.</summary>
     public EventProfiler Evenements => _evenements;
 
+    /// <summary>
+    /// A quel point les familles de frappes confirment le tempo, 0 a 1.
+    ///
+    /// C'est la seule verification du tempo qui ne vienne pas de lui-meme : les familles
+    /// sont formees sur le timbre et n'ont jamais consulte la grille.
+    /// </summary>
+    public GridAgreement Accord => _accord;
+
+    private readonly GridAgreement _accord;
+    private long _dernierJugement;
+
     /// <summary>Les deux fonctions de detection, pour les comparer sur la meme image.</summary>
     public float DernierFluxEnergie { get; private set; }
     public float DernierFluxComplexe { get; private set; }
@@ -294,6 +305,7 @@ public sealed class SpectrumAnalyzer
         _sampleRate = sampleRate;
         _frameSeconds = Window / (float)sampleRate;
         _tempo = new TempoTracker(sampleRate, Window);
+        _accord = new GridAgreement(_evenements.Familles);
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
@@ -620,6 +632,17 @@ public sealed class SpectrumAnalyzer
         // decider qu'il y a eu une frappe — cela vient d'etre fait — mais a savoir laquelle,
         // sans avoir a la nommer.
         var famille = _evenements.Feed(full, kick || clap || hits.Hat);
+
+        // La verification croisee : les familles n'ont jamais consulte le tempo, donc leur
+        // accord avec lui vaut quelque chose. On ne rejuge qu'une fois par seconde — c'est
+        // une mediane sur soixante instants, pas une grandeur qui bouge d'une image a
+        // l'autre.
+        if (famille >= 0) _accord.Frappe(famille, tMs);
+        if (tMs - _dernierJugement > 1000)
+        {
+            _dernierJugement = tMs;
+            _accord.Juger(_tempo.Bpm);
+        }
         Etapes.Fin(9);                       // kick, clap, charley
 
         UpdateMasks(bands);
@@ -763,6 +786,7 @@ public sealed class SpectrumAnalyzer
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             EventFamily: famille,
+            GridAgreement: _accord.Accord,
             EventPrint: _evenements.Derniere,
             Flux: Clamp01(rKick / scale),
             Threshold: Clamp01(_kick.Threshold / scale),

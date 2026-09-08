@@ -97,6 +97,7 @@ var lastReason = "";
 // chaine tient le direct : une image qui depasse le pas de 21 ms fait prendre du retard,
 // et ce retard s'accumule.
 var coutImage = new List<double>();
+var famAt = Enumerable.Range(0, EventFamilies.Max).Select(_ => new List<long>()).ToArray();
 var fluxE = new List<float>();
 var fluxC = new List<float>();
 var annonces = new List<(long T, float Bpm)>();
@@ -140,6 +141,7 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
+    if (f.EventFamily >= 0) famAt[f.EventFamily].Add(tMs);
     fluxE.Add(analyzer.DernierFluxEnergie);
     fluxC.Add(analyzer.DernierFluxComplexe);
 
@@ -417,15 +419,58 @@ if (fluxE.Count > 10)
 {
     var fam = analyzer.Evenements.Familles;
     Console.WriteLine();
-    Console.WriteLine($"familles de frappes  {fam.Connues} distinctes");
+    var acc = analyzer.Accord;
+    Console.WriteLine($"familles de frappes  {fam.Connues} distinctes · " +
+                      $"accord avec la grille {acc.Accord:F2} " +
+                      $"({acc.Votantes} familles votantes)");
     for (var i = 0; i < fam.Connues; i++)
     {
         var c = fam.CentreDe(i);
         var v = fam.VuesDe(i);
-        var barre = new string('#', Math.Min(30, v / 4));
-        Console.WriteLine($"  famille {i} : {v,4} frappes {barre,-30} " +
-                          $"brillance {c.Brillance:F2} · etalement {c.Etalement:F2} · " +
-                          $"piquant {c.Piquant:F2}");
+        // LA REGULARITE D'UNE FAMILLE : est-elle le pouls du morceau ?
+        //
+        // Une famille dont les intervalles se ressemblent frappe en mesure ; une famille
+        // dont ils partent dans tous les sens est un ornement, ou du bruit. C'est un
+        // indice que les bandes de frequence ne donnent pas : la pulsation n'est pas
+        // forcement dans les graves.
+        var t = famAt[i];
+        var regul = "—";
+        var surTemps = "";
+        if (t.Count > 4)
+        {
+            var iv = new List<double>();
+            for (var k = 1; k < t.Count; k++) iv.Add(t[k] - t[k - 1]);
+            iv.Sort();
+            var med = iv[iv.Count / 2];
+            // Ecart median a la mediane : robuste, contrairement a un ecart-type que
+            // deux intervalles aberrants suffisent a doubler.
+            var ecarts = iv.Select(x => Math.Abs(x - med)).OrderBy(x => x).ToList();
+            var mad = ecarts[ecarts.Count / 2];
+            regul = med > 0 ? $"{1.0 - Math.Min(1.0, mad / med):F2}" : "—";
+
+            if (tempos.Count > 0)
+            {
+                var temps = 60000.0 / Median(tempos);
+                var justes = iv.Count(x => Math.Abs(x / temps - Math.Round(x / temps)) < 0.15);
+
+                // A QUEL TEMPO CETTE FAMILLE BAT-ELLE, SI ELLE BAT SEULE ?
+                //
+                // Une famille reguliere qui ne tombe pas sur la grille dit quelque chose :
+                // ou bien elle joue une subdivision, ou bien c'est la grille qui se trompe.
+                // On publie donc le tempo qu'elle impliquerait, et le rapport a celui qu'on
+                // a detecte — un rapport proche de 1, 2 ou 0,5 est une subdivision ; un
+                // rapport batard est un desaccord.
+                var bpmFamille = 60000.0 / med;
+                var rapport = bpmFamille / Median(tempos);
+                surTemps = $" · {100.0 * justes / iv.Count,3:F0} % sur la grille" +
+                           $" · bat a {bpmFamille,5:F1} BPM (x{rapport:F2})";
+            }
+        }
+
+        var barre = new string('#', Math.Min(24, v / 6));
+        Console.WriteLine($"  famille {i} : {v,4} frappes {barre,-24} " +
+                          $"brillance {c.Brillance:F2} · piquant {c.Piquant:F2} · " +
+                          $"regularite {regul}{surTemps}");
     }
 }
 
