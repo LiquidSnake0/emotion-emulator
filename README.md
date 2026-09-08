@@ -371,18 +371,34 @@ mieux tolérée des deux.
 
 | Référence | Seuil | Marge restante |
 |---|---|---|
-| [EBU R37](https://tech.ebu.ch/publications/r037) — norme de diffusion | 40 ms | **−8 ms** |
-| [ITU-R BT.1359-1](https://www.itu.int/rec/R-REC-BT.1359) — détectable | 45 ms | **−3 ms** |
-| ITU-R BT.1359-1 — inacceptable | 90 ms | **+42 ms** |
+| **Laboratoire — imperceptible** | **20 ms** | **−28 ms** ← la cible |
+| [EBU R37](https://tech.ebu.ch/publications/r037) — norme de diffusion | 40 ms | −8 ms |
+| [ITU-R BT.1359-1](https://www.itu.int/rec/R-REC-BT.1359) — détectable | 45 ms | −3 ms |
+| ITU-R BT.1359-1 — inacceptable | 90 ms | +42 ms |
+
+**La cible est 20 ms**, et non 40. Les normes de diffusion sont écrites pour de la parole
+et des plans larges ; ici l'événement est une frappe sèche que le spectateur cherche
+activement à voir tomber avec ce qu'il entend, et c'est le cas le plus défavorable —
+la détection est possible dès 20 ms sur un transitoire net.
 
 Un vidéoprojecteur consomme 16 à 33 ms selon son traitement d'image ; un modèle de mapping
 en mode faible latence descend vers 16, ce qui laisse **une vingtaine de millisecondes**
 pour le rendu aller-retour.
 
-**Sauf pour le kick, où le budget n'est plus borné par le seuil.** L'horloge à
-verrouillage de phase ne réagit pas à la frappe, elle la prévoit : sur cet événement, la
-limite devient la stabilité du tempo, pas la perception. Tout ce qui n'est pas
-périodique — clap irrégulier, voix, rupture — subit les 48 ms.
+**Sauf pour le kick, et c'est ce qui rend la cible atteignable.** L'horloge à verrouillage
+de phase ne réagit pas à la frappe, elle la prévoit, et part donc **en avance** — 30 ms
+aujourd'hui. Sur cet événement, le retard perçu tombe à `48 − 30 = 18 ms`, **sous le seuil
+d'imperceptibilité**.
+
+Cette avance n'est pas bornée par la perception mais par la **prévisibilité du tempo** : à
+87 BPM un temps dure 690 ms, donc 30 ms représentent 4 % d'un temps, et 60 ms en
+représenteraient 9 %. Tant que le tempo tient à 1 % près, l'avance peut absorber le GPU et
+le projecteur en plus — il suffit de l'augmenter d'autant. **Le budget prédictif est large ;
+c'est la stabilité du plateau qui le limite, pas l'œil.**
+
+Tout ce qui n'est pas périodique — clap irrégulier, voix, rupture — subit les 48 ms et ne
+peut pas être avancé : prédire l'imprévisible inventerait des événements, ce qui est pire
+qu'un visuel en retard.
 
 **Une seule économie a été cherchée et rejetée.** Supprimer l'anticipation du sommet
 retirerait 21,3 ms, la plus grosse disponible : les détections tombent alors de 1003 à 683
