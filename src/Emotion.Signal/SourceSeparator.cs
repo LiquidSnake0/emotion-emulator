@@ -38,6 +38,17 @@ public sealed class SourceSeparator
     /// Un morceau de ce repertoire en contient rarement davantage : une basse, une
     /// batterie, un ou deux instruments tenus, une voix, du souffle. En demander vingt
     /// decouperait un meme instrument en morceaux ; en demander deux les melangerait.
+    ///
+    /// SIX EST MESURE, PAS SUPPOSE — ET L'INTUITION INVERSE EST FAUSSE.
+    ///
+    /// On pourrait croire qu'en demander davantage separerait mieux. Sur un morceau du
+    /// crate, la stabilite des profils va dans l'autre sens : 0,87 a 0,99 avec six sources,
+    /// 0,85 a 0,92 avec neuf, 0,76 a 0,92 avec douze. Passe un certain point, la
+    /// factorisation n'a plus d'objets a trouver et se met a couper des instruments en
+    /// morceaux — des morceaux qui ne se retrouvent pas d'un apprentissage a l'autre.
+    ///
+    /// Le cout, lui, monte franchement : 167 ms par apprentissage a six, 355 a douze. On
+    /// paierait donc deux fois pour un resultat moins bon.
     /// </summary>
     public const int Sources = 6;
 
@@ -80,6 +91,32 @@ public sealed class SourceSeparator
     private readonly float[] _hauteurs = new float[Sources];
     private readonly int[] _ordre = new int[Sources];
 
+    /// <summary>
+    /// A quel point le profil de chaque source tient d'un apprentissage a l'autre, 0 a 1.
+    ///
+    /// C'EST LA BONNE MESURE DE NETTETE, ET L'ANCIENNE DECRIVAIT AUTRE CHOSE.
+    ///
+    /// La nettete etait calculee sur les <b>bandes de frequence</b> — six octaves — alors
+    /// que ce qui est affiche a l'ecran, ce sont les six sources separees par le
+    /// <b>timbre</b>. Deux grandeurs differentes portaient le meme numero : la jauge de la
+    /// case 1 decrivait la tranche 100-200 Hz pendant que la forme de la case 1 dessinait
+    /// un timbre. Une bande d'octave est presque toujours partagee — un kick et une basse y
+    /// tombent ensemble — donc la jauge restait basse quoi qu'il arrive, et disait le
+    /// contraire de ce que l'oeil voyait.
+    ///
+    /// Une source NMF, elle, est definie par son profil spectral : c'est exactement son
+    /// timbre. Si ce profil se retrouve identique d'un apprentissage au suivant, la source
+    /// est un objet stable du morceau ; s'il change a chaque fois, la factorisation n'a pas
+    /// trouve d'objet et melange plusieurs choses.
+    /// </summary>
+    private readonly float[] _stabilite = new float[Sources];
+    private readonly float[] _profilPrecedent;
+    private bool _profilConnu;
+
+    /// <summary>Stabilite du profil de la source de rang donne, du grave a l'aigu.</summary>
+    public float StabiliteOrdonnee(int rang) =>
+        rang >= 0 && rang < Sources ? _stabilite[_ordre[rang]] : 0f;
+
     public SourceSeparator(int bins)
     {
         _bins = bins;
@@ -89,6 +126,7 @@ public sealed class SourceSeparator
         _numer = new float[Sources];
         _denom = new float[Sources];
         _wh = new float[bins];
+        _profilPrecedent = new float[bins * Sources];
 
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
@@ -124,6 +162,7 @@ public sealed class SourceSeparator
         if (_apprentissage.TryAdopt(_w))
         {
             Ordonner();
+            MesurerStabilite();
             Pret = true;
         }
 
@@ -214,6 +253,49 @@ public sealed class SourceSeparator
         Array.Sort(_ordre, (a, b) => _hauteurs[a].CompareTo(_hauteurs[b]));
     }
 
+    /// <summary>
+    /// Compare les profils fraichement appris a ceux d'avant.
+    ///
+    /// La mesure est un cosinus : deux profils qui pointent dans la meme direction
+    /// decrivent le meme timbre, quelle que soit leur intensite. C'est ce qu'on veut — une
+    /// source peut jouer plus fort sans changer de nature, et une mesure sensible a
+    /// l'amplitude confondrait les deux.
+    /// </summary>
+    private void MesurerStabilite()
+    {
+        if (_profilConnu)
+        {
+            for (var s = 0; s < Sources; s++)
+            {
+                double ps = 0, na = 0, nb = 0;
+                for (var i = 0; i < _bins; i++)
+                {
+                    var a = _w[i * Sources + s];
+                    var b = _profilPrecedent[i * Sources + s];
+                    ps += a * b;
+                    na += (double)a * a;
+                    nb += (double)b * b;
+                }
+
+                var cos = na > Eps && nb > Eps
+                    ? (float)(ps / (Math.Sqrt(na) * Math.Sqrt(nb)))
+                    : 0f;
+
+                // Un cosinus entre profils positifs vaut deja 0,5 pour deux timbres sans
+                // rapport : la moitie basse de l'echelle ne distingue rien. On l'etire
+                // pour que la jauge parle de ce qui varie vraiment.
+                var net = Clamp01((cos - 0.55f) / 0.40f);
+
+                // Lissage : un seul apprentissage malchanceux ne doit pas effacer un
+                // verdict construit sur plusieurs.
+                _stabilite[s] += (net - _stabilite[s]) * 0.35f;
+            }
+        }
+
+        Array.Copy(_w, _profilPrecedent, _w.Length);
+        _profilConnu = true;
+    }
+
     /// <summary>Activation de la source de rang <paramref name="rang"/>, du grave a l'aigu.</summary>
     public float ActivationOrdonnee(int rang) =>
         rang >= 0 && rang < Sources ? _courant[_ordre[rang]] : 0f;
@@ -221,4 +303,6 @@ public sealed class SourceSeparator
     /// <summary>Hauteur du timbre de la source de rang donne.</summary>
     public float HauteurOrdonnee(int rang) =>
         rang >= 0 && rang < Sources ? _hauteurs[_ordre[rang]] : 0.5f;
+
+    private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
 }

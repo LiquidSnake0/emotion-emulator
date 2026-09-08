@@ -86,6 +86,9 @@ public sealed class SpectrumAnalyzer
     /// <summary>Les voies, pour lire leur maturite et leur poser un nom.</summary>
     public VoiceTracker Voix => _voices;
 
+    /// <summary>La derniere image publiee, pour la sonde. Ce que le renderer a recu.</summary>
+    public VisualFrame Derniere { get; private set; }
+
     /// <summary>
     /// Ce que la fiche du cue affirmait du tempo, confronte a ce que le disque fait.
     ///
@@ -190,6 +193,8 @@ public sealed class SpectrumAnalyzer
     // Deux jeux publies a tour de role : rien n'est alloue par image.
     private readonly float[][] _sepPool =
         [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
+    private readonly LaneState[][] _lanePool =
+        [new LaneState[SourceSeparator.Sources], new LaneState[SourceSeparator.Sources]];
     private readonly float[][] _hautPool =
         [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
     private int _sepTurn;
@@ -413,7 +418,26 @@ public sealed class SpectrumAnalyzer
                 haut[i] = _separation.HauteurOrdonnee(i);
             }
 
-            voices = voices with { Levels = act, Pitches = haut };
+            // CE QUI EST MESURE DOIT DECRIRE CE QUI EST AFFICHE.
+            //
+            // Les niveaux et les contours publies viennent de la separation par timbre ; la
+            // nettete doit donc en venir aussi. Elle etait prise sur les bandes d'octave,
+            // c'est-a-dire sur autre chose que ce que l'ecran montrait — et comme une bande
+            // d'octave est presque toujours partagee, la jauge restait basse en decrivant un
+            // objet que personne ne regardait.
+            var etats = _lanePool[_sepTurn];
+            for (var i = 0; i < SourceSeparator.Sources; i++)
+            {
+                var brut = _voices.EtatDe(i);
+                etats[i] = brut with
+                {
+                    Level = act[i],
+                    Position = haut[i],
+                    Sharpness = _separation.StabiliteOrdonnee(i),
+                };
+            }
+
+            voices = voices with { Levels = act, Pitches = haut, Lanes = etats };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint
@@ -633,7 +657,7 @@ public sealed class SpectrumAnalyzer
         // ne change : on ne fabrique pas d'ecart avec une reference qu'on n'a pas.
         Reference.Feed(_tempo.Bpm, tMs);
 
-        return new VisualFrame(
+        return Derniere = new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
             Harmony: harmony,
