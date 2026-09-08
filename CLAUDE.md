@@ -542,62 +542,47 @@ toute conclusion sur la latence serait fausse.
 
 ## Le vocabulaire visuel
 
-**Le registre commande la hauteur.** Empiler les formes au centre les rendait illisibles —
-basse, kick et voix se recouvraient — et les séparer par la couleur seule ne suffisait pas.
-L'ordre vertical résout les deux d'un coup parce qu'il est déjà dans l'oreille : le grave
-est bas et large, l'aigu est haut et fin. La scène se lit comme un **spectre debout**.
+**La scène est une matrice de cases, et elle n'est pas symétrique.** Empiler les formes sur
+un axe unique les faisait se recouvrir quoi qu'on fasse — trois tentatives de bornage n'y
+ont rien changé, parce que le problème n'était pas le calcul mais la composition : tout
+partageait la même colonne.
 
-**L'horizon sépare, il ne rassemble pas.** La basse et le kick partaient tous deux du sol
-*vers le haut* : ils se croisaient à chaque frappe, quel que soit le découpage qu'on leur
-donnait. Aucune zone ne pouvait les séparer tant qu'ils partageaient la même direction. La
-basse monte au-dessus de l'horizon, le kick descend en dessous — ils se touchent sur la
-ligne, ce qui est juste puisqu'une frappe grave est bien les deux à la fois.
+```
+┌──────────┬────────────────┬──────────┐
+│ charleys │                │  aiguës  │
+├──────────┤     BASSE      ├──────────┤
+│  piano   │                │   VOIX   │
+├──────────┴────────────────┴──────────┤
+│              kick · claps            │
+└──────────────────────────────────────┘
+```
 
-**Chaque forme se dimensionne en fraction de sa zone, jamais en unités absolues.** Borner
-la *position* ne suffit pas : une forme plus haute que sa zone déborde même parfaitement
-centrée. La bande de la voix mesurait jusqu'à 19 % de la hauteur pour une zone qui en
-faisait 15 — et la marge devenant négative, le calcul de position lui-même perdait son
-sens. J'ai corrigé trois fois la position avant de voir que le problème était la taille.
+Une case ne peut pas mordre sur une autre puisqu'elles ne se touchent que par leurs bords,
+et l'asymétrie donne à l'œil de quoi se repérer : on apprend « la voix est à droite » plus
+vite que « la voix est à trente-quatre centièmes de hauteur ».
 
-La règle : **deux tiers de la zone pour l'objet, un tiers pour sa course.** Le contour
-mélodique se voit, aucune forme ne va chez le voisin. Un contrôle géométrique vérifie
-chaque forme à ses valeurs extrêmes.
+| Source | Rendu | Couleur |
+|---|---|---|
+| basse | halo qui grandit et rétrécit, au centre | vert |
+| voix | **bouche en caractères** qui s'ouvre et se courbe | cyan |
+| piano | octogone en rotation lente | violet |
+| aiguës | colonne de blocs, pointe triangulaire au sommet | jaune |
+| charleys | grain de caractères qui scintillent | gris |
+| kick | traits qui filent du centre vers les bords | **blanc** |
+| claps | les deux extrémités de la bande s'allument | violet |
 
-| Source | Forme | Couleur | Zone (fraction de hauteur) |
-|---|---|---|---|
-| charleys | poussière qui scintille | gris | 0,02 – 0,10 |
-| aiguës | losanges pleins | jaune | 0,13 – 0,24 |
-| voix | bande lumineuse + repère | cyan | 0,27 – 0,42 |
-| piano | octogone en rotation lente | violet | 0,45 – 0,58 |
-| basse | arc plein, monte de l'horizon | vert | 0,61 – 0,78 |
-| kick | traits qui descendent sous l'horizon | **blanc** | 0,78 – 0,91 |
-| claps | cercles ouverts | violet | sur l'horizon, aux bords |
+**Le rendu est en caractères** parce qu'il doit rester léger — il n'y a pas de GPU sous la
+main, et un remplissage de texte coûte une fraction d'un dégradé. Ils donnent en prime une
+identité que des polygones translucides n'avaient pas : celle d'un terminal, ce qui va bien
+à un projet qui passe son temps à mesurer.
 
-**Le contour mélodique déplace les formes.** Trois amplitudes ne décrivent aucun
-mouvement : quand une mélodie monte, le médium baisse et l'aigu monte — deux faits
-indépendants dont aucun ne porte le geste, et le visuel n'en montrait qu'un frisson.
-`Voices` transporte maintenant *où* joue chaque registre à l'intérieur du sien, sur échelle
-logarithmique. Le triangle de la voix monte et descend dans sa bande, le nuage des aiguës
-glisse d'un bloc, et l'arc de la basse s'élargit plutôt que de quitter le sol.
+**Une voix ne se déplace pas, elle s'ouvre.** La bande qui montait et descendait
+« rebondissait comme une balle de basket ». Le contour mélodique commande donc la
+**courbure** des lèvres — relevées dans l'aigu, retombantes dans le grave — et non plus une
+position.
 
-> **Une position se déplace ; une amplitude ne fait que grossir.** C'est la seule grandeur
-> du paquet qui décrive un mouvement plutôt qu'un état.
-
-Le contour passe par **un ressort et non par une moyenne** : une moyenne exponentielle
-arrive toujours en retard et sans élan, ce qui est exactement ce qui fait qu'un mouvement
-paraît mou. Et on ne le suit qu'à proportion de ce qu'on entend — un centre de gravité
-calculé sur un registre presque muet saute au gré du bruit de fond, puis saute encore au
-retour du son.
-
-**La palette des sources est fixe d'un disque à l'autre** — sinon l'œil devrait tout
-réapprendre à chaque transition. La couleur du disque n'a pas disparu : elle teinte la
-**trame de fond et l'horizon**. L'identité du morceau devient l'ambiance, les sources
-gardent leur nom, et pendant un fondu la trame passe d'une couleur à l'autre. Aucun rouge.
-
-Trois détails qui font la différence à l'écran : le kick est **la seule chose blanche et
-la seule qui traverse** ; le piano **tourne au lieu de clignoter**, ce qui convient à un
-registre presque toujours présent ; et une trame verticale très pâle donne aux formes
-quelque chose à quoi se mesurer — sans elle, tout flotte.
+La palette des sources est fixe d'un disque à l'autre ; la couleur du disque teinte les
+**cadres** de la matrice. Aucun rouge.
 
 ## Où vit le lissage
 
