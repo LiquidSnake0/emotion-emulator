@@ -29,9 +29,20 @@ public static class DeckEndpoints
 
         // La transition est faite : ce qui etait cale devient ce qui joue. C'est le
         // seul geste qui change la projection.
-        app.MapPost("/deck/take", async (DeckState deck, IHubContext<VisualHub> hub) =>
+        app.MapPost("/deck/take", async (DeckState deck, IHubContext<VisualHub> hub,
+                                         IAudioSource source) =>
         {
             var next = deck.Apply(d => d.Take());
+
+            // L'ANALYSE DOIT APPRENDRE LE CHANGEMENT DE LA BASE, PAS DU SIGNAL.
+            //
+            // C'est la seule chose que la fiche sait et que le son ne dira pas a temps :
+            // les estimateurs oublient lentement par construction, et mettraient des
+            // dizaines de secondes a admettre qu'un autre disque joue. Pendant tout ce
+            // temps, le systeme annoncerait qu'il « connait » un morceau qui ne passe
+            // plus.
+            source.NewTrack();
+
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
@@ -47,9 +58,10 @@ public static class DeckEndpoints
         // Pose directement ce qui joue, sans passer par le casque. Sert au demarrage
         // d'un set et aux essais.
         app.MapPost("/deck/play", async (TrackContext track, DeckState deck,
-                                         IHubContext<VisualHub> hub) =>
+                                         IHubContext<VisualHub> hub, IAudioSource source) =>
         {
             var next = deck.Apply(_ => new Deck(track, null));
+            source.NewTrack();
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });

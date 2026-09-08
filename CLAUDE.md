@@ -445,7 +445,7 @@ algorithme.**
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources, transport | **aucune** |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 97 tests | xUnit |
+| `Emotion.Signal.Tests` | 108 tests | xUnit |
 | `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**

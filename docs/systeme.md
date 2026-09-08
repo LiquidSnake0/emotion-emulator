@@ -10,7 +10,7 @@ telephone au mur. Ce document fixe qui fait quoi et ce qui passe entre les trois
    │             │        │                  │        │                    │
    │ bibliotheque│───────▶│     analyse      │───────▶│   deux processus   │──▶ mur
    │  du bac     │  fiche │   du signal      │ paquet │   cue │ master     │
-   │             │        │                  │  112 o │                    │
+   │             │        │                  │  128 o │                    │
    │  interface  │◀───────┼──────────────────┼────────│  etat, avancement  │
    └─────────────┘  notif └──────────────────┘        └────────────────────┘
         ▲                          ▲                            │
@@ -50,7 +50,7 @@ Rien de rythmique, rien de spectral. Ces informations-la se mesurent.
 
 ### 2. `emotion-emulator` → `emotion-renderer` : le paquet, a chaque instant t
 
-Le canal chaud. **112 octets**, ecrits dans un anneau partage sans verrou, mesures a
+Le canal chaud. **128 octets**, ecrits dans un anneau partage sans verrou, mesures a
 **1,5 µs** par message en `Release`.
 
 Il part **a chaque fenetre d'analyse, sans condition** — environ 47 fois par seconde. Un
@@ -134,10 +134,22 @@ Le rétroprojecteur est la sortie du processus master, qui compose :
 | `emotion-emulator` | ce depot | analyse complete, 90 tests, transport mesure a 1,5 µs |
 | `emotion-renderer` | **a creer** | CUDA / C++ |
 
+La fiche arrive par `POST /deck/cue`, `/deck/take` et `/deck/play`, et porte titre, disque,
+face, Camelot, famille, couleur et pochette. Deux choses en decoulent, qui manquaient :
+
+- **le Camelot pilote enfin la geometrie.** Il traversait tout le systeme sans rien
+  commander — recu, transporte, documente dans trois fichiers, et lu nulle part. La regle
+  vivait en double, dans le renderer et nulle part ailleurs, et les deux versions avaient
+  deja diverge. Elle appartient desormais a la fiche, qui la publie ; le rendu la lit ;
+  le paquet la transporte.
+- **poser un disque previent l'analyse.** `IAudioSource.NewTrack()` remet le seuil de
+  connaissance a zero. Sans cela, les estimateurs — dont l'oubli est lent par
+  construction — mettraient des dizaines de secondes a admettre le changement, en
+  annoncant pendant tout ce temps qu'ils « connaissent » un morceau qui ne joue plus.
+
 ### Ce qui manque cote emulator
 
 - Le **canal de retour** depuis le renderer
-- La reception de la **fiche** depuis `crate`
 
 Le reste — analyse, structure, gestes, transport, seuil de connaissance et feu vert — est
 en place et mesure.

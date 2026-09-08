@@ -18,4 +18,16 @@ public interface IAudioSource
     /// c'est le consommateur qui cadence, et un renderer lent ne noie pas le hub.
     /// </summary>
     IAsyncEnumerable<VisualFrame> ReadAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Un autre disque commence : tout ce qui decrivait le precedent est a jeter.
+    ///
+    /// C'est la seule chose que la base sait et que le signal ne dira pas a temps. Une
+    /// analyse qui l'ignore met des dizaines de secondes a admettre le changement, son
+    /// oubli etant lent par construction — et elle annoncerait pendant ce temps qu'elle
+    /// « connait » un disque qui ne joue plus.
+    ///
+    /// Implementation vide par defaut : une source fabriquee n'a rien a reapprendre.
+    /// </summary>
+    void NewTrack() { }
 }

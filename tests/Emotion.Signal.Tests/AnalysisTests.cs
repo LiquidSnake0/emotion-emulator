@@ -147,3 +147,36 @@ public class SpectrumAnalyzerTests
         Assert.Throws<ArgumentException>(() => a.Analyze(new float[512], 0));
     }
 }
+
+public class TrackContextTests
+{
+    [Theory]
+    [InlineData("8A", 8)]
+    [InlineData("12B", 12)]
+    [InlineData("1A", 3)]      // pas de polygone a un cote
+    [InlineData("2A", 3)]
+    [InlineData("3A", 3)]
+    [InlineData("", 6)]        // hors roue : l'hexagone, neutre
+    [InlineData("bidon", 6)]
+    [InlineData("99A", 6)]
+    public void Le_camelot_donne_le_nombre_de_cotes(string camelot, int expected)
+    {
+        // La correspondance est directe — Camelot 8 donne un octogone — parce qu'elle
+        // s'explique en une phrase. Cette regle vivait en double, ici et dans le renderer,
+        // et les deux implementations avaient deja diverge.
+        var t = new TrackContext("x", "d", "A", camelot, "Soul", "#334455", null);
+
+        Assert.Equal(expected, t.Sides);
+    }
+
+    [Theory]
+    [InlineData("8A", true)]
+    [InlineData("8B", false)]
+    [InlineData("", true)]     // le bac est tres majoritairement mineur
+    public void La_lettre_camelot_donne_le_mode(string camelot, bool minor)
+    {
+        var t = new TrackContext("x", "d", "A", camelot, "Soul", "#334455", null);
+
+        Assert.Equal(minor, t.Minor);
+    }
+}

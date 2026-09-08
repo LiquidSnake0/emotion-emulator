@@ -128,7 +128,7 @@ export class Visual {
   setCued(t) {
     this.next = t ? {
       color: hexToRgb(t.colorHex) ?? { r: 110, g: 110, b: 110 },
-      sides: sidesOf(t.camelot),
+      sides: sidesOf(t),
       kind: t.scene?.kind ?? 'Rest',
       intensity: t.scene?.intensity ?? 0,
     } : null;
@@ -136,7 +136,7 @@ export class Visual {
 
   setTrack(t) {
     this.color = hexToRgb(t.colorHex) ?? { r: 110, g: 110, b: 110 };
-    this.sides = sidesOf(t.camelot);
+    this.sides = sidesOf(t);
     this.kindName = t.scene?.kind ?? 'Rest';
     this.intensity = t.scene?.intensity ?? 0;
   }
@@ -418,8 +418,13 @@ export class Visual {
 }
 
 /** "8A" -> huit cotes. Une valeur absente laisse six, plutot que de reduire a un point. */
-function sidesOf(camelot) {
-  const m = /^(\d{1,2})([AB])$/.exec((camelot || '').trim().toUpperCase());
+// Le nombre de cotes vient de la fiche, qui le tire du Camelot. Il etait calcule ici
+// aussi, et les deux implementations avaient diverge : celle-ci rendait 8 cotes pour un
+// Camelot 8, l'autre en rendait 10. Une regle qui vit en deux endroits finit toujours par
+// vivre de deux facons. Le repli ne sert qu'aux fiches anciennes, sans le champ.
+function sidesOf(track) {
+  if (typeof track?.sides === 'number' && track.sides >= 3) return track.sides;
+  const m = /^(\d{1,2})([AB])$/.exec((track?.camelot || '').trim().toUpperCase());
   return m ? Math.max(3, parseInt(m[1], 10)) : 6;
 }
 

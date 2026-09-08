@@ -36,6 +36,47 @@ public sealed record TrackContext(
     public Scene Scene { get; } = Scene.ForFamily(Family);
 
     /// <summary>
+    /// Nombre de cotes du polygone qui porte la voix, tire du <b>chiffre</b> Camelot.
+    ///
+    /// Le tag traversait tout le systeme sans rien piloter : il etait recu, transporte,
+    /// documente dans trois fichiers, et aucun code ne le lisait. La forme des anneaux
+    /// concentriques etait donc la meme pour tous les disques.
+    ///
+    /// La correspondance est directe — Camelot 8 donne un octogone — parce qu'elle
+    /// s'explique en une phrase et se verifie d'un coup d'oeil. Les positions 1 a 3
+    /// donnent toutes un triangle, faute de polygone a moins de trois cotes.
+    ///
+    /// <b>Cette regle vivait en double.</b> Le renderer la calculait de son cote a partir
+    /// du tag, et rien ne garantissait que les deux implementations restent d'accord —
+    /// elles avaient d'ailleurs deja diverge. Le calcul appartient desormais a la fiche,
+    /// et le rendu la lit.
+    /// </summary>
+    public int Sides { get; } = SidesFor(Camelot);
+
+    /// <summary>
+    /// Mode mineur, tire de la <b>lettre</b> Camelot. A pour mineur, B pour majeur.
+    /// Vrai par defaut : le bac est tres majoritairement mineur, et une valeur inconnue
+    /// vaut mieux ressembler au cas frequent qu'a l'exception.
+    /// </summary>
+    public bool Minor { get; } = !(Camelot ?? "").TrimEnd().EndsWith('B');
+
+    private static int SidesFor(string? camelot)
+    {
+        var s = (camelot ?? "").Trim();
+        var digits = 0;
+        foreach (var c in s)
+        {
+            if (!char.IsDigit(c)) break;
+            digits = digits * 10 + (c - '0');
+        }
+
+        // Hors roue — tag vide ou illisible — on rend l'hexagone, valeur neutre qui ne
+        // ressemble a aucune position particuliere.
+        if (digits < 1 || digits > 12) return 6;
+        return Math.Max(3, digits);
+    }
+
+    /// <summary>
     /// La couleur decomposee, calculee une seule fois a la construction.
     ///
     /// Elle l'etait auparavant a chaque message vers l'unite de rendu, soit une chaine

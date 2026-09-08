@@ -30,7 +30,7 @@ namespace Emotion.Signal;
 public struct GpuPacket
 {
     /// <summary>Taille exacte du message, en octets. Le lecteur CUDA s'aligne dessus.</summary>
-    public const int Size = 112;
+    public const int Size = 128;
 
     /// <summary>Nombre magique, pour qu'un lecteur detecte tout de suite un flux mal cadre.</summary>
     public const uint MagicValue = 0x454D5531;   // "EMU1"
@@ -164,6 +164,16 @@ public struct GpuPacket
     /// </summary>
     [FieldOffset(111)] public byte Trust;
 
+    /// <summary>
+    /// Cotes du polygone de la voix, tires du Camelot par la fiche. Le renderer les
+    /// <b>lit</b> et ne les recalcule pas : la regle vivait en double et les deux
+    /// implementations avaient deja diverge.
+    /// </summary>
+    [FieldOffset(112)] public byte Sides;
+
+    /// <summary>Mode mineur, tire de la lettre Camelot. Non nul si mineur.</summary>
+    [FieldOffset(113)] public byte Minor;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -251,6 +261,8 @@ public struct GpuPacket
         p.BarsToBoundary = (byte)Math.Clamp(f.Structure.BarsToBoundary, 0, 255);
         p.SectionSure = (byte)Math.Clamp(f.Structure.SectionConfidence * 255f, 0f, 255f);
         p.Trust = (byte)Math.Clamp(f.Structure.Trust * 255f, 0f, 255f);
+        p.Sides = (byte)track.Sides;
+        p.Minor = track.Minor ? (byte)1 : (byte)0;
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
