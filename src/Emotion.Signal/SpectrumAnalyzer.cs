@@ -123,6 +123,10 @@ public sealed class SpectrumAnalyzer
     public float PoidsComplexe { get; set; }
 
     private readonly ComplexFlux _fluxComplexe = new(Window / 2);
+    private readonly EventProfiler _evenements = new(Window / 2);
+
+    /// <summary>Les familles de frappes rencontrees sur ce disque, pour la sonde.</summary>
+    public EventProfiler Evenements => _evenements;
 
     /// <summary>Les deux fonctions de detection, pour les comparer sur la meme image.</summary>
     public float DernierFluxEnergie { get; private set; }
@@ -611,6 +615,11 @@ public sealed class SpectrumAnalyzer
         if (clap && rClap < rKick * 1.3f) clap = false;
 
         var hits = new Hits(kick, clap, _hat.Feed(rHat));
+
+        // L'empreinte de la frappe, prise sur la fenetre ou elle tombe. Elle ne sert pas a
+        // decider qu'il y a eu une frappe — cela vient d'etre fait — mais a savoir laquelle,
+        // sans avoir a la nommer.
+        var famille = _evenements.Feed(full, kick || clap || hits.Hat);
         Etapes.Fin(9);                       // kick, clap, charley
 
         UpdateMasks(bands);
@@ -753,6 +762,8 @@ public sealed class SpectrumAnalyzer
             Readiness: readiness,
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
+            EventFamily: famille,
+            EventPrint: _evenements.Derniere,
             Flux: Clamp01(rKick / scale),
             Threshold: Clamp01(_kick.Threshold / scale),
             ExpectedBpm: Reference.Expected,

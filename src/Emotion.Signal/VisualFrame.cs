@@ -103,7 +103,16 @@ public readonly record struct VisualFrame(
     float AnnouncedBpm = 0f,
 
     /// <summary>Une annonce de tempo tombe sur cette image.</summary>
-    bool TempoAnnounce = false)
+    bool TempoAnnounce = false,
+
+    /// <summary>
+    /// Famille de la frappe qui vient d'etre identifiee, ou -1. Deux frappes de meme
+    /// famille sont le meme instrument — sans qu'on sache lequel, ni qu'on ait a le savoir.
+    /// </summary>
+    int EventFamily = -1,
+
+    /// <summary>L'empreinte de cette frappe : brillance, etalement, piquant.</summary>
+    EventSignature EventPrint = default)
 {
     /// <summary>Nombre de bandes emises. Fixe : le shader dimensionne ses uniformes dessus.</summary>
     public const int BandCount = 12;

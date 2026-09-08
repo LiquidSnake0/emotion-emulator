@@ -299,6 +299,23 @@ public struct GpuPacket
     /// </summary>
     [FieldOffset(208)] public byte TempoAnnounce;
 
+    /// <summary>
+    /// Famille de la frappe qui vient de tomber, ou 255 si aucune.
+    ///
+    /// Deux frappes de meme famille sont le meme instrument. Le renderer peut donc donner a
+    /// chacune son traitement sans qu'on ait eu besoin de nommer quoi que ce soit — c'est la
+    /// meme discipline que pour les six sources separees.
+    /// </summary>
+    [FieldOffset(212)] public byte EventFamily;
+
+    /// <summary>L'empreinte de cette frappe, un octet par axe.</summary>
+    [FieldOffset(213)] public byte EventBright;
+    [FieldOffset(214)] public byte EventSpread;
+    [FieldOffset(215)] public byte EventSharp;
+
+    /// <summary>Aucune famille : la frappe n'a pas encore ete identifiee.</summary>
+    public const byte NoFamily = 255;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -428,6 +445,10 @@ public struct GpuPacket
         p.TempoDrift = f.TempoDrift;
         p.DriftVisible = (byte)Math.Clamp(f.DriftVisible * 255f, 0f, 255f);
         p.BpmAnnounced = f.AnnouncedBpm;
+        p.EventFamily = f.EventFamily >= 0 ? (byte)f.EventFamily : NoFamily;
+        p.EventBright = Byte255(f.EventPrint.Brillance);
+        p.EventSpread = Byte255(f.EventPrint.Etalement);
+        p.EventSharp = Byte255(f.EventPrint.Piquant);
         p.TempoAnnounce = f.TempoAnnounce ? (byte)1 : (byte)0;
 
         p.Centroid = (byte)Math.Clamp(f.Timbre.Centroid * 255f, 0f, 255f);

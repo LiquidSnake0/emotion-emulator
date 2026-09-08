@@ -410,6 +410,25 @@ if (fluxE.Count > 10)
     Console.WriteLine($"flux energie/complexe  correlation {r:F3} · " +
                       $"moyennes {mE:F1} et {mC:F1}");
 }
+// LES FAMILLES DE FRAPPES : combien d'instruments distincts, et sont-ils stables ?
+//
+// Une famille qui ne frappe qu'une ou deux fois est un accident — un craquement, une
+// frappe isolee. Une famille qui revient des dizaines de fois est un instrument du morceau.
+{
+    var fam = analyzer.Evenements.Familles;
+    Console.WriteLine();
+    Console.WriteLine($"familles de frappes  {fam.Connues} distinctes");
+    for (var i = 0; i < fam.Connues; i++)
+    {
+        var c = fam.CentreDe(i);
+        var v = fam.VuesDe(i);
+        var barre = new string('#', Math.Min(30, v / 4));
+        Console.WriteLine($"  famille {i} : {v,4} frappes {barre,-30} " +
+                          $"brillance {c.Brillance:F2} · etalement {c.Etalement:F2} · " +
+                          $"piquant {c.Piquant:F2}");
+    }
+}
+
 Console.WriteLine("maturite des sources  (confiance 0,6 atteinte a)");
 for (var r = 0; r < Voices.Registers; r++)
 {

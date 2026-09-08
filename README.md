@@ -734,6 +734,41 @@ donc deux fois pour un résultat moins bon.
 
 ---
 
+## Reconnaître une frappe sans la nommer
+
+Les frappes étaient rangées par hauteur : ce qui tape dans les graves est un kick, dans le
+médium un clap, dans l'aigu un charley. Convention utile et grossière — **deux percussions
+différentes qui vivent dans la même tranche devenaient le même événement**, exactement comme
+deux instruments d'une même octave devenaient une seule forme avant la séparation par le
+timbre.
+
+Or une frappe a une couleur propre, et elle est stable. Trois grandeurs la décrivent, prises
+**sur la fenêtre où l'attaque tombe** — pas après, sinon on mesurerait la réverbération de la
+salle, identique pour toutes :
+
+| | ce que ça sépare |
+|---|---|
+| **brillance** | un kick d'un charley, et deux caisses entre elles |
+| **étalement** | une peau accordée d'une cymbale de même brillance |
+| **piquant** | deux frappes de même couleur qui ne durent pas pareil |
+
+Sur un morceau du crate, six familles se dégagent — et **les deux principales ont la même
+brillance (0,46 et 0,51) mais un piquant de 0,04 contre 0,23**. Deux percussions que les
+bandes de fréquence voyaient comme une seule.
+
+```
+  famille 0 :   36 frappes  brillance 0.28 · étalement 0.25 · piquant 0.03
+  famille 2 :  147 frappes  brillance 0.46 · étalement 0.42 · piquant 0.04
+  famille 3 :  163 frappes  brillance 0.51 · étalement 0.42 · piquant 0.23
+  famille 5 :   34 frappes  brillance 0.60 · étalement 0.40 · piquant 0.11
+```
+
+**Aucun apprentissage préalable, et toujours aucun nom.** Un classifieur entraîné dirait
+« caisse claire » et se tromperait au premier disque sortant de ce qu'il a vu. Ce qu'on veut
+est plus modeste et plus robuste : savoir que *cette frappe-ci est la même que celle d'il y a
+deux mesures*. Le rendu peut donner à chacune son traitement ; savoir laquelle est une caisse
+claire ne l'intéresse pas.
+
 ## Le parallélisme, et ce que la mesure en a dit
 
 La demande était directe : faire calculer les six sources en parallèle, chacune écrivant sa
@@ -1235,9 +1270,6 @@ serveur, sans carte son et sans navigateur**.
 
 ## Ce qui reste
 
-- **Signature par événement** — centroïde spectral, largeur de bande et temps de
-  décroissance suffisent à ranger un son dans une famille générique sans avoir à le
-  nommer.
 - **Structure du morceau** — densité et énergie sur fenêtre glissante, détection de
   rupture pour repérer les sections.
 - **Le détecteur d'attaques reste le maillon faible**, et une piste sérieuse a été
