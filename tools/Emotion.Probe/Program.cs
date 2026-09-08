@@ -37,6 +37,22 @@ var analyzer = new SpectrumAnalyzer(rate, separate);
 // « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
 // avant. Sert a comparer les deux regimes sur le meme morceau.
 if (args.Contains("inline")) analyzer.Separation.ApprentissageEnLigne = true;
+
+// « memoire » en argument : reprend ce qu'on savait deja de ce disque et range ce qu'on
+// vient d'apprendre. Sert a verifier qu'une seconde ecoute corrige la premiere au lieu de
+// tout recommencer.
+var memoire = args.Contains("memoire")
+    ? new KnowledgeStore(Path.Combine(Path.GetTempPath(), "emotion-connaissance"))
+    : null;
+var connu = memoire?.Load(Path.GetFileNameWithoutExtension(path)) ?? default;
+if (memoire is not null)
+{
+    analyzer.Reprendre(connu);
+    Console.WriteLine(connu.Any
+        ? $"reprise             {connu.SecondsHeard:F0} s deja entendues · " +
+          $"{connu.Sources.Sum(x => x.Observations)} observations · tempo connu {connu.Bpm:F1}"
+        : "reprise             premiere ecoute de ce disque");
+}
 Console.WriteLine(separate ? "separation active" : "separation COUPEE");
 const int hop = SpectrumAnalyzer.Window;
 
@@ -336,6 +352,13 @@ Console.WriteLine($"cout d'une image    median {coutImage[coutImage.Count / 2]:F
                   $"99e centile {p99:F2} ms · pire {pireImage:F1} ms · " +
                   $"{enRetard} images au-dessus du pas de 21 ms");
 
+if (memoire is not null)
+{
+    var apres = analyzer.Connaissance(Path.GetFileNameWithoutExtension(path), connu);
+    memoire.Save(apres);
+    Console.WriteLine($"range               {apres.SecondsHeard:F0} s cumulees · " +
+                      $"{apres.Sources.Sum(x => x.Observations)} observations");
+}
 Console.WriteLine($"annonces de tempo   {annonces.Count} : " +
                   string.Join(" · ", annonces.Take(12).Select(a => $"{a.T / 1000f:F0}s {a.Bpm:F1}")));
 Console.WriteLine("maturite des sources  (confiance 0,6 atteinte a)");

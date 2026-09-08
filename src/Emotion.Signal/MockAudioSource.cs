@@ -111,6 +111,52 @@ public sealed class MockAudioSource : IAudioSource
         // regler le visuel sans materiel, et un signal fabrique qui ne remplit pas le
         // meme contrat qu'un vrai ne simule plus rien. La regle vaut a chaque fois que le
         // contrat s'etend.
+        // LES SIX REGISTRES, CHACUN AVEC SON RYTHME PROPRE.
+        //
+        // Sans eux, les six cases du renderer restent vides en mode simule et le visuel ne
+        // peut plus etre regle sans materiel — ce qui est precisement la raison d'etre de
+        // ce fichier. Chaque registre recoit donc un cycle de niveau, un contour et une
+        // subdivision d'attaque qui lui sont propres : six formes identiques ne
+        // permettraient pas de verifier qu'on les distingue.
+        var niveaux = new float[Voices.Registers];
+        var contours = new float[Voices.Registers];
+        var voies = new LaneState[Voices.Registers];
+        var attaques = 0;
+
+        for (var r = 0; r < Voices.Registers; r++)
+        {
+            // Des periodes premieres entre elles : les six ne retombent jamais en phase,
+            // et l'on voit donc six mouvements et non un seul repete six fois.
+            var periode = new[] { 8f, 6f, 5f, 3f, 2f, 1.5f }[r];
+            var niveau = Clamp01(0.18f + 0.55f * MathF.Abs(
+                MathF.Sin((float)(beats * MathF.PI / periode))));
+
+            niveaux[r] = niveau;
+            contours[r] = 0.5f + 0.42f * MathF.Sin((float)(beats * MathF.PI / (periode * 0.7f)));
+
+            // Une attaque toutes les n croches, n changeant d'un registre a l'autre.
+            if (beat && ((int)beats % (r + 2)) == 0) attaques |= 1 << r;
+
+            // LA MATURITE MONTE A DES VITESSES DIFFERENTES, ET C'EST LE POINT.
+            //
+            // Sur un vrai morceau, une source se tient en quelques secondes et une autre
+            // met une minute ; deux registres graves partages entre le kick et la basse ne
+            // se tiennent jamais. Le mock reproduit cet etagement — sinon la progression
+            // que le renderer affiche ne pourrait pas etre reglee sans materiel.
+            var vitesse = new[] { 0f, 0.02f, 0.05f, 0.20f, 0.10f, 0.14f }[r];
+            var sur = Clamp01((float)(t / 1000.0) * vitesse);
+            voies[r] = new LaneState(niveau, contours[r], (attaques >> r & 1) != 0,
+                                     Confidence: sur,
+                                     Brightness: r / 5f,
+                                     Texture: 0.3f + r * 0.1f);
+        }
+
+        // Un nom se pose sur une source mure, et sur elle seule. Zero partout ailleurs :
+        // le renderer doit montrer une case anonyme tant qu'elle l'est.
+        var noms = new int[Voices.Registers];
+        for (var r = 0; r < Voices.Registers; r++)
+            if (voies[r].Confidence > 0.8f) noms[r] = r + 1;
+
         var voices = new Voices(
             Low: Clamp01(0.25f + kick * 0.5f),
             Mid: Clamp01(0.30f + Pad(t, 5) * 0.6f),
@@ -123,7 +169,9 @@ public sealed class MockAudioSource : IAudioSource
             // simule et le geste resterait introuvable a regler sans materiel.
             LowPitch: 0.5f + 0.25f * MathF.Sin((float)(beats * MathF.PI / 8)),
             MidPitch: 0.5f + 0.35f * MathF.Sin((float)(beats * MathF.PI / 8)),
-            HighPitch: 0.5f + 0.30f * MathF.Sin((float)(beats * MathF.PI / 4)));
+            HighPitch: 0.5f + 0.30f * MathF.Sin((float)(beats * MathF.PI / 4)),
+            Levels: niveaux, Pitches: contours, Hits: attaques,
+            Lanes: voies, Labels: noms);
 
         // Le filtre s'ouvre et se ferme lentement, sur seize mesures : c'est le geste que
         // Selim fera le plus souvent a la table, et il doit pouvoir le regler sans table.

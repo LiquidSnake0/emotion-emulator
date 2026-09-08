@@ -78,6 +78,29 @@ public sealed class SpectrumAnalyzer
     /// </summary>
     public TempoReference Reference { get; } = new();
 
+    /// <summary>
+    /// Reprend ce qu'on savait deja de ce disque : les portraits des sources et le tempo.
+    ///
+    /// Ce qui suit corrigera ces valeurs au lieu de les remplacer. C'est ce qui fait
+    /// qu'arreter un morceau et le relancer ne perd rien, et que les seize temps du cue
+    /// servent encore une fois le disque passe au master.
+    /// </summary>
+    public void Reprendre(in TrackKnowledge connaissance)
+    {
+        _voices.Reprendre(connaissance);
+        if (connaissance.Bpm > 0f) Reference.Expected = connaissance.Bpm;
+    }
+
+    /// <summary>Ce qu'on sait a cet instant, pret a etre range pour la prochaine ecoute.</summary>
+    public TrackKnowledge Connaissance(string id, in TrackKnowledge precedente) =>
+        new(id,
+            _voices.Portraits(),
+            _tempo.Bpm ?? precedente.Bpm,
+            precedente.BpmObservations + 1,
+            precedente.SecondsHeard + _secondesEcoutees);
+
+    private float _secondesEcoutees;
+
     // LA SEPARATION PAR LE TIMBRE, ET NON PAR LA FREQUENCE.
     //
     // Un piano et un saxophone qui jouent la meme octave tombent dans la meme bande :
@@ -571,6 +594,8 @@ public sealed class SpectrumAnalyzer
 
         var gestures = _gestures.Feed(timbre.Openness, bass, timbre.Density);
         var readiness = _gate.Feed(tMs, _tempo.Bpm, timbre.Centroid, bass, timbre.Density);
+
+        _secondesEcoutees = tMs / 1000f;
 
         // La fiche du cue, confrontee au disque. Sans fiche, la derive reste nulle et rien
         // ne change : on ne fabrique pas d'ecart avec une reference qu'on n'a pas.

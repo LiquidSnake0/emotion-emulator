@@ -280,3 +280,170 @@ public class TempoAnnonceTests
         Assert.Equal(1, n);
     }
 }
+
+public class ConnaissanceTests
+{
+    /// <summary>
+    /// Une source au timbre stable mais dont chaque note tombe ailleurs, dans une plage
+    /// etroite. C'est ce a quoi ressemble un instrument reel : reconnaissable dans
+    /// l'ensemble, jamais identique d'une image a l'autre.
+    ///
+    /// Le premier signal de ce test etait une note qui ne bougeait pas : la moyenne y
+    /// convergeait des la trentieme observation, et les paliers rendaient tous le meme
+    /// ecart. Un signal sans variation ne permet pas de mesurer une convergence.
+    /// </summary>
+    private static float[] Note(int t)
+    {
+        var s = new float[64];
+        var pic = 16 + (int)(t * 2654435761u % 11);
+        for (var i = 0; i < s.Length; i++) s[i] = i == pic ? 1f : 0.03f;
+        return s;
+    }
+
+    /// <summary>
+    /// LA PROPRIETE QUE SELIM DEMANDE, ENONCEE COMME UN TEST.
+    ///
+    /// Arreter le son a mi-parcours, le relancer et laisser tourner doit donner ce que
+    /// donnerait une ecoute continue : la seconde moitie <b>corrige</b> ce que la premiere
+    /// a etabli. Un systeme qui repartirait de zero a chaque lancement ne saurait jamais
+    /// rien d'un disque qu'on ecoute par morceaux — c'est-a-dire de tous.
+    /// </summary>
+    [Fact]
+    public void Deux_ecoutes_valent_une_ecoute_continue()
+    {
+        // Ecoute continue, mille images.
+        var continu = new SourceIdentity();
+        for (var t = 0; t < 1000; t++) continu.Feed(Note(t), 0, 64, 0.8f);
+
+        // Meme matiere, coupee en deux, avec un rangement au milieu.
+        var premiere = new SourceIdentity();
+        for (var t = 0; t < 500; t++) premiere.Feed(Note(t), 0, 64, 0.8f);
+        var range = premiere.Save();
+
+        var seconde = new SourceIdentity();
+        seconde.Load(range);
+        for (var t = 500; t < 1000; t++) seconde.Feed(Note(t), 0, 64, 0.8f);
+
+        Assert.Equal(continu.Observations, seconde.Observations);
+        Assert.Equal(continu.Brightness, seconde.Brightness, 3);
+        Assert.Equal(continu.Texture, seconde.Texture, 3);
+        Assert.Equal(continu.Confidence, seconde.Confidence, 3);
+    }
+
+    [Fact]
+    public void Une_reprise_en_sait_plus_qu_un_depart_de_zero()
+    {
+        var avecReprise = new SourceIdentity();
+        var depuisZero = new SourceIdentity();
+
+        var amorce = new SourceIdentity();
+        for (var t = 0; t < 500; t++) amorce.Feed(Note(t), 0, 64, 0.8f);
+        avecReprise.Load(amorce.Save());
+
+        // Soixante images seulement : bien en dessous de ce qu'il faut pour murir seul,
+        // ce qui est justement le cas ou la reprise doit se voir. Comparer apres deux
+        // cents images ne prouverait rien — les deux auraient sature.
+        for (var t = 500; t < 560; t++)
+        {
+            avecReprise.Feed(Note(t), 0, 64, 0.8f);
+            depuisZero.Feed(Note(t), 0, 64, 0.8f);
+        }
+
+        Assert.True(avecReprise.Confidence > depuisZero.Confidence,
+                    $"reprise {avecReprise.Confidence:F2} contre depart de zero {depuisZero.Confidence:F2}");
+    }
+
+    /// <summary>
+    /// ECOUTER PLUS LONGTEMPS DOIT AMELIORER, ET CE N'ETAIT PAS ACQUIS.
+    ///
+    /// Avec un pas de correction fixe, le portrait flotte indefiniment : la millieme
+    /// observation pese autant que la dixieme, donc la valeur oscille autour de la bonne
+    /// sans s'y poser. Ce test verifie que l'ecart au portrait final se resserre a mesure
+    /// qu'on ecoute — c'est cela, tendre vers les valeurs justes.
+    /// </summary>
+    [Fact]
+    public void Le_portrait_se_resserre_a_mesure_qu_on_ecoute()
+    {
+        var id = new SourceIdentity();
+        var releves = new List<float>();
+
+        // Les releves se font tot, la ou la convergence se joue : passe quelques centaines
+        // d'observations tout est deja pose, et comparer des ecarts de l'ordre de 1e-4
+        // ne mesurerait plus que du bruit.
+        // Alignes sur le cycle du signal : des jalons pris au milieu d'un cycle
+        // compareraient deux phases differentes et non deux etats de convergence. Un
+        // premier essai le faisait, et deux jalons y rendaient exactement le meme ecart.
+        var jalons = new[] { 30, 60, 120, 240, 480 };
+
+        for (var t = 0; t < 2000; t++)
+        {
+            id.Feed(Note(t), 0, 64, 0.8f);
+            if (jalons.Contains(t + 1)) releves.Add(id.Brightness);
+        }
+
+        var final = id.Brightness;
+        var ecarts = releves.Select(v => MathF.Abs(v - final)).ToList();
+
+        // L'ecart au portrait final se resserre nettement entre le premier palier et le
+        // dernier. On ne l'exige pas strictement decroissant a chaque etape : la
+        // convergence d'une moyenne sur un signal bruite n'est pas monotone image par
+        // image, et l'exiger testerait le tirage plutot que la methode.
+        Assert.True(ecarts[^1] < ecarts[0] * 0.5f,
+                    $"apres {jalons[0]} observations : {ecarts[0]:F5} ; " +
+                    $"apres {jalons[^1]} : {ecarts[^1]:F5}");
+    }
+
+    /// <summary>Ce qu'on range se relit tel quel, y compris apres un aller-retour disque.</summary>
+    [Fact]
+    public void La_connaissance_survit_au_disque()
+    {
+        var dossier = Path.Combine(Path.GetTempPath(), "emotion-test-" + Guid.NewGuid());
+        try
+        {
+            var magasin = new KnowledgeStore(dossier);
+            var tracker = new VoiceTracker(48_000, 1024);
+
+            var spectre = new float[512];
+            for (var i = 0; i < spectre.Length; i++) spectre[i] = 0.4f + (i % 7) * 0.08f;
+            for (var t = 0; t < 400; t++) tracker.Feed(spectre);
+
+            tracker.Nommer(2, 42);
+            var avant = tracker.Portraits();
+            magasin.Save(new TrackKnowledge("Macroblank — two sided", avant, 87.6f, 900, 24f));
+
+            var relu = magasin.Load("Macroblank — two sided");
+            Assert.True(relu.Any);
+            Assert.Equal(87.6f, relu.Bpm);
+            Assert.Equal(24f, relu.SecondsHeard);
+
+            var suite = new VoiceTracker(48_000, 1024);
+            suite.Reprendre(relu);
+
+            for (var r = 0; r < Voices.Registers; r++)
+                Assert.Equal(avant[r].Observations, suite.PortraitDe(r).Observations);
+
+            Assert.Equal((byte)42, relu.Sources[2].Label);
+        }
+        finally
+        {
+            if (Directory.Exists(dossier)) Directory.Delete(dossier, true);
+        }
+    }
+
+    /// <summary>Un morceau jamais entendu ne rend rien, et surtout pas une erreur.</summary>
+    [Fact]
+    public void Un_morceau_inconnu_part_de_rien()
+    {
+        var dossier = Path.Combine(Path.GetTempPath(), "emotion-test-" + Guid.NewGuid());
+        try
+        {
+            var k = new KnowledgeStore(dossier).Load("jamais entendu");
+            Assert.False(k.Any);
+            Assert.Equal(0f, k.Bpm);
+        }
+        finally
+        {
+            if (Directory.Exists(dossier)) Directory.Delete(dossier, true);
+        }
+    }
+}

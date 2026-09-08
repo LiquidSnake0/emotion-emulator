@@ -78,17 +78,20 @@ const REG = [
   { c: { r: 232, g: 200, b: 77  }, ch: '░' },
 ];
 
+// La premiere rangee commence sous le bandeau de reglage, qui occupe le haut de l'ecran.
+// A 3 % elle passait dessous et ses trois titres — donc les trois jauges de maturite —
+// etaient invisibles : la case avait l'air anonyme alors qu'elle ne l'etait pas.
 const CASE = {
-  r0: { x: 0.02,  y: 0.03, w: 0.31, h: 0.27, nom: '1' },
-  r1: { x: 0.345, y: 0.03, w: 0.31, h: 0.27, nom: '2' },
-  r2: { x: 0.67,  y: 0.03, w: 0.31, h: 0.27, nom: '3' },
-  r3: { x: 0.02,  y: 0.32, w: 0.31, h: 0.27, nom: '4' },
-  r4: { x: 0.345, y: 0.32, w: 0.31, h: 0.27, nom: '5' },
-  r5: { x: 0.67,  y: 0.32, w: 0.31, h: 0.27, nom: '6' },
-  grave: { x: 0.02,  y: 0.61, w: 0.31, h: 0.21, nom: 'GRAVE' },
-  grain: { x: 0.345, y: 0.61, w: 0.31, h: 0.21, nom: 'GRAIN' },
-  spec:  { x: 0.67,  y: 0.61, w: 0.31, h: 0.21, nom: 'SPECTRE' },
-  bas:   { x: 0.02,  y: 0.84, w: 0.96, h: 0.13, nom: 'FRAPPES' },
+  r0: { x: 0.02,  y: 0.075, w: 0.31, h: 0.245, nom: '1' },
+  r1: { x: 0.345, y: 0.075, w: 0.31, h: 0.245, nom: '2' },
+  r2: { x: 0.67,  y: 0.075, w: 0.31, h: 0.245, nom: '3' },
+  r3: { x: 0.02,  y: 0.335, w: 0.31, h: 0.245, nom: '4' },
+  r4: { x: 0.345, y: 0.335, w: 0.31, h: 0.245, nom: '5' },
+  r5: { x: 0.67,  y: 0.335, w: 0.31, h: 0.245, nom: '6' },
+  grave: { x: 0.02,  y: 0.595, w: 0.31, h: 0.20, nom: 'GRAVE' },
+  grain: { x: 0.345, y: 0.595, w: 0.31, h: 0.20, nom: 'GRAIN' },
+  spec:  { x: 0.67,  y: 0.595, w: 0.31, h: 0.20, nom: 'SPECTRE' },
+  bas:   { x: 0.02,  y: 0.815, w: 0.96, h: 0.125, nom: 'FRAPPES' },
 };
 
 const boite = (c, w, h) => ({
@@ -108,6 +111,35 @@ const boite = (c, w, h) => ({
 const BLOCS = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 const bloc = (v) => BLOCS[Math.max(0, Math.min(8, Math.round(v * 8)))];
 
+// SIX FORMES DISTINCTES, ET NON SIX FOIS LA MEME.
+//
+// Les six registres partageaient un seul dessin — une colonne qui montait — avec pour
+// seule difference leur couleur et leur caractere de remplissage. Six colonnes identiques
+// ne se comparent pas : l'oeil doit lire une legende pour savoir laquelle il regarde,
+// alors que six silhouettes se reconnaissent sans y penser. Selim l'avait dit sur la
+// premiere version : « le delire pour les levres en ascii c'etait super, cercle pour la
+// basse c'etait super aussi ».
+//
+// TOUT EST EN COORDONNEES NORMALISEES, ET C'EST CE QUI EMPECHE LE DEBORDEMENT.
+//
+// Chaque forme travaille dans un carre de -1 a 1, quelles que soient les dimensions
+// reelles de la grille. Une forme de rayon r y tient par construction tant que r ne
+// depasse pas 1, et le contour melodique ne deplace le centre que de ce qui reste libre.
+// Les debordements repetes des cases 4, 5 et 6 venaient tous de dessins calcules en
+// cellules, ou une meme constante donnait un motif tenu dans une case et deborde dans une
+// autre.
+const FORMES = ['anneau', 'onde', 'levres', 'losange', 'etoile', 'grain'];
+
+// Ce que chaque forme occupe verticalement, en fraction de la demi-hauteur. Sert a lui
+// reserver sa place avant de la deplacer : couper un motif qui deborde le mutile, lui
+// laisser sa place le garde entier.
+const EXTENSION = {
+  anneau: 0.62, onde: 0.42, levres: 0.55, losange: 0.62, etoile: 0.66, grain: 1.0,
+};
+
+// Le caractere d'une forme a une distance donnee de son trait : plein, puis estompe.
+const trait = (d, e, plein, pale) => d < e ? plein : (d < e * 2.2 ? pale : null);
+
 // La grille d'une case retranche la place du titre et une marge basse, une bonne fois.
 // C'est ce qui faisait deborder le grain, dont les lignes etaient comptees sur la hauteur
 // entiere puis dessinees sous la legende.
@@ -118,6 +150,22 @@ function grille(b, cellules) {
     cols: cellules, lignes: Math.max(1, Math.floor(dispo / ch)),
     cw, ch, x0: b.x + cw * 0.5, y0: b.y + titre,
   };
+}
+
+// ON DEMANDE DES LIGNES, PAS DES COLONNES.
+//
+// Le nombre de lignes n'est pas libre : une cellule de caractere est 1,9 fois plus haute
+// que large, donc c'est le nombre de <b>colonnes</b> qui decide combien de lignes tiennent
+// dans une case. Les choisir a la main revient a deviner, et la devinette est tombee a
+// cote : 22 colonnes dans la case du grave ne laissaient qu'une seule ligne, et l'anneau
+// n'avait plus nulle part ou exister — la case restait vide sans que rien ne le signale.
+//
+// Une forme a besoin d'a peu pres neuf lignes pour se lire. On part donc de la, et l'on en
+// deduit les colonnes.
+function grillePour(b, lignesVoulues) {
+  const titre = b.h * 0.16;
+  const ch = Math.max(4, (b.h - titre) / (lignesVoulues + 0.4));
+  return grille(b, Math.max(6, Math.round(b.w / (ch / 1.9))));
 }
 
 export class Visual {
@@ -171,6 +219,30 @@ export class Visual {
     this.regNiveau = Array.from({ length: 6 }, () => new Lue());
     this.regPos = Array.from({ length: 6 }, () => new Lue(0.5));
     this.regCoup = Array.from({ length: 6 }, () => new Pulse(0.5));
+
+    // CE QUE CHAQUE SOURCE SAIT D'ELLE-MEME, ET QUI ARRIVE PLUS TARD QUE LE RESTE.
+    //
+    // Le niveau et le contour sont justes des la premiere image ; l'empreinte, elle, se
+    // forme sur quelques secondes de jeu effectif — plus longtemps encore pour une source
+    // qui n'entre qu'au refrain. Chaque case avance donc a son rythme, et le mur montre
+    // cette progression au lieu de tout afficher avec le meme aplomb.
+    //
+    // Sur un morceau du crate, les six murissent a 4,5 s, 7,0 s, 7,2 s et 15,8 s ; les
+    // deux registres graves restent inconnus, partages entre le kick et la basse. Une
+    // bande partagee qui refuse de se laisser nommer est le bon resultat, pas une panne.
+    this.regSur = Array.from({ length: 6 }, () => new Lue());
+    this.regNom = new Array(6).fill(0);
+
+    // LE TEMPO ANNONCE, ET L'ECART A CE QU'ON CROYAIT SAVOIR.
+    //
+    // Quand un disque a ete cale au casque, son tempo est deja connu et n'a pas a etre
+    // recalcule. Mais un vinyle derive : le plateau bouge, le pitch glisse sous les
+    // doigts. Un seul BPM d'ecart deplace la grille d'un sixieme de temps en seize temps
+    // et d'un temps entier en une minute — c'est invisible en chiffres et flagrant a
+    // l'ecran, donc c'est a l'ecran qu'il faut le montrer.
+    this.annonce = new Pulse(4);       // le ping tient quatre temps
+    this.annonceBpm = 0;
+    this.derive = new Lue();
 
     // LA STRUCTURE NE PORTE PAS DE FORME A ELLE, ELLE GOUVERNE LES AUTRES.
     //
@@ -304,7 +376,21 @@ export class Visual {
       if ((hits >> r) & 1) this.regCoup[r].fire();
       this.regNiveau[r].step(this.lerp.scalar(f => f.voices?.levels?.[r] ?? 0, now));
       this.regPos[r].step(this.lerp.scalar(f => f.voices?.pitches?.[r] ?? 0.5, now));
+
+      // La maturite ne s'interpole pas : elle monte deja lentement en amont, et lui
+      // ajouter un lissage ne ferait que retarder ce qu'elle annonce.
+      this.regSur[r].step(v.lanes?.[r]?.confidence ?? 0);
+      this.regNom[r] = v.labels?.[r] ?? 0;
     }
+
+    // L'annonce de tempo : « on est a 87,9 », puis « 88,1 ». Elle ne dure qu'une image
+    // cote analyse, on la tient quatre temps a l'ecran pour qu'elle soit lisible.
+    if (frame.tempoAnnounce) {
+      this.annonce.fire();
+      this.annonceBpm = frame.announcedBpm ?? 0;
+    }
+    this.annonce.step(beatMs, dtMs);
+    this.derive.step(frame.driftVisible ?? 0);
 
     // La structure. Elle est la seule chose de tout le systeme qu'on lise en avance :
     // partout ailleurs on constate un evenement et l'on court apres, ici la tension monte
@@ -430,7 +516,27 @@ export class Visual {
                      Math.round(b.w), Math.round(b.h));
       this.police(ctx, Math.max(8, Math.min(13, b.w * 0.075)));
       ctx.fillStyle = S.rgba(teinte, 0.80);
-      ctx.fillText(b.nom, b.x + 5, b.y + 4);
+
+      // LE TITRE D'UNE CASE DE REGISTRE PORTE SA MATURITE.
+      //
+      // Quatre crans qui se remplissent a mesure que la source se tient. Tant qu'ils sont
+      // vides, ce qui joue dans cette bande n'est pas identifiable — souvent parce que
+      // plusieurs instruments s'y relaient — et aucun nom ne doit y etre pose. Pleins, la
+      // source est assez stable pour en porter un.
+      //
+      // AUCUN NOM N'EST INVENTE ICI. La case affiche un numero, et le nom seulement si la
+      // fiche en a pose un : ce qui joue dans une bande change d'un disque a l'autre, et
+      // annoncer un piano la ou passe un saxophone est pire que ne rien annoncer.
+      if (k[0] === 'r' && k.length === 2) {
+        const r = +k[1], sur = this.regSur[r].value;
+        const crans = Math.round(sur * 4);
+        let jauge = '';
+        for (let i = 0; i < 4; i++) jauge += i < crans ? '▮' : '▯';
+        const nom = this.regNom[r] ? `${b.nom}·${this.regNom[r]}` : b.nom;
+        ctx.fillText(`${nom} ${jauge}`, b.x + 5, b.y + 4);
+      } else {
+        ctx.fillText(b.nom, b.x + 5, b.y + 4);
+      }
     }
   }
 
@@ -441,37 +547,141 @@ export class Visual {
   }
 
   // ------------------------------------------------------------ REGISTRE
-  // Une octave, dans sa case, avec sa couleur et son caractere.
+  // Une octave, dans sa case, avec sa couleur, son caractere et SA FORME.
   //
-  // Le dessin est le meme pour les six, pour qu'on les compare : la colonne monte avec le
-  // niveau, sa position horizontale suit le contour melodique — ou l'instrument joue dans
-  // sa bande — et une attaque l'ouvre en largeur.
+  // Le niveau donne la taille, le contour melodique deplace la forme de bas en haut — une
+  // melodie qui monte fait monter le motif — et une attaque l'epaissit brievement.
+  //
+  // LA CONFIANCE GOUVERNE LA NETTETE, ET C'EST NOUVEAU.
+  //
+  // Une source dont l'empreinte n'est pas formee reste volontairement floue : trait
+  // estompe, contour pointille. A mesure qu'elle se tient — quelques secondes pour une
+  // basse, une minute pour un instrument qui n'entre qu'au refrain — son dessin se
+  // resserre. Le mur montre ainsi ce que le systeme est en train d'apprendre, au lieu
+  // d'afficher tout avec le meme aplomb qu'il sache ou non de quoi il parle.
   drawRegistre(ctx, b, r) {
     const niv = this.regNiveau[r].value;
     const pos = this.regPos[r].value;
     const frappe = this.regCoup[r].value;
     if (niv < 0.015 && frappe < 0.02) return;
 
-    const G = grille(b, 13);
-    this.police(ctx, G.cw * 1.55);
+    // QUARANTE-QUATRE COLONNES, ET LE CHIFFRE VIENT D'UN CALCUL.
+    //
+    // Le nombre de lignes n'est pas libre : une cellule fait 1,9 fois sa largeur, donc
+    // moins de colonnes veut dire des cellules plus hautes et donc moins de lignes. A 34
+    // colonnes la case n'en tenait que six, ce qui suffit a une barre mais pas a
+    // distinguer un anneau d'un losange. A 44, elle en tient neuf — assez pour qu'une
+    // silhouette se lise, sans descendre sous une police projetable.
+    const G = grillePour(b, 9);
+    this.police(ctx, G.cw * 1.5);
 
-    const colonne = Math.round((G.cols - 1) * (0.10 + pos * 0.80));
-    const hautes = Math.round(niv * G.lignes);
-    const large = Math.max(0, Math.round(frappe * 2.5));
+    const nom = FORMES[r];
+    const sur = this.regSur[r].value;              // maturite de l'empreinte, 0 a 1
+    const force = Math.min(1, niv + frappe * 0.35);
 
-    ctx.fillStyle = S.rgba(REG[r].c, 0.25 + niv * 0.65 + frappe * 0.3);
+    // La forme reserve d'abord son extension, puis le contour n'utilise que ce qui reste.
+    // L'ordre compte : le calculer dans l'autre sens ferait sortir la forme de sa case,
+    // et la rogner ensuite la couperait en deux.
+    const rayon = Math.min(0.92, (0.22 + force * 0.72) * EXTENSION[nom]);
+    const libre = Math.max(0, 1 - rayon);
+    const cy = (0.5 - pos) * 2 * libre;
+
+    // L'ASPECT, ET C'EST CE QUI DECIDE SI UNE FORME EST RECONNAISSABLE.
+    //
+    // Une case fait deux fois plus large que haute, et sa grille davantage encore : une
+    // cellule de caractere est 1,9 fois plus haute que large. Des coordonnees normalisees
+    // par le nombre de cellules ecrasent donc tout — un anneau, un losange et une etoile
+    // deviennent la meme bande horizontale, ce qui annule exactement ce qu'on cherchait en
+    // leur donnant six silhouettes.
+    //
+    // On mesure donc en pixels, rapportes a la plus petite demi-dimension : les formes
+    // sont rondes, occupent la hauteur disponible et restent etroites au milieu de leur
+    // case. C'est aussi ce qui garantit qu'elles ne debordent jamais, puisque l'unite est
+    // la dimension contraignante.
+    const cxg = (G.cols - 1) / 2, cyg = (G.lignes - 1) / 2;
+    const unite = Math.max(1, Math.min(cxg * G.cw, cyg * G.ch));
+    const parCol = G.cw / unite, parLigne = G.ch / unite;
+    const plein = REG[r].ch;
+
+    // Un trait franc quand la source est connue, estompe tant qu'elle ne l'est pas.
+    const pale = sur > 0.6 ? '·' : '˙';
+    const epais = 0.16 + frappe * 0.22 + sur * 0.10;
+
+    ctx.fillStyle = S.rgba(REG[r].c, 0.14 + niv * 0.55 + frappe * 0.3 + sur * 0.16);
+
     for (let l = 0; l < G.lignes; l++) {
-      const depuisBas = G.lignes - 1 - l;
-      if (depuisBas >= hautes && large === 0) continue;
-
+      const ny = (l - cyg) * parLigne - cy;
       let ligne = '';
+
       for (let col = 0; col < G.cols; col++) {
-        const d = Math.abs(col - colonne);
-        if (d === 0 && depuisBas < hautes) ligne += REG[r].ch;
-        else if (d <= large && depuisBas < Math.max(1, hautes)) ligne += '│';
-        else ligne += ' ';
+        const nx = (col - cxg) * parCol;
+        ligne += this.pixel(nom, nx, ny, rayon, force, epais, plein, pale, col, l,
+                            parLigne) ?? ' ';
       }
+
       ctx.fillText(ligne, G.x0, G.y0 + l * G.ch);
+    }
+  }
+
+  // Le caractere a poser en un point, selon la forme. Une seule fonction pour les six :
+  // ce qui les distingue tient dans la geometrie, pas dans six boucles de rendu.
+  pixel(nom, nx, ny, r, force, e, plein, pale, col, l, parLigne) {
+    const d = Math.sqrt(nx * nx + ny * ny);
+
+    switch (nom) {
+      // Un anneau qui respire. La forme la plus lisible du lot, et la premiere que Selim
+      // ait validee.
+      case 'anneau':
+        return trait(Math.abs(d - r), e, plein, pale);
+
+      // Une onde qui traverse la case, dont l'amplitude suit le niveau. Elle dit un
+      // mouvement continu la ou un cercle dit une masse.
+      case 'onde': {
+        const y = Math.sin(nx * 2.2 + this.spin * 2.2) * r;
+
+        // UNE ONDE SUR NEUF LIGNES SE CASSE SI ON LA TESTE COMME UN TRAIT.
+        //
+        // La ou la sinusoide est raide, elle traverse une ligne entiere entre deux
+        // colonnes : un test de distance verticale ne l'attrape nulle part, et l'onde
+        // arrive a l'ecran en morceaux epars. Le trait ne descend donc jamais sous une
+        // demi-ligne — il reste fin, mais continu.
+        const e2 = Math.max(e * 0.7, parLigne * 0.55);
+        return trait(Math.abs(ny - y), e2, plein, pale);
+      }
+
+      // Deux levres qui s'ouvrent avec le niveau et se ferment avec lui. C'est la forme
+      // qui rend une voix reconnaissable : une bouche s'ouvre, elle ne clignote pas.
+      case 'levres': {
+        if (Math.abs(nx) > r * 1.35) return null;
+        const arc = Math.sqrt(Math.max(0, 1 - (nx / (r * 1.35)) ** 2));
+        const ouverture = arc * r * (0.15 + force * 0.85);
+        const haut = Math.abs(ny - ouverture), bas = Math.abs(ny + ouverture);
+        const c = trait(Math.min(haut, bas), e * 1.4, plein, pale);
+        if (c) return c;
+        // L'interieur s'assombrit quand la bouche est grande ouverte : sans lui, deux
+        // arcs seuls ne se lisent pas comme une ouverture.
+        return Math.abs(ny) < ouverture * 0.7 && force > 0.45 ? '·' : null;
+      }
+
+      // Un losange : des aretes droites, que l'oeil separe d'un cercle sans hesiter.
+      case 'losange':
+        return trait(Math.abs(Math.abs(nx) + Math.abs(ny) - r), e * 1.3, plein, pale);
+
+      // Une etoile a branches. Elle scintille avec l'attaque au lieu de gonfler.
+      case 'etoile': {
+        if (d > r * 1.15) return null;
+        const a = Math.atan2(ny, nx);
+        const branches = 5;
+        const rayonAngle = r * (0.35 + 0.65 * Math.abs(Math.cos(a * branches / 2)));
+        return d < rayonAngle ? (d < rayonAngle * 0.55 ? plein : pale) : null;
+      }
+
+      // Un semis dont la densite suit le niveau. Pour ce qui n'a pas de contour : un
+      // souffle, une texture, ce qui remplit sans jouer de note.
+      default: {
+        const graine = ((col * 31 + l * 17) % 97) / 97;
+        return graine < force * 0.55 ? (graine < force * 0.22 ? plein : pale) : null;
+      }
     }
   }
 
@@ -479,19 +689,22 @@ export class Visual {
   // Un anneau de caracteres qui respire. La seule forme que Selim ait dite bonne.
   drawGrave(ctx, b) {
     const v = this.bass.value + this.bassHit.value * 0.5;
-    const G = grille(b, 22);
+    const G = grillePour(b, 7);
     this.police(ctx, G.cw * 1.5);
 
+    // Mesure en pixels, pour la meme raison que les registres : une normalisation par le
+    // nombre de cellules donnait deux rangees de points au lieu d'un anneau.
     const cxg = (G.cols - 1) / 2, cyg = (G.lignes - 1) / 2;
-    const r = (0.25 + v * 0.70) * Math.min(cxg, cyg);
+    const unite = Math.max(1, Math.min(cxg * G.cw, cyg * G.ch));
+    const r = (0.25 + v * 0.70);
 
     ctx.fillStyle = S.rgba(SRC.grave, 0.30 + v * 0.6);
     for (let l = 0; l < G.lignes; l++) {
       let ligne = '';
       for (let col = 0; col < G.cols; col++) {
-        const dx = (col - cxg) * (cyg / Math.max(1, cxg)), dy = l - cyg;
+        const dx = (col - cxg) * G.cw / unite, dy = (l - cyg) * G.ch / unite;
         const d = Math.sqrt(dx * dx + dy * dy);
-        ligne += Math.abs(d - r) < 0.8 ? '●' : (Math.abs(d - r) < 1.6 ? '·' : ' ');
+        ligne += Math.abs(d - r) < 0.16 ? '●' : (Math.abs(d - r) < 0.32 ? '·' : ' ');
       }
       ctx.fillText(ligne, G.x0, G.y0 + l * G.ch);
     }
@@ -508,7 +721,7 @@ export class Visual {
     const v = Math.max(fond * 0.7, this.hat.value);
     if (v < 0.01 || coupe < 0.05) return;
 
-    const G = grille(b, 20);
+    const G = grillePour(b, 7);
     this.police(ctx, G.cw * 1.5);
     ctx.fillStyle = S.rgba(SRC.hat, 0.25 + v * 0.7);
 
@@ -530,7 +743,7 @@ export class Visual {
   // Les colonnes de blocs empilees etaient illisibles. C'est la lecture d'un mixeur, et
   // l'oeil y suit une bande sans effort.
   drawSpectre(ctx, b, bands) {
-    const G = grille(b, 14);
+    const G = grillePour(b, 12);
     this.police(ctx, G.cw * 1.5);
     const parLigne = Math.max(1, Math.floor(G.lignes / 12));
 
@@ -565,6 +778,19 @@ export class Visual {
     }
     ctx.fillStyle = S.rgba(SRC.kick, 0.14 + k * 0.8);
     ctx.fillText(ligne, G.x0, G.y0 + l * G.ch);
+
+    // L'ANNONCE DE TEMPO, LA OU LA GRILLE SE VOIT.
+    //
+    // Elle se pose sous les frappes, parce que c'est la que l'ecart se constate : le motif
+    // du kick tombe a cote, et le chiffre dit pourquoi. La derive, elle, teinte l'annonce
+    // — plus la grille a glisse, plus elle s'impose.
+    const a = this.annonce.value;
+    if (a > 0.02 && this.annonceBpm > 0) {
+      const der = this.derive.value;
+      ctx.fillStyle = S.rgba(SRC.grave, 0.25 + a * 0.55 + der * 0.20);
+      ctx.fillText(`▸ ${this.annonceBpm.toFixed(1)} BPM`,
+                   G.x0, G.y0 + Math.min(G.lignes - 1, l + 1) * G.ch);
+    }
 
     if (this.tension.value > 0.03) {
       let t = '';

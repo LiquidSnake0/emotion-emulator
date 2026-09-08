@@ -30,7 +30,7 @@ public static class DeckEndpoints
         // La transition est faite : ce qui etait cale devient ce qui joue. C'est le
         // seul geste qui change la projection.
         app.MapPost("/deck/take", async (DeckState deck, IHubContext<VisualHub> hub,
-                                         IAudioSource source) =>
+                                         IAudioSource source, TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Take());
 
@@ -42,6 +42,16 @@ public static class DeckEndpoints
             // temps, le systeme annoncerait qu'il « connait » un morceau qui ne passe
             // plus.
             source.NewTrack();
+
+            // CE QU'ON AVAIT APPRIS NE SE JETTE PAS AVEC LE DISQUE.
+            //
+            // NewTrack efface les estimateurs, et il le faut : ils decrivent le son qui
+            // vient de s'arreter. Mais les portraits des sources et le tempo etabli
+            // decrivent le disque, pas l'instant — ils sont ranges, et ceux du disque qui
+            // arrive sont repris. Un disque deja passe dans la soiree recommence donc la
+            // ou il s'etait arrete au lieu de tout redecouvrir.
+            if (source is ILearnsTracks learner)
+                memory.Switch(TrackMemory.MasterLane, next.Playing, learner);
 
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
@@ -58,10 +68,13 @@ public static class DeckEndpoints
         // Pose directement ce qui joue, sans passer par le casque. Sert au demarrage
         // d'un set et aux essais.
         app.MapPost("/deck/play", async (TrackContext track, DeckState deck,
-                                         IHubContext<VisualHub> hub, IAudioSource source) =>
+                                         IHubContext<VisualHub> hub, IAudioSource source,
+                                         TrackMemory memory) =>
         {
             var next = deck.Apply(_ => new Deck(track, null));
             source.NewTrack();
+            if (source is ILearnsTracks learner)
+                memory.Switch(TrackMemory.MasterLane, next.Playing, learner);
             await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });

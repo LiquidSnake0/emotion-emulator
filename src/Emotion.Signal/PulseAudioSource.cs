@@ -16,7 +16,7 @@ namespace Emotion.Signal;
 /// sa sortie standard, et cela evite une dependance native a compiler par plateforme.
 /// Le cout est un processus fils, et deux pieges qu'il faut traiter — voir plus bas.
 /// </summary>
-public sealed class PulseAudioSource : IAudioSource
+public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
 {
     private const int SampleRate = 48_000;
 
@@ -49,6 +49,13 @@ public sealed class PulseAudioSource : IAudioSource
     public void AdoptTempo(float bpm, long tMs) => _analyzer.AdoptTempo(bpm, tMs);
 
     public void NewTrack() => _analyzer.NewTrack();
+
+    /// <summary>Reprend ce qu'on savait de ce disque : portraits des sources et tempo.</summary>
+    public void Resume(in TrackKnowledge knowledge) => _analyzer.Reprendre(knowledge);
+
+    /// <summary>Rend ce qu'on sait maintenant, pour rangement.</summary>
+    public TrackKnowledge Park(string id, in TrackKnowledge previous) =>
+        _analyzer.Connaissance(id, previous);
 
     /// <summary>
     /// Lit sans fin. Si <c>parec</c> s'arrete — peripherique debranche, serveur audio

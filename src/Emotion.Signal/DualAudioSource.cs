@@ -73,6 +73,21 @@ public sealed class DualAudioSource : IAudioSource
     public string Name => $"{_master.Name} + cue {_cue.Name}";
 
     /// <summary>
+    /// Les deux faces, pour que chacune accumule sa propre connaissance.
+    ///
+    /// LA FACE CALEE APPREND AUTANT QUE CELLE QUI JOUE, ET SOUVENT PLUS.
+    ///
+    /// C'est au casque que l'aiguille repasse : caler une face veut dire revenir au debut
+    /// plusieurs fois pour verifier le tempo. Chacun de ces passages est une ecoute de plus
+    /// du meme extrait, et leur cumul depasse largement une seule ecoute continue. Ne faire
+    /// apprendre que le master jetterait exactement la matiere la plus abondante, et
+    /// obligerait a tout redecouvrir au moment de la transition — c'est-a-dire au seul
+    /// moment ou l'on n'a pas le temps.
+    /// </summary>
+    public IAudioSource Master => _master;
+    public IAudioSource Cue => _cue;
+
+    /// <summary>
     /// Remet la mesure a zero : nouveau disque au casque, et un nouveau relais a venir.
     /// </summary>
     public void ResetBlend()

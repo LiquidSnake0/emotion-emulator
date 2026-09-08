@@ -18,6 +18,17 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters
 
 builder.Services.AddSingleton<DeckState>();
 
+// CE QUE LE SYSTEME A APPRIS SURVIT A L'ARRET DU SERVEUR.
+//
+// Un disque passe hier doit etre reconnu ce soir : les portraits de ses sources et son
+// tempo sont ranges sur le disque dur, un fichier par morceau. Sans cette persistance, la
+// preparation au casque ne servirait que la soiree en cours et chaque set repartirait de
+// rien.
+builder.Services.AddSingleton(new KnowledgeStore(
+    Path.Combine(builder.Environment.ContentRootPath, "connaissance")));
+builder.Services.AddSingleton<TrackMemory>();
+builder.Services.AddHostedService<MemoryKeeper>();
+
 // Le bus de diffusion : un producteur, plusieurs consommateurs, aucun ne pouvant
 // ralentir les autres.
 builder.Services.AddSingleton<FrameBus>();

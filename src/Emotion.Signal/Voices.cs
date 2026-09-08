@@ -14,7 +14,7 @@ public readonly record struct Voices(
     bool LowHit, bool MidHit, bool HighHit,
     float LowPitch = 0.5f, float MidPitch = 0.5f, float HighPitch = 0.5f,
     float[]? Levels = null, float[]? Pitches = null, int Hits = 0,
-    LaneState[]? Lanes = null, byte[]? Labels = null)
+    LaneState[]? Lanes = null, int[]? Labels = null)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.
@@ -49,8 +49,15 @@ public readonly record struct Voices(
     public LaneState LaneAt(int i) =>
         Lanes is { } v && i < v.Length ? v[i] : new LaneState(LevelAt(i), PitchAt(i), HitAt(i));
 
-    /// <summary>Le nom pose sur cette source, ou zero tant qu'elle est anonyme.</summary>
-    public byte LabelAt(int i) => Labels is { } n && i < n.Length ? n[i] : (byte)0;
+    /// <summary>
+    /// Le nom pose sur cette source, ou zero tant qu'elle est anonyme.
+    ///
+    /// UN ENTIER ET NON UN OCTET, POUR UNE RAISON DE TRANSPORT. Un tableau d'octets est
+    /// serialise en base64 par System.Text.Json : le renderer recevait une chaine et
+    /// affichait « 1·A » la ou il attendait un numero. Le paquet GPU, lui, garde bien un
+    /// octet — c'est le canal JSON qui impose ce choix, pas le format binaire.
+    /// </summary>
+    public byte LabelAt(int i) => Labels is { } n && i < n.Length ? (byte)n[i] : (byte)0;
 }
 
 /// <summary>
@@ -74,7 +81,7 @@ public sealed class VoiceTracker
     private readonly float[][] _levelPool = [new float[N], new float[N]];
     private readonly float[][] _pitchPool = [new float[N], new float[N]];
     private readonly LaneState[][] _statePool = [new LaneState[N], new LaneState[N]];
-    private readonly byte[] _labels = new byte[N];
+    private readonly int[] _labels = new int[N];
     private int _turn;
 
     public VoiceTracker(int sampleRate, int window)
@@ -147,6 +154,31 @@ public sealed class VoiceTracker
         if ((uint)registre >= N) return;
         _labels[registre] = nom;
         if (_pipeline.Lanes[registre] is RegisterLane lane) lane.Label = nom;
+    }
+
+    /// <summary>
+    /// Reprend ce qu'on savait deja de ce morceau. Tout ce qui sera entendu ensuite
+    /// corrigera ces portraits au lieu de les remplacer.
+    /// </summary>
+    public void Reprendre(in TrackKnowledge knowledge)
+    {
+        if (!knowledge.Any) return;
+
+        for (var r = 0; r < N && r < knowledge.Sources.Length; r++)
+        {
+            if (_pipeline.Lanes[r] is not RegisterLane lane) continue;
+            lane.Identity.Load(knowledge.Sources[r]);
+            _labels[r] = knowledge.Sources[r].Label;
+        }
+    }
+
+    /// <summary>Ce qu'on sait a cet instant, pret a etre range pour la prochaine ecoute.</summary>
+    public SourcePortrait[] Portraits()
+    {
+        var p = new SourcePortrait[N];
+        for (var r = 0; r < N; r++)
+            p[r] = _pipeline.Lanes[r] is RegisterLane lane ? lane.Identity.Save() : default;
+        return p;
     }
 
     /// <summary>Le portrait d'une voie, pour la sonde et le reglage.</summary>

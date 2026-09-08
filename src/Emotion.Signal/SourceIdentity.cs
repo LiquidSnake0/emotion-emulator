@@ -41,8 +41,32 @@ public sealed class SourceIdentity
     /// </summary>
     private const int Mature = 200;
 
-    /// <summary>Inertie de l'empreinte. Lente : c'est un portrait, pas une mesure.</summary>
-    private const float Inertia = 0.02f;
+    /// <summary>
+    /// Plancher de l'inertie. En dessous, une source cesserait completement d'ecouter ce
+    /// qui se passe et resterait figee sur un portrait ancien.
+    /// </summary>
+    private const float InertiaFloor = 0.002f;
+
+    /// <summary>
+    /// De combien chaque observation corrige le portrait.
+    ///
+    /// L'INERTIE DECROIT AVEC L'EXPERIENCE, ET C'EST CE QUI FAIT CONVERGER.
+    ///
+    /// Une moyenne exponentielle a pas fixe ne converge jamais : la millieme observation
+    /// pese autant que la dixieme, donc le portrait flotte indefiniment autour de la bonne
+    /// valeur au lieu de s'y poser. Ecouter plus longtemps n'apportait alors rien — ce qui
+    /// contredisait exactement ce qu'on attend du systeme.
+    ///
+    /// Un pas en <c>1/n</c> donne la moyenne courante : chaque observation compte pour ce
+    /// qu'elle vaut dans l'ensemble, et le portrait <b>tend</b> vers la valeur juste au
+    /// lieu d'osciller. A la vingt-quatrieme seconde on a le meilleur portrait possible
+    /// avec vingt-quatre secondes ; a la vingt-cinquieme, il est meilleur encore, et il ne
+    /// se degrade pas.
+    ///
+    /// Le plancher garde une capacite de correction : un morceau peut vraiment changer, et
+    /// une empreinte totalement figee serait aveugle a un instrument qui entre.
+    /// </summary>
+    private float Inertia => MathF.Max(InertiaFloor, 1f / (_observations + 1));
 
     /// <summary>
     /// Bornes de la dispersion, <b>relevees sur le repertoire et non choisies</b>.
@@ -66,8 +90,38 @@ public sealed class SourceIdentity
     /// <summary>Dispersion moyenne des observations autour du portrait. Diagnostic.</summary>
     public float Spread => _spread;
 
-    /// <summary>Observations accumulees. Diagnostic.</summary>
+    /// <summary>
+    /// Observations accumulees, ecoutes precedentes comprises. Ne redescend jamais.
+    /// </summary>
     public int Observations => _observations;
+
+    /// <summary>
+    /// Ce que la source sait d'elle-meme, sous une forme qu'on peut ranger et reprendre.
+    ///
+    /// C'est ce qui permet d'arreter un disque et de le relancer sans rien perdre : la
+    /// seconde ecoute <b>corrige</b> le portrait de la premiere au lieu de repartir de
+    /// zero, et une source vue trois fois vingt secondes en sait autant qu'une source vue
+    /// une minute d'affilee.
+    /// </summary>
+    public SourcePortrait Save() => new(Brightness, Texture, _spread, _observations, Label);
+
+    /// <summary>Reprend un portrait range plus tot. Tout ce qui suit le corrigera.</summary>
+    public void Load(in SourcePortrait p)
+    {
+        Brightness = p.Brightness;
+        Texture = p.Texture;
+        _spread = p.Spread;
+        _observations = p.Observations;
+        Label = p.Label;
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        var maturity = MathF.Min(1f, _observations / (float)Mature);
+        var sharpness = Clamp01(1f - (_spread - Tight) / (Loose - Tight));
+        Confidence = maturity * sharpness;
+    }
 
     /// <summary>Brillance moyenne de la source, 0 sourde, 1 claire.</summary>
     public float Brightness { get; private set; } = 0.5f;
@@ -127,18 +181,20 @@ public sealed class SourceIdentity
         // Dispersion : de combien chaque observation s'ecarte du portrait deja forme. Une
         // source qui change tout le temps ne merite pas de confiance, meme vue souvent.
         var drift = MathF.Abs(brightness - Brightness) + MathF.Abs(texture - Texture);
-        _spread += (drift - _spread) * Inertia;
 
-        Brightness += (brightness - Brightness) * Inertia;
-        Texture += (texture - Texture) * Inertia;
+        var pas = Inertia;
+        _spread += (drift - _spread) * pas;
+        Brightness += (brightness - Brightness) * pas;
+        Texture += (texture - Texture) * pas;
 
-        if (_observations < Mature) _observations++;
+        // Le compteur n'est PAS plafonne : il porte l'experience accumulee, y compris
+        // celle des ecoutes precedentes. C'est lui qui fait qu'une seconde ecoute corrige
+        // au lieu de recommencer.
+        _observations++;
 
         // La maturite monte avec l'experience, la nettete descend avec l'instabilite. Le
         // produit des deux : il faut avoir beaucoup vu ET avoir vu la meme chose.
-        var maturity = _observations / (float)Mature;
-        var sharpness = Clamp01(1f - (_spread - Tight) / (Loose - Tight));
-        Confidence = maturity * sharpness;
+        Refresh();
     }
 
     public void Reset()
@@ -153,3 +209,14 @@ public sealed class SourceIdentity
 
     private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
 }
+
+/// <summary>
+/// Ce qu'on sait d'une source, range pour la prochaine ecoute.
+/// </summary>
+/// <param name="Brightness">brillance moyenne.</param>
+/// <param name="Texture">raie franche a souffle.</param>
+/// <param name="Spread">dispersion des observations autour du portrait.</param>
+/// <param name="Observations">experience accumulee. C'est elle qui rend la reprise utile.</param>
+/// <param name="Label">nom pose de l'exterieur, ou zero.</param>
+public readonly record struct SourcePortrait(
+    float Brightness, float Texture, float Spread, int Observations, byte Label);
