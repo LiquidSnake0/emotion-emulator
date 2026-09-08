@@ -18,7 +18,7 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
-**128 tests** · **zéro dépendance tierce dans le cœur**
+**128 tests** · **zéro dépendance tierce dans le cœur** · **48 ms du son au paquet**
 
 ---
 
@@ -338,6 +338,56 @@ par configuration, pour comparer.
 
 Le retard est désormais **affiché** — `retard 21 ms` dans le nom de la source, en rouge
 au-delà de 40 dans l'écran de calage. C'est une grandeur qu'on regarde, pas qu'on subit.
+
+### Le budget complet, du son au paquet
+
+> **48 ms séparent le son du paquet qui part au GPU**, dont 42,6 sont incompressibles et
+> 2,2 seulement sont du calcul.
+
+| Étage | Coût | Nature |
+|---|---|---|
+| capture PulseAudio | **3,3 ms** | subi — mais trois fois moins cher que supposé |
+| fenêtre d'analyse | **21,3 ms** | incompressible — il faut l'avoir entendue en entier |
+| anticipation du sommet | **21,3 ms** | incompressible — un pic ne se voit qu'après |
+| calcul | **2,2 ms** | maîtrisé — 8,8 % du pas de 21,3 ms |
+| anneau partagé | **1,5 µs** | maîtrisé — mémoire partagée, sans verrou |
+
+**Le calcul n'est pas le problème.** Il occupe moins d'un dixième du budget ; le reste est
+de l'attente pure. Optimiser ici reviendrait à courir plus vite dans une file d'attente —
+c'est pourquoi la réponse retenue n'est pas d'aller plus vite mais de **ne plus attendre**,
+en prédisant le kick au lieu de le constater.
+
+**Deux chiffres ont été corrigés par la mesure, et dans le bon sens.** La capture était
+portée à 20 ms au budget : c'est la valeur *demandée* à `parec`, pas celle obtenue — le
+serveur rend 4,4 ms de tampon réel pour 20 demandées, 3,3 pour 5. Et à rebours de
+l'intuition, **un tampon court rend le flux plus régulier** : la gigue d'arrivée des blocs
+tombe de 3,1 ms à 0,9 en passant de 20 à 5, sans un seul bloc en retard, machine chargée
+sur ses huit cœurs et serveur en marche. `EMOTION_CAPTURE_MS` permet de comparer.
+
+### Ce qu'il reste pour l'unité de rendu
+
+Le cas est celui d'une image qui suit un son — l'asynchronie *« vidéo en retard »*, la
+mieux tolérée des deux.
+
+| Référence | Seuil | Marge restante |
+|---|---|---|
+| [EBU R37](https://tech.ebu.ch/publications/r037) — norme de diffusion | 40 ms | **−8 ms** |
+| [ITU-R BT.1359-1](https://www.itu.int/rec/R-REC-BT.1359) — détectable | 45 ms | **−3 ms** |
+| ITU-R BT.1359-1 — inacceptable | 90 ms | **+42 ms** |
+
+Un vidéoprojecteur consomme 16 à 33 ms selon son traitement d'image ; un modèle de mapping
+en mode faible latence descend vers 16, ce qui laisse **une vingtaine de millisecondes**
+pour le rendu aller-retour.
+
+**Sauf pour le kick, où le budget n'est plus borné par le seuil.** L'horloge à
+verrouillage de phase ne réagit pas à la frappe, elle la prévoit : sur cet événement, la
+limite devient la stabilité du tempo, pas la perception. Tout ce qui n'est pas
+périodique — clap irrégulier, voix, rupture — subit les 48 ms.
+
+**Une seule économie a été cherchée et rejetée.** Supprimer l'anticipation du sommet
+retirerait 21,3 ms, la plus grosse disponible : les détections tombent alors de 1003 à 683
+et le verrouillage de la grille de 85 % à 70 %. Or c'est ce verrouillage qui permet de
+prédire — raccourcir casserait ce qui compense.
 
 **Fenêtre de Hann.** Sans elle, une note qui ne tombe pas exactement sur un bin fuit sur
 tout le spectre et les bandes graves se remplissent de bruit d'aigu.
