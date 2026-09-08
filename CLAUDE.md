@@ -68,6 +68,8 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | tempo publié sur 4 % des fenêtres | vote sur les écarts entre attaques consécutives, par cases de 1,4 % | autocorrélation de l'enveloppe |
 | intervalle de mesure à 149 ms | la grille recalculait sa position depuis une origine lointaine : changer la période faisait sauter le rang de seize temps | la phase s'accumule, elle ne se recalcule pas |
 | 0,90 de confiance sur du bruit blanc | confiance mesurée sur la forme de la courbe, dont la moitié vaut zéro par troncature | sur la hauteur de la corrélation, qui est absolue |
+| écart médian entre kicks = 1,21 temps | courbe moyennée sur deux fenêtres avant jugement : un pic d'une fenêtre en ressort étalé sur **deux fenêtres égales**, que le maximum local strict rejette | juger le kick sans lissage — 1,00 temps, intervalles justes 35 → 52 % |
+| toute la grille battait avec le morceau | l'échelle de la scène entière était pilotée par `openness`, un descripteur de timbre calculé toutes les 21 ms et lissé par rien | seuls les gestes lents déplacent le cadre ; le filtre agit à l'intérieur des cases |
 | trois extraits d'un set à 96,2 · 96,8 · 95,2 | la préférence de tempo écrasait la mesure au lieu de la départager | plancher à 0,55 : elle penche, elle ne décide pas |
 | 935 changements d'accord en 2 min | seuil deviné à 0,45, soit le milieu de la distribution | 0,75, la queue — un indice fréquent ne discrimine rien |
 | tension jamais au-dessus de 0,08 | diviseur des pentes à 0,5 quand le maximum réel est 0,149 | 0,12, mesuré à la sonde |

@@ -122,6 +122,125 @@ public sealed class SpectrumAnalyzer
     /// </summary>
     public float PoidsComplexe { get; set; }
 
+    /// <summary>
+    /// Moyenne la courbe du kick sur deux fenetres avant de la juger.
+    ///
+    /// FAUX PAR DEFAUT, ET C'EST LA PLUS GROSSE CORRECTION DU DETECTEUR.
+    ///
+    /// Le lissage etait la depuis le debut, pour la raison qui parait evidente : le flux
+    /// brut est en dents de scie, et y chercher un sommet reviendrait a compter le bruit.
+    /// Sauf que <see cref="Smooth"/> rend <c>(precedent + courant) / 2</c>. Une attaque
+    /// qui ne dure qu'une fenetre — c'est-a-dire un kick — en ressort <b>etalee sur deux
+    /// fenetres de valeur exactement egale</b>. Or le detecteur exige un maximum local
+    /// strict : rien d'aussi haut ni avant ni apres. Deux voisines egales, il rejette.
+    ///
+    /// Le lissage cense proteger du bruit supprimait donc en priorite les attaques les
+    /// plus franches, et ne laissait passer que celles qu'il avait deformees assez pour
+    /// les departager — au hasard d'une fenetre pres.
+    ///
+    /// LA MESURE, SUR QUATRE-VINGT-DIX SECONDES DE TROIS ENREGISTREMENTS.
+    ///
+    /// <code>
+    ///                        lisse        brut
+    ///   Macroblank
+    ///     intervalles justes   35 %        52 %
+    ///     frappes calees       23 %        33 %
+    ///     verrouillage         62 %        67 %
+    ///     ecart median      1,21 temps   1,00 temps
+    ///   enregistrement de set
+    ///     verrouillage         58 %        87 %
+    ///     frappes calees       14 %        33 %
+    ///   instamata
+    ///     verrouillage         49 %        73 %
+    /// </code>
+    ///
+    /// L'ecart median est le chiffre qui tranche. Il valait 1,21 temps : ni une noire, ni
+    /// une croche, ni rien de musical — la signature d'un detecteur qui rate des frappes
+    /// et en invente entre. Il vaut maintenant <b>1,00 temps</b>. Le detecteur bat sur le
+    /// temps, ce qu'il n'avait jamais fait.
+    ///
+    /// LA MARGE A ETE REVERIFIEE, ET ELLE NE BOUGE PAS. Elle avait ete reglee avec le
+    /// lissage, donc plus aucune raison d'etre juste sans lui. Balayee de 1,2 a 3,0 : les
+    /// intervalles justes de Macroblank culminent a 1,8 (52 %) et se degradent des deux
+    /// cotes — 50 % a 1,2, 42 % a 2,2, 38 % a 3,0. La valeur tenait a autre chose qu'au
+    /// lissage.
+    ///
+    /// L'interrupteur reste, pour pouvoir refaire la comparaison sur une autre matiere.
+    /// </summary>
+    public bool LissageKick { get; set; }
+
+    /// <summary>
+    /// Le meme lissage, sur le clap et le charley.
+    ///
+    /// VRAI PAR DEFAUT — LE MEME DEFAUT, ET POURTANT LA CONCLUSION INVERSE.
+    ///
+    /// Le raisonnement etait tentant : le lissage etale un pic sur deux fenetres egales et
+    /// le maximum local strict les rejette, c'est demontre sur le kick, donc le retirer
+    /// partout. Ces deux registres comptent en plus au-dela de leur propre eclair — les
+    /// familles de frappes sont nourries par <c>kick || clap || charley</c>, et c'est la
+    /// regularite des familles qui permet a la verification croisee du tempo de dire
+    /// quelque chose.
+    ///
+    /// LA MESURE A DIT NON, ET SUR LE SEUL DISQUE QU'ON CONNAISSE BIEN.
+    ///
+    /// <code>
+    ///                             lisse    brut
+    ///   Macroblank  accord         0,43    0,01
+    ///               verrouillage   67 %    50 %
+    ///   instamata   accord         0,00    0,65
+    /// </code>
+    ///
+    /// Les chiffres du kick, eux, ne bougent pas d'un point — 52 % d'intervalles justes et
+    /// 33 % de frappes calees dans les deux cas — ce qui confirme au passage que les trois
+    /// detecteurs sont bien independants.
+    ///
+    /// LA RAISON EST DEJA ECRITE PLUS BAS, A PROPOS DES CHARLEYS. Un registre ne se prete a
+    /// une lecture franche que s'il <b>se vide entre deux frappes</b>. Le grave se vide ;
+    /// les mediums et les aigus de ce repertoire ne se vident jamais, entre le souffle de
+    /// bande, le crepitement du vinyle et les nappes. Sans lissage, leur courbe n'est plus
+    /// une suite de pics mais du bruit ou chaque fenetre est un maximum local : les
+    /// familles 2 et 3 de Macroblank passaient de x1,61 et x2,01 — deux rapports lisibles —
+    /// a x2,14 toutes les deux, c'est-a-dire a rien.
+    ///
+    /// Le lissage n'est donc ni bon ni mauvais en soi. Il coute une attaque franche et il
+    /// achete du bruit en moins : le marche est bon la ou le fond est charge, mauvais la
+    /// ou le registre respire. Instamata gagne beaucoup a l'enlever, et c'est justement
+    /// pourquoi l'interrupteur reste : une autre matiere reglera peut-etre autrement.
+    /// </summary>
+    public bool LissageAttaques { get; set; } = true;
+
+    /// <summary>
+    /// Compare le kick a la mediane de son historique plutot qu'a sa moyenne.
+    /// Voir <see cref="OnsetDetector.Median"/>.
+    ///
+    /// TESTE, UTILE SEUL, NUISIBLE AVEC LE RESTE — donc disponible et eteint.
+    ///
+    /// Avec le lissage encore en place, la mediane rattrapait une bonne part du defaut :
+    /// Macroblank passait de 35 a 48 % d'intervalles justes, le verrouillage du set de 58
+    /// a 79 %. C'est logique, les deux corrigent le meme mal par deux bouts.
+    ///
+    /// Mais <b>cumulee au retrait du lissage, elle depasse la cible</b> : les detections de
+    /// Macroblank tombent de 126 a 75, les intervalles justes de 52 a 37 %, les frappes
+    /// calees de 33 a 21. La raison tient a la marge : la mediane d'un signal en pics est
+    /// bien plus basse que sa moyenne, donc le seuil s'effondre, donc le detecteur
+    /// declenche sur la pente et l'ecart minimal bloque ensuite le vrai sommet.
+    ///
+    /// Il aurait fallu regler la marge en meme temps. Deux parametres qui se compensent se
+    /// reglent sur le bruit du jeu d'essai, pas sur une propriete du signal — on s'arrete.
+    /// </summary>
+    public bool SeuilMedian
+    {
+        get => _kick.Median;
+        set => _kick.Median = value;
+    }
+
+    /// <summary>Marge du kick au-dessus du fond. Reglee par la mesure, pas choisie.</summary>
+    public float MargeKick
+    {
+        get => _kick.Margin;
+        set => _kick.Margin = value;
+    }
+
     private readonly ComplexFlux _fluxComplexe = new(Window / 2);
     private readonly EventProfiler _evenements = new(Window / 2);
 
@@ -572,8 +691,10 @@ public sealed class SpectrumAnalyzer
         // complexe, lui, voit qu'une note repart d'une phase arbitraire meme quand son
         // amplitude bouge peu. Les deux sont ramenes a un rapport sans dimension avant
         // d'etre melanges, sinon le poids du melange dependrait du volume du disque.
-        var rKick = Smooth(0, BandRise(bands, 0, 3) + PoidsComplexe * _fluxComplexe.Rapport);
-        var rClap = Smooth(1, BandRise(bands, 4, 9));
+        var brutKick = BandRise(bands, 0, 3) + PoidsComplexe * _fluxComplexe.Rapport;
+        var rKick = LissageKick ? Smooth(0, brutKick) : brutKick;
+        var brutClap = BandRise(bands, 4, 9);
+        var rClap = LissageAttaques ? Smooth(1, brutClap) : brutClap;
         // LES CHARLEYS GARDENT LA DIFFERENCE, ET CE N'EST PAS UNE EXCEPTION DE CONFORT.
         //
         // Un rapport n'est informatif que dans un registre qui se vide entre deux frappes.
@@ -585,7 +706,8 @@ public sealed class SpectrumAnalyzer
         //
         // Le grave et le medium, eux, se vident entre deux frappes. Ils prennent le
         // rapport, qui les rend invariants au niveau ; les aigus gardent la difference.
-        var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount, ratioMode: false));
+        var brutHat = BandRise(bands, 9, VisualFrame.BandCount, ratioMode: false);
+        var rHat  = LissageAttaques ? Smooth(2, brutHat) : brutHat;
 
         // LE TEMPO SE MESURE AVANT LA SEPARATION, SUR LE SPECTRE ENTIER.
         //

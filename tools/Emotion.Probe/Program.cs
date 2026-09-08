@@ -13,7 +13,9 @@ using Emotion.Signal;
 
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("usage: probe <fichier.wav> [debut_s] [duree_s]");
+    Console.Error.WriteLine("usage: probe <fichier.wav> [debut_s] [duree_s] [options...]");
+    Console.Error.WriteLine("options : sep · inline · complexe · lisse · brutmed · median");
+    Console.Error.WriteLine("          memoire · poids=X · marge=X · export=<fichier.json>");
     return 1;
 }
 
@@ -22,8 +24,12 @@ var startS = args.Length > 1 ? double.Parse(args[1]) : 0;
 var lengthS = args.Length > 2 ? double.Parse(args[2]) : 90;
 
 // Export des images analysees, pour rejouer l'analyse sans materiel ni serveur.
-// Quatrieme argument : le fichier de sortie.
-var exportTo = args.Length > 3 ? args[3] : null;
+//
+// NOMME, ET PLUS POSITIONNEL. Il occupait le quatrieme rang, si bien qu'un drapeau passe
+// la — « brut », « median » — etait pris pour un chemin de sortie et laissait un fichier
+// du meme nom a la racine du depot. Tous les arguments qui suivent la duree sont
+// desormais nommes.
+var exportTo = args.FirstOrDefault(a => a.StartsWith("export="))?[7..];
 var exported = new List<string>();
 
 var (mono, rate) = Wav.ReadMono(path, startS, lengthS);
@@ -31,7 +37,7 @@ Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} 
 
 // Cinquieme argument : « sep » force la separation harmonique/percussive, coupee par
 // defaut depuis qu'on l'a mesuree. Sert a comparer les deux sur la meme matiere.
-var separate = args.Length > 4 && args[4] == "sep";
+var separate = args.Contains("sep");
 var analyzer = new SpectrumAnalyzer(rate, separate);
 
 // « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
@@ -42,6 +48,23 @@ analyzer.Etapes.Actif = true;
 // « complexe » en argument : juge les attaques dans le domaine complexe plutot que sur le
 // flux d'energie. Sert a comparer les deux sur la meme matiere.
 if (args.Contains("complexe")) analyzer.FluxComplexeActif = true;
+
+// « lisse » : remet la moyenne sur deux fenetres avant de juger le kick, comme avant.
+// Sert a refaire la comparaison sur une autre matiere. Voir SpectrumAnalyzer.LissageKick.
+if (args.Contains("lisse")) analyzer.LissageKick = true;
+
+// « brutmed » : retire aussi le lissage du clap et du charley. Mesure sur macro : nuisible.
+if (args.Contains("brutmed")) analyzer.LissageAttaques = false;
+
+// « median » : seuil pris sur la mediane de l'historique plutot que sur sa moyenne.
+if (args.Contains("median")) analyzer.SeuilMedian = true;
+
+// « marge=X » : marge du kick au-dessus du fond, pour la balayer.
+foreach (var a in args)
+    if (a.StartsWith("marge=") && float.TryParse(a[6..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var mg))
+        analyzer.MargeKick = mg;
 
 // « poids=X » : part du domaine complexe dans le jugement du kick, pour la regler par
 // la mesure plutot que de la choisir.

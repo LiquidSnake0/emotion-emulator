@@ -69,6 +69,68 @@ public class OnsetDetectorTests
         Assert.Equal(1, fired);
     }
 
+    /// <summary>
+    /// LE TEST QUI VERROUILLE LA CORRECTION LA PLUS COUTEUSE DU DETECTEUR.
+    ///
+    /// Une attaque nette ne dure qu'une fenetre. Le detecteur doit la voir. Cela parait
+    /// acquis, et ca ne l'etait pas : l'analyseur moyennait la courbe sur deux fenetres
+    /// avant de la lui donner, ce qui transformait un pic isole en <b>deux fenetres de
+    /// valeur egale</b> — et le maximum local strict rejette deux egales.
+    ///
+    /// Le lissage cense proteger du bruit supprimait donc en priorite les attaques les
+    /// plus franches. Sur le repertoire, l'ecart median entre kicks valait 1,21 temps ; il
+    /// vaut 1,00 depuis. Ce test tient la porte fermee.
+    /// </summary>
+    [Fact]
+    public void Un_pic_d_une_seule_fenetre_est_vu()
+    {
+        var d = new OnsetDetector(minGap: 2);
+        for (var i = 0; i < 60; i++) d.Feed(1f);
+
+        Assert.False(d.Feed(20f));      // le pic est encore juge en retard d'une fenetre
+        Assert.True(d.Feed(1f));        // la fenetre suivante le confirme comme sommet
+    }
+
+    /// <summary>
+    /// Le meme pic, prealablement etale sur deux fenetres egales — ce que faisait le
+    /// lissage — n'est plus vu. C'est le cote « avant » de la meme correction, et il
+    /// documente pourquoi elle etait necessaire plutot que de le faire croire sur parole.
+    /// </summary>
+    [Fact]
+    public void Le_meme_pic_etale_sur_deux_fenetres_egales_echappe_au_detecteur()
+    {
+        var d = new OnsetDetector(minGap: 2);
+        for (var i = 0; i < 60; i++) d.Feed(1f);
+
+        // (precedent + courant) / 2 applique a 1, 20, 1 donne 10,5 puis 10,5.
+        Assert.False(d.Feed(10.5f));
+        Assert.False(d.Feed(10.5f));
+        Assert.False(d.Feed(1f));
+    }
+
+    /// <summary>
+    /// La mediane decrit le fond, la moyenne se laisse tirer par les pics. Sur un
+    /// historique ou une valeur sur cinq est une attaque, les deux references different
+    /// franchement — c'est tout l'interet du commutateur, et la raison pour laquelle il
+    /// ne se cumule pas au retrait du lissage.
+    /// </summary>
+    [Fact]
+    public void La_mediane_ignore_les_pics_que_la_moyenne_encaisse()
+    {
+        var moyenne = new OnsetDetector(minGap: 2);
+        var mediane = new OnsetDetector(minGap: 2) { Median = true };
+
+        for (var i = 0; i < 60; i++)
+        {
+            var v = i % 5 == 0 ? 40f : 1f;
+            moyenne.Feed(v);
+            mediane.Feed(v);
+        }
+
+        Assert.Equal(1f, mediane.Baseline, 3);
+        Assert.True(moyenne.Baseline > 5f);
+    }
+
     [Fact]
     public void Une_montee_progressive_ne_declenche_pas()
     {

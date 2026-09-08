@@ -94,7 +94,7 @@ public sealed class OnsetDetector
     /// Marge au-dessus de la moyenne recente. Trop bas, chaque nappe declenche ;
     /// trop haut, un morceau feutre ne declenche jamais.
     /// </summary>
-    private const float Margin = 1.8f;
+    public float Margin { get; set; } = 1.8f;
 
     /// <param name="minGap">
     /// Ecart minimal en fenetres. La valeur par defaut est reglee sur le temps du crate ;
@@ -187,8 +187,33 @@ public sealed class OnsetDetector
     {
         var count = Math.Min(_n, History);
         if (count == 0) return 0f;
+        if (Median) return Mediane(count);
         var sum = 0f;
         for (var i = 0; i < count; i++) sum += _recent[i];
         return sum / count;
+    }
+
+    /// <summary>
+    /// Prend la mediane de l'historique plutot que sa moyenne.
+    ///
+    /// La difference n'est pas cosmetique. La moyenne est <b>tiree vers le haut par les
+    /// pics eux-memes</b> : chaque attaque detectee remonte la reference qui servira a
+    /// juger la suivante, si bien qu'une salve de frappes fortes eteint le detecteur
+    /// juste apres. La mediane, elle, ignore les valeurs extremes par construction — elle
+    /// decrit le fond sonore, ce qui est exactement ce a quoi une attaque doit etre
+    /// comparee. C'est le choix de Dixon (2006) et de Bello (2005).
+    ///
+    /// Quarante-trois valeurs a trier par fenetre, soit une quarantaine de fois par
+    /// seconde : le cout ne se mesure pas.
+    /// </summary>
+    public bool Median { get; set; }
+
+    private readonly float[] _tri = new float[History];
+
+    private float Mediane(int count)
+    {
+        Array.Copy(_recent, _tri, count);
+        Array.Sort(_tri, 0, count);
+        return count % 2 == 1 ? _tri[count / 2] : (_tri[count / 2 - 1] + _tri[count / 2]) * 0.5f;
     }
 }

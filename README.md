@@ -734,6 +734,83 @@ donc deux fois pour un résultat moins bon.
 
 ---
 
+## Le lissage qui supprimait les attaques
+
+Le détecteur d'attaques a été le maillon faible du projet pendant des semaines. Trois pistes
+avaient été explorées et rejetées — seuil guidé par la grille, anticipation nulle, domaine
+complexe — sans jamais regarder ce qui arrivait *dans* le détecteur.
+
+La courbe du kick était moyennée sur deux fenêtres avant d'être jugée :
+
+```csharp
+private float Smooth(int slot, float v)
+{
+    var s = (_smooth[slot] + v) * 0.5f;    // (précédent + courant) / 2
+    _smooth[slot] = v;
+    return s;
+}
+```
+
+La raison paraissait évidente : le flux brut est en dents de scie, et y chercher un sommet
+reviendrait à compter le bruit. Mais **une attaque nette ne dure qu'une fenêtre.** Appliqué à
+la suite `1, 20, 1`, ce lissage rend `10,5` puis `10,5` — deux fenêtres de valeur exactement
+égale. Or le détecteur exige un maximum local *strict* : rien d'aussi haut ni avant ni après.
+
+> Le filtre censé protéger du bruit supprimait en priorité les attaques les plus franches,
+> et ne laissait passer que celles qu'il avait assez déformées pour les départager.
+
+Ce que la mesure donne sur quatre-vingt-dix secondes de trois enregistrements :
+
+| | lissé | brut |
+|---|---|---|
+| **Macroblank** — intervalles justes | 35 % | **52 %** |
+| frappes bien calées | 23 % | **33 %** |
+| verrouillage | 62 % | **67 %** |
+| écart médian entre kicks | 1,21 temps | **1,00 temps** |
+| **enregistrement de set** — verrouillage | 58 % | **87 %** |
+| **instamata** — verrouillage | 49 % | **73 %** |
+
+**L'écart médian est le chiffre qui tranche.** 1,21 temps n'est ni une noire, ni une croche,
+ni rien de musical : c'est la signature d'un détecteur qui rate des frappes et en invente
+entre. Il vaut maintenant 1,00 temps. Le détecteur bat sur le temps, ce qu'il n'avait jamais
+fait.
+
+La marge du seuil avait été réglée *avec* le lissage, donc plus aucune raison d'être juste
+sans lui. Balayée de 1,2 à 3,0 : les intervalles justes de Macroblank culminent à 1,8 (52 %)
+et se dégradent des deux côtés — 50 % à 1,2, 42 % à 2,2, 38 % à 3,0. Elle tenait à autre
+chose, elle reste.
+
+### Le même défaut, et pourtant la conclusion inverse
+
+Le clap et le charley passent par le même lissage. Le retirer là aussi paraissait acquis —
+et ces deux registres comptent au-delà de leur propre éclair, puisque les familles de
+frappes sont nourries par `kick || clap || charley`.
+
+| | lissé | brut |
+|---|---|---|
+| Macroblank — accord avec la grille | **0,43** | 0,01 |
+| Macroblank — verrouillage | **67 %** | 50 % |
+| instamata — accord avec la grille | 0,00 | **0,65** |
+
+**Rejeté**, sur le seul disque qu'on connaisse bien. La raison était déjà écrite ailleurs
+dans le code, à propos des charleys : un registre ne se prête à une lecture franche que s'il
+**se vide entre deux frappes**. Le grave se vide ; les médiums et les aigus de ce répertoire
+ne se vident jamais, entre le souffle de bande, le crépitement du vinyle et les nappes. Sans
+lissage leur courbe n'est plus une suite de pics mais du bruit où chaque fenêtre est un
+maximum local — les familles 2 et 3 de Macroblank passaient de ×1,61 et ×2,01, deux rapports
+lisibles, à ×2,14 toutes les deux, c'est-à-dire à rien.
+
+Le lissage n'est donc ni bon ni mauvais en soi : il coûte une attaque franche et il achète du
+bruit en moins. Le marché est bon là où le fond est chargé, mauvais là où le registre
+respire. Les deux interrupteurs restent, avec leurs mesures.
+
+Un dernier essai, écarté lui aussi : prendre le **seuil sur la médiane** de l'historique
+plutôt que sur sa moyenne — la moyenne est tirée vers le haut par les pics eux-mêmes, si bien
+qu'une salve de frappes fortes éteint le détecteur juste après. Seule, elle aide (Macroblank
+35 → 48 %). Cumulée au retrait du lissage, elle dépasse la cible : les détections tombent de
+126 à 75. Deux paramètres qui se compensent se règlent sur le bruit du jeu d'essai, pas sur
+une propriété du signal. On s'arrête.
+
 ## Reconnaître une frappe sans la nommer
 
 Les frappes étaient rangées par hauteur : ce qui tape dans les graves est un kick, dans le
@@ -789,12 +866,15 @@ tombent sur des multiples ou des divisions du temps. Sur un morceau du crate à 
 Trois rapports francs obtenus sans jamais regarder la grille — **c'est une confirmation
 indépendante du tempo**, la première dont le projet dispose.
 
-**Mais l'indicateur ne discrimine pas encore, et il faut le dire.** L'accord mesuré va de 0,07
-à 0,38 selon les morceaux, ce qui est bas partout. La cause est en amont : les familles ne
-sont régulières qu'à 0,21–0,54, parce qu'elles héritent des détections du détecteur
-d'attaques — le maillon faible. **La vérification dépend donc de ce qu'elle devrait
-vérifier.** Le mécanisme est juste et testé ; il deviendra utile le jour où le détecteur
-s'améliorera, et pas avant.
+**Mais l'indicateur ne discrimine pas encore, et il faut le dire.** L'accord vaut 0,43 sur
+Macroblank et 0,00 sur les deux autres enregistrements. La cause est en amont : les familles
+ne sont régulières qu'à 0,22–0,45, parce qu'elles héritent des détections du clap et du
+charley — deux registres qui ne se vident jamais sur ce répertoire. **La vérification dépend
+donc en partie de ce qu'elle devrait vérifier.**
+
+Corriger le kick a fait passer l'accord de Macroblank de 0,38 à 0,43, ce qui est cohérent
+mais modeste. Le même traitement appliqué au clap et au charley a été mesuré et **rejeté** :
+il fait tomber l'accord à 0,01 sur la référence. Voir plus haut, `LissageAttaques`.
 
 ## Le parallélisme, et ce que la mesure en a dit
 
@@ -1310,11 +1390,18 @@ serveur, sans carte son et sans navigateur**.
   stable — entre 0,2 et 0,3 de poids, le verrouillage moyen tombe de 64 à 45 %, ce qui
   trahit un optimum réglé sur du bruit. Le mécanisme reste disponible et éteint par défaut :
   figer un compromis aurait empiré le seul disque qu'on connaisse bien.
-- **Le reste du détecteur.** Sur un répertoire aux kicks
-  étouffés, 28 % seulement des intervalles entre frappes tombent sur un temps entier. Régler
-  l'écart minimal sur le tempo plutôt que sur une constante a fait passer ce chiffre de 23 à
-  28 % et les frappes bien calées de 12 à 20 %, mais filtrer ne crée pas les détections
-  manquantes. L'horloge à verrouillage de phase compense — elle n'excuse pas.
+- **Le reste du détecteur.** Le gros défaut a été trouvé et corrigé : la courbe du kick était
+  moyennée sur deux fenêtres avant d'être jugée, ce qui étalait toute attaque d'une seule
+  fenêtre en **deux fenêtres de valeur exactement égale** — que le maximum local strict
+  rejette. Le lissage censé protéger du bruit supprimait donc en priorité les attaques les
+  plus franches. En le retirant, sur Macroblank : intervalles justes 35 → 52 %, frappes bien
+  calées 23 → 33 %, verrouillage 62 → 67 %, et surtout **l'écart médian entre kicks passe de
+  1,21 à 1,00 temps**. 1,21 n'était ni une noire ni une croche : c'était la signature d'un
+  détecteur qui rate des frappes et en invente entre. Il bat maintenant sur le temps.
+  La marge du seuil a été revérifiée dans la foulée, balayée de 1,2 à 3,0 : elle ne bouge pas.
+  Il reste que l'écart de phase moyen vaut encore 0,185 temps, soit 127 ms — six fenêtres
+  d'analyse. Ce n'est plus un problème de résolution, c'est un problème de placement, et
+  l'horloge à verrouillage de phase compense — elle n'excuse pas.
 - **Le tempo porte un biais systématique de +0,6 BPM**, dont la cause n'est pas trouvée.
   Mesuré sur huit tempos fabriqués exactement entre 82 et 120 : l'écart moyen est de
   0,60 BPM et le pire de 0,87, presque toujours vers le haut dans la plage 82–96. Sur les
