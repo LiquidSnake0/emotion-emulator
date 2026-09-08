@@ -84,6 +84,15 @@ bascule, et elle repond a une question qu'aucun des deux autres ne peut trancher
 est-il pret ?*
 
 Le seuil qui la declenche : **convergence des estimateurs, plafonnee a 30 secondes.**
+`KnowledgeGate` la mesure, `SignalWorker` l'emet une fois, `/ready` la rend interrogeable
+a tout moment — par exemple pour afficher une jauge en rouvrant l'application.
+
+    GET /ready
+    { "pret": true, "motif": "convergence", "avancement": 1, "secondesRestantes": 0,
+      "tempo": 96.3, "confianceTempsFort": 0.7, "confianceStructure": 0, "fiabilite": 1 }
+
+Le motif compte autant que le drapeau : `convergence` dit qu'on sait, `plafond` dit qu'on
+annonce ce qu'on a. Dans le second cas, les confiances jointes disent a quoi se fier.
 
 ---
 
@@ -127,8 +136,8 @@ Le rétroprojecteur est la sortie du processus master, qui compose :
 
 ### Ce qui manque cote emulator
 
-- Le **seuil de connaissance** et l'emission du feu vert
 - Le **canal de retour** depuis le renderer
 - La reception de la **fiche** depuis `crate`
 
-Le reste — analyse, structure, gestes, transport — est en place et mesure.
+Le reste — analyse, structure, gestes, transport, seuil de connaissance et feu vert — est
+en place et mesure.

@@ -106,6 +106,10 @@ public sealed class SpectrumAnalyzer
     // filtre mais la reponse a « est-il ferme », et c'est elle qui fait clignoter un motif.
     private readonly GestureTracker _gestures = new();
 
+    // Le seuil de connaissance : quand annoncer au telephone qu'on en sait assez sur le
+    // disque en cours pour que le GPU puisse basculer dessus.
+    private readonly KnowledgeGate _gate = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -134,6 +138,12 @@ public sealed class SpectrumAnalyzer
     /// <summary>Ce que le profil des quatre temps designe, pour le reglage.</summary>
     public (int Offset, float Confidence, IReadOnlyList<float> Scores, int GridBeat) Downbeat =>
         (_profile.Offset, _profile.Confidence, _profile.Scores, _grid.Beat);
+
+    /// <summary>Ce que le systeme sait du disque en cours, et s'il en sait assez.</summary>
+    public Readiness Readiness => _gate.Current;
+
+    /// <summary>Un nouveau disque commence : tout est a reapprendre.</summary>
+    public void NewTrack() => _gate.Reset();
 
     /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
     public string LastBreak => _continuity.Reason;
@@ -381,7 +391,7 @@ public sealed class SpectrumAnalyzer
             _section.Reset();
             _arc.Reset();
             _profile.Reset();
-            if (_continuity.WasSilence) _tempo.Reset();
+            if (_continuity.WasSilence) { _tempo.Reset(); _gate.Reset(); }
         }
 
         // La signature de la mesure en cours, close a chaque debut de mesure.
@@ -411,6 +421,7 @@ public sealed class SpectrumAnalyzer
             _continuity.Trust);
 
         var gestures = _gestures.Feed(timbre.Openness, bass, timbre.Density);
+        var readiness = _gate.Feed(tMs, _tempo.Bpm, timbre.Centroid, bass, timbre.Density);
 
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
@@ -420,6 +431,7 @@ public sealed class SpectrumAnalyzer
             Timbre: timbre,
             Structure: structure,
             Gestures: gestures,
+            Readiness: readiness,
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             Flux: Clamp01(rKick / scale),

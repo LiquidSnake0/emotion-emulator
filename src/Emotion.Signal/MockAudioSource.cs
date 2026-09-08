@@ -155,7 +155,11 @@ public sealed class MockAudioSource : IAudioSource
 
         return new VisualFrame(t, rms, bands, beat, phase, _bpm,
             Hits: hits, Voices: voices, Timbre: timbre, Structure: structure,
-            Gestures: gestures);
+            Gestures: gestures,
+            // Le mock connait son propre morceau : il est pret d'emblee, et le dit. Sans
+            // cela, le feu vert ne partirait jamais en mode simule et la bascule visuelle
+            // resterait introuvable a regler sans materiel.
+            Readiness: new Readiness(1f, true, "mock", 0f));
     }
 
     private double _lastOffbeat = -1;

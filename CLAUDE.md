@@ -445,7 +445,7 @@ algorithme.**
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources, transport | **aucune** |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 84 tests | xUnit |
+| `Emotion.Signal.Tests` | 97 tests | xUnit |
 | `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**
@@ -465,6 +465,9 @@ dotnet run -c Release --project tools/Emotion.Probe -- <set.wav> [début_s] [dur
 
 Regarder l'écran renseigne sur ce qu'on voit, jamais sur ce qui décide. La sonde a
 corrigé quatre constantes devinées dès sa première exécution.
+
+`/ready` donne l'état de préparation du disque en cours ; le feu vert part aussi une fois
+par le hub, vers le téléphone. Voir `docs/systeme.md`.
 
 `http://localhost:5099` · `S` cycle visuel / superposé / signaux · `D` diagnostic ·
 `H` masque · `F` plein écran · `/health` pour l'état des tuyaux.

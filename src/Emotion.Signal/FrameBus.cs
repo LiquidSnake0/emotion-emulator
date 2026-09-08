@@ -131,8 +131,17 @@ public sealed class FrameBus
     /// Publie une image a tous les abonnes. Ne bloque jamais, n'alloue rien, ne prend
     /// aucun verrou.
     /// </summary>
+    /// <summary>
+    /// La derniere image publiee. Un endpoint qui interroge l'etat n'a pas besoin de
+    /// s'abonner au flux pour lire une valeur courante ; ecrire une reference est atomique
+    /// sur toutes les plateformes visees, donc ce raccourci ne coute rien au chemin chaud.
+    /// </summary>
+    public VisualFrame Latest { get; private set; }
+
     public void Publish(in VisualFrame frame)
     {
+        Latest = frame;
+
         // Les consommateurs en ligne d'abord : ils sont sur le chemin critique, et rien
         // ne doit s'intercaler entre l'analyse et eux.
         var inline = _inline;

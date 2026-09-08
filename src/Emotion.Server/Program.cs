@@ -103,6 +103,27 @@ app.MapDeck();
 
 // Etat des tuyaux : ce qui a ete livre, ce qui a ete jete, et le temps d'ecriture dans
 // l'anneau. Sans cette page, un visuel qui saccade reste indebuggable.
+// L'etat de preparation, interrogeable depuis le telephone. Le meme contenu part aussi
+// en notification par le hub, mais un endpoint permet de le lire a tout moment — par
+// exemple pour afficher une jauge en rouvrant l'application.
+app.MapGet("/ready", (FrameBus bus) =>
+{
+    var f = bus.Latest;
+    var r = f.Readiness;
+    return Results.Ok(new
+    {
+        pret = r.Ready,
+        motif = r.Reason,
+        avancement = r.Progress,
+        secondesRestantes = r.SecondsLeft,
+        // Ce a quoi le renderer aura le droit de se fier, et dans quelle mesure.
+        tempo = f.Bpm,
+        confianceTempsFort = f.Structure.Confidence,
+        confianceStructure = f.Structure.SectionConfidence,
+        fiabilite = f.Structure.Trust,
+    });
+});
+
 app.MapGet("/health", (FrameBus bus, GpuSink gpu) =>
 {
     var (written, mean, worst, over100, over1ms) = gpu.Stats();
