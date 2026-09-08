@@ -24,11 +24,12 @@ de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 ## Voir tourner
 
-**[Démo interactive](https://claude.ai/code/artifact/9ff0e42a-dd2f-4eb5-ac62-3ee1f99671c7)** —
-vingt-six secondes de vinyle passées dans la chaîne d'analyse, rejouées **avec le son**.
-Deux extraits : un disque seul, comme au casque pendant le calage, et deux disques
-superposés pendant une transition. Chaque forme y est commandée par une grandeur mesurée,
-et le panneau de droite montre ce que le système sait à chaque instant.
+Le mur en marche, et l'écran de réglage qui montre ce que le système sait au même instant.
+Rien n'est décoratif : chaque forme est commandée par une grandeur mesurée.
+
+Le rendu se lance sans matériel — `dotnet run --project src/Emotion.Server` fabrique un
+signal et anime la scène, ce qui permet de régler le visuel sans table de mixage ni
+platine. Voir [**Faire tourner**](#faire-tourner).
 
 <table>
 <tr>
