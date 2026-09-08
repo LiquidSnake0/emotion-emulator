@@ -56,7 +56,15 @@ public sealed class VoiceTracker
     private readonly float[] _level = new float[3];
     private readonly float[] _prev = new float[3];
     private readonly float[] _peak = [1e-3f, 1e-3f, 1e-3f];
-    private readonly float[] _pitch = [0.5f, 0.5f, 0.5f];
+    private readonly float[] _cible = [0.5f, 0.5f, 0.5f];
+
+    // Ressorts souples : un contour melodique glisse, il ne claque pas.
+    private readonly Damper[] _pitch =
+    [
+        new(6f, 0.5f), new(8f, 0.5f), new(10f, 0.5f),
+    ];
+
+    private const float FrameSeconds = 1024f / 48_000f;
 
     private readonly OnsetDetector[] _onsets =
     [
@@ -113,7 +121,7 @@ public sealed class VoiceTracker
             _onsets[0].Feed(lowRise),
             _onsets[1].Feed(midRise),
             _onsets[2].Feed(highRise),
-            _pitch[0], _pitch[1], _pitch[2]);
+            _pitch[0].Value, _pitch[1].Value, _pitch[2].Value);
     }
 
     private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;

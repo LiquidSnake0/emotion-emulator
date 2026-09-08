@@ -567,6 +567,12 @@ glisse d'un bloc, et l'arc de la basse s'élargit plutôt que de quitter le sol.
 > **Une position se déplace ; une amplitude ne fait que grossir.** C'est la seule grandeur
 > du paquet qui décrive un mouvement plutôt qu'un état.
 
+Le contour passe par **un ressort et non par une moyenne** : une moyenne exponentielle
+arrive toujours en retard et sans élan, ce qui est exactement ce qui fait qu'un mouvement
+paraît mou. Et on ne le suit qu'à proportion de ce qu'on entend — un centre de gravité
+calculé sur un registre presque muet saute au gré du bruit de fond, puis saute encore au
+retour du son.
+
 **La palette des sources est fixe d'un disque à l'autre** — sinon l'œil devrait tout
 réapprendre à chaque transition. La couleur du disque n'a pas disparu : elle teinte la
 **trame de fond et l'horizon**. L'identité du morceau devient l'ambiance, les sources
