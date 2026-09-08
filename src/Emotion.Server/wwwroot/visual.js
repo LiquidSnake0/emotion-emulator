@@ -21,7 +21,7 @@ import { ClipLibrary } from './clips.js';
 import { Diagnostics } from './diag.js';
 import { Signals } from './signals.js';
 import { Calibrate } from './calibrate.js';
-import { Spring, Pulse, FrameLerp } from './motion.js';
+import { Spring, Lue, Pulse, FrameLerp } from './motion.js';
 import { BeatClock } from './beatclock.js';
 import * as S from './shapes.js';
 
@@ -75,13 +75,20 @@ export class Visual {
     this.lerp = new FrameLerp();
     this.bandBuf = new Float32Array(12);
 
-    // Ressorts pour tout ce qui doit paraitre avoir une masse. Un lissage simple
-    // arriverait en retard et sans elan ; un ressort a une vitesse, donc de l'inertie.
-    this.bass = new Spring(14);        // la basse est lourde, elle traine un peu
-    this.voice = new Spring(22);
-    this.bells = new Spring(40);       // le xylophone est vif
-    this.level = new Spring(16);
-    this.tonal = new Spring(6);        // la texture change lentement
+    // CE QUI A UNE MASSE EST AMORTI PAR L'ANALYSE, PLUS PAR LE RENDU.
+    //
+    // Ces valeurs traversaient ici des ressorts. Ils ont ete descendus dans
+    // `Emotion.Signal.Damper`, avec les memes raideurs : le mouvement est identique, mais
+    // l'unite CUDA n'aura pas a les reimplementer — et la raideur ne vit plus qu'a un
+    // seul endroit. Garder les deux amortirait deux fois et rendrait tout mou.
+    //
+    // Le renderer ne calcule donc plus que les impulsions, qui doivent rester brutes :
+    // une impulsion lissee en amont ne serait plus une impulsion.
+    this.bass = new Lue();
+    this.voice = new Lue();
+    this.bells = new Lue();
+    this.level = new Lue();
+    this.tonal = new Spring(6);        // la tonalite n'est pas amortie en amont
 
     // OU JOUE CHAQUE REGISTRE, ET NON COMBIEN.
     //
@@ -90,9 +97,9 @@ export class Visual {
     // deplace — et une forme peut la suivre.
     //
     // Ressorts souples : c'est un contour melodique, pas une attaque. Il doit glisser.
-    this.lowPitch = new Spring(7, 0.5);
-    this.midPitch = new Spring(9, 0.5);
-    this.highPitch = new Spring(11, 0.5);
+    this.lowPitch = new Lue(0.5);
+    this.midPitch = new Lue(0.5);
+    this.highPitch = new Lue(0.5);
 
     // LA STRUCTURE NE PORTE PAS DE FORME A ELLE, ELLE GOUVERNE LES AUTRES.
     //
@@ -101,7 +108,7 @@ export class Visual {
     // a poser une interface par-dessus le visuel — une jauge, un compteur — et personne
     // ne regarde une jauge pendant un set. Elles pilotent donc le <b>comportement</b> des
     // formes existantes : leur amplitude, leur vitesse, leur accent.
-    this.tension = new Spring(4);      // une montee dure huit mesures, rien ne presse
+    this.tension = new Lue();          // ArcDetector la lisse deja, sur huit mesures
     this.drop = new Pulse(3);          // la rupture tient trois temps
     this.onOne = 0.55;                 // accent du temps fort, applique a l'onde du kick
 
@@ -111,9 +118,9 @@ export class Visual {
     //
     // Raideur basse : ces grandeurs bougent au rythme de la main du DJ, pas de la
     // musique. Une reaction vive les ferait trembler.
-    this.open = new Spring(5, 1);      // ouverture du filtre, 1 au demarrage
-    this.bright = new Spring(5, 0.5);
-    this.density = new Spring(4, 0.5);
+    this.open = new Lue(1);            // ouverture du filtre, grande ouverte au demarrage
+    this.bright = new Lue(0.5);
+    this.density = new Lue(0.5);
 
     // Impulsions, dont la duree de vie est une fraction du temps musical et non une
     // constante : sinon un effet meurt en 120 ms quel que soit le morceau, et l'ecran

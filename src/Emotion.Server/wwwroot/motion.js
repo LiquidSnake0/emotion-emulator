@@ -77,6 +77,22 @@ export class Pulse {
 }
 
 /**
+ * Une valeur deja amortie par l'analyse : le rendu ne fait que la porter.
+ *
+ * Elle remplace un ressort partout ou l'amortissement a ete descendu dans
+ * `Emotion.Signal.Damper`. Garder les deux amortirait le mouvement deux fois, et tout
+ * paraitrait mou — mais surtout, la raideur vivrait en deux endroits, ce qui finit
+ * toujours par la faire vivre de deux facons.
+ *
+ * Le renderer ne calcule donc plus qu'une chose : les impulsions. Elles, il les declenche
+ * lui-meme, parce qu'une impulsion lissee en amont ne serait plus une impulsion.
+ */
+export class Lue {
+  constructor(value = 0) { this.value = value; }
+  step(cible) { this.value = cible ?? 0; return this.value; }
+}
+
+/**
  * Garde les deux dernieres images d'analyse et rend leur interpolation a l'instant
  * courant.
  *

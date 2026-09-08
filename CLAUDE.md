@@ -577,6 +577,30 @@ la seule qui traverse** ; le piano **tourne au lieu de clignoter**, ce qui convi
 registre presque toujours présent ; et une trame verticale très pâle donne aux formes
 quelque chose à quoi se mesurer — sans elle, tout flotte.
 
+## Où vit le lissage
+
+**Dans l'analyse, plus dans le rendu.** Chaque grandeur continue traversait un ressort
+côté renderer. L'unité CUDA aurait dû les réimplémenter tous, avec les mêmes raideurs — et
+une règle qui vit en deux endroits finit par vivre de deux façons, comme le Camelot avant
+elle.
+
+| | Amorti par | Raideur |
+|---|---|---|
+| niveau, 12 bandes | `Damper` (analyse) | 16 · 20 |
+| registres grave / médium / aigu | `Damper` | 14 · 22 · 40 |
+| ouverture, brillance, densité | `TimbreTracker`, déjà | — |
+| tension | `ArcDetector`, déjà | — |
+| **kick, clap, charley, rupture** | **personne — et c'est voulu** | — |
+
+Les raideurs sont celles qu'employait le renderer : le mouvement ne change pas en changeant
+de place, et **aucune latence n'est ajoutée** puisque le ressort existait déjà.
+
+> **Les événements restent bruts.** Une impulsion lissée n'est plus une impulsion. C'est
+> la seule chose que le renderer calcule encore — il déclenche, il n'amortit plus.
+
+Côté rendu, `Lue` remplace `Spring` partout où l'amortissement est descendu : elle porte la
+valeur sans la retoucher. Garder les deux amortirait deux fois et rendrait tout mou.
+
 ## Front
 
 Le renderer est en canvas 2D sans cadriciel : 60 images par seconde, aucun DOM, aucun

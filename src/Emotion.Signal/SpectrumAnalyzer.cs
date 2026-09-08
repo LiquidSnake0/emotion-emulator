@@ -125,6 +125,27 @@ public sealed class SpectrumAnalyzer
     // filtre mais la reponse a « est-il ferme », et c'est elle qui fait clignoter un motif.
     private readonly GestureTracker _gestures = new();
 
+    // L'AMORTISSEMENT DESCEND DANS L'ANALYSE.
+    //
+    // Il vivait dans le renderer, ou chaque grandeur continue traversait un ressort avant
+    // d'etre dessinee. L'unite CUDA aurait du les reimplementer tous, avec les memes
+    // raideurs — et une regle qui vit en deux endroits finit par vivre de deux facons,
+    // comme le Camelot avant elle.
+    //
+    // Les raideurs sont celles qu'employait le renderer, pour que le mouvement ne change
+    // pas en changeant de place. Aucune latence n'est ajoutee : le ressort existait deja.
+    private readonly Damper _dLevel = new(16f);
+    private readonly Damper[] _dBands =
+    [
+        new(20f), new(20f), new(20f), new(20f), new(20f), new(20f),
+        new(20f), new(20f), new(20f), new(20f), new(20f), new(20f),
+    ];
+    private readonly Damper _dLow = new(14f);    // la basse est lourde, elle traine
+    private readonly Damper _dMid = new(22f);
+    private readonly Damper _dHigh = new(40f);   // le xylophone est vif
+
+    private const float FrameSeconds = Window / 48_000f;
+
     // Le seuil de connaissance : quand annoncer au telephone qu'on en sait assez sur le
     // disque en cours pour que le GPU puisse basculer dessus.
     private readonly KnowledgeGate _gate = new();
@@ -397,6 +418,19 @@ public sealed class SpectrumAnalyzer
                        + (voices.LowHit ? 1 : 0) + (voices.MidHit ? 1 : 0)
                        + (voices.HighHit ? 1 : 0);
         var timbre = _timbre.Feed(full, eventCount);
+
+        // Les grandeurs continues partent amorties ; les evenements restent bruts. Une
+        // impulsion lissee n'est plus une impulsion, et c'est le renderer qui les
+        // declenche — la seule chose qu'il calcule encore.
+        var dt = FrameSeconds;
+        level = _dLevel.Feed(level, dt);
+        for (var i = 0; i < bands.Length; i++) bands[i] = _dBands[i].Feed(bands[i], dt);
+        voices = voices with
+        {
+            Low = _dLow.Feed(voices.Low, dt),
+            Mid = _dMid.Feed(voices.Mid, dt),
+            High = _dHigh.Feed(voices.High, dt),
+        };
 
         // Les graves sont pris sur les bandes normalisees et non sur le RMS : c'est leur
         // poids relatif qui compte, et un morceau joue fort ne doit pas paraitre plus
