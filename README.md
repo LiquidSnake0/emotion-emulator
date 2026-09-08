@@ -734,6 +734,93 @@ donc deux fois pour un résultat moins bon.
 
 ---
 
+## Le retard que nos propres mesures ne pouvaient pas voir
+
+Après avoir retiré le lissage, le détecteur battait sur le temps mais gardait 0,185 temps
+d'erreur de phase — 127 ms, six fenêtres d'analyse. Plusieurs pistes ont été essayées et
+n'ont rien donné. La bonne question était ailleurs : **contre quoi mesure-t-on ?**
+
+Tous les indicateurs comparent les frappes à la grille, et la grille se cale sur ces mêmes
+frappes. Un décalage commun aux deux leur est invisible. Il fallait sortir.
+
+**Première référence : un métronome fabriqué.** 90 secondes à 87,85 BPM exactement, kick sur
+chaque temps, clap sur 2 et 4, charley sur les croches. La chaîne y est irréprochable :
+
+```
+  intervalles sur la grille   100 %
+  frappes bien calées         100 %
+  justesse de phase           0,004 temps = 2 ms
+  période de la grille        683 ms · tempo publié 683 ms · écart +0,0 %
+```
+
+Donc aucun défaut systématique de calcul. Le problème venait bien de la matière — ou d'autre
+chose.
+
+**Seconde référence : une autre implémentation.** `aubioonset` sur les mêmes 90 secondes, et
+la comparaison des instants. Le résultat était impossible à ignorer :
+
+| | écart médian | à ±20 ms | hasard |
+|---|---|---|---|
+| métronome | **+17,3 ms** | 60 % | 12 % |
+| macro | +26,8 ms | 17 % | 21 % |
+| live | +26,5 ms | 23 % | 12 % |
+| instamata | +29,7 ms | 15 % | 19 % |
+
+Sur Macroblank et instamata, **l'accord tombait sous le niveau du hasard**. Et surtout : le
+métronome, dont on venait de prouver l'exactitude vis-à-vis de notre propre grille, était en
+retard de dix-sept millisecondes sur le monde.
+
+Un décalage constant d'une fenêtre. La cause tenait en une ligne, sous un commentaire qui
+décrivait pourtant la bonne intention :
+
+```csharp
+var at = tMs + (long)_transient.OffsetMs;
+```
+
+Deux erreurs de même sens. La frappe est jugée sur la fenêtre **précédente** — c'est tout le
+rôle de `Lookahead`, qui attend la suivante pour confirmer un sommet — il fallait donc
+retrancher une fenêtre. Et `_transient.OffsetMs` décrit la fenêtre **courante** : on
+corrigeait la position d'une frappe avec le relevé d'une autre. On ajoutait une dizaine de
+millisecondes là où il fallait en retirer une vingtaine.
+
+```csharp
+var at = tMs - (long)_frameMs + (long)_offsetPrec;
+```
+
+| | écart médian | à ±20 ms | hasard |
+|---|---|---|---|
+| métronome | **+4,9 ms** | **97 %** | 12 % |
+| macro | +14,2 ms | **43 %** | 21 % |
+| live | +13,0 ms | **55 %** | 12 % |
+| instamata | +18,8 ms | **40 %** | 19 % |
+
+Macroblank passe de sous le hasard à deux fois le hasard.
+
+**Et nos mesures internes n'ont pas bougé d'un point** — 50 % d'intervalles justes,
+0,185 d'erreur de phase, 67 % de verrouillage, exactement comme avant. C'est logique : en
+décalant toutes les frappes de 21 ms, on décale aussi la grille qu'elles calent. Aucun de
+nos indicateurs ne pouvait trouver ce défaut, et c'est la leçon la plus utile de la journée.
+
+Le gain est réel malgré cette invisibilité, parce que l'horloge à verrouillage de phase
+**prédit** ses temps à partir de la grille : vingt millisecondes de biais sur l'origine
+étaient vingt millisecondes de retard sur chaque temps annoncé.
+
+### Deux pistes mesurées et écartées le même soir
+
+Le **domaine complexe** a été rejugé sans le lissage, qui aurait pu masquer son intérêt
+puisqu'il détruit précisément les pics d'une seule fenêtre. Même verdict : dès un poids de
+0,15 le verrouillage de Macroblank tombe de 67 à 35 %.
+
+Le **blanchiment adaptatif** (Stowell & Plumbley, 2007) traitait un vrai problème : à
+44,1 kHz une raie fait 43 Hz, donc les trois bandes du kick n'en couvrent que trois, de 43 à
+172 Hz — là où vit la basse. Un kick et une note de basse y tombent ensemble. Le blanchiment
+divise chaque raie par sa propre crête récente, ce qui permet de regarder plus large sans se
+faire noyer. Balayé de 0,3 à 3,0 : il améliore instamata et live, et dégrade le
+verrouillage de Macroblank (67 % → 43-61 %). Gardé, éteint, documenté.
+
+Le motif se répète pour la troisième fois : **le seul disque qu'on connaisse bien veut un
+détecteur étroit, les deux autres veulent un détecteur large.** Ce n'est pas du bruit.
+
 ## Le lissage qui supprimait les attaques
 
 Le détecteur d'attaques a été le maillon faible du projet pendant des semaines. Trois pistes

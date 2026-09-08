@@ -242,6 +242,49 @@ public sealed class SpectrumAnalyzer
     }
 
     private readonly ComplexFlux _fluxComplexe = new(Window / 2);
+    private readonly WhitenedFlux _fluxBlanchi = new(Window / 2);
+
+    /// <summary>Largeur d'une raie, en hertz. Depend du taux d'echantillonnage.</summary>
+    private readonly float _binHz;
+
+    /// <summary>Duree d'une fenetre, en millisecondes.</summary>
+    private readonly float _frameMs;
+
+    /// <summary>
+    /// Instant reel de la derniere frappe retenue, corrige de l'anticipation et de la
+    /// position dans la fenetre. C'est cet instant que la grille utilise, et c'est celui
+    /// qu'il faut confronter a une implementation de reference.
+    /// </summary>
+    public long FrappeMs { get; private set; }
+
+    /// <summary>
+    /// Position de l'attaque dans la fenetre PRECEDENTE.
+    ///
+    /// C'est celle-la qui compte : le detecteur juge la fenetre d'avant, jamais celle qui
+    /// vient d'arriver. Garder le releve de la fenetre courante pour dater une frappe
+    /// jugee sur la precedente revient a corriger une mesure avec le releve d'une autre.
+    /// </summary>
+    private float _offsetPrec;
+
+    /// <summary>
+    /// Part du flux blanchi dans le jugement du kick. Zero le desactive, et il ne coute
+    /// alors rien — le blanchiment n'est calcule que s'il sert.
+    ///
+    /// MESURE ET LAISSE ETEINT. Le blanchiment permet de regarder plus large que les trois
+    /// bandes du kick sans se faire noyer, et c'est theoriquement ce qu'il faut ici : a
+    /// 44,1 kHz ces trois bandes ne couvrent que trois raies, ou le kick et la basse
+    /// tombent ensemble. Balaye de 0,3 a 3,0, il ameliore instamata et live mais degrade
+    /// le verrouillage de Macroblank — 67 % sans lui, 43 a 61 % avec. Meme verdict que
+    /// pour le domaine complexe, et pour la meme raison : le seul disque qu'on connaisse
+    /// bien veut un detecteur etroit.
+    /// </summary>
+    public float PoidsBlanchi { get; set; }
+
+    /// <summary>Jusqu'ou le flux blanchi regarde, en hertz.</summary>
+    public float BlanchiHz { get; set; } = 500f;
+
+    /// <summary>La derniere valeur du flux blanchi, pour la sonde.</summary>
+    public float DernierFluxBlanchi => _fluxBlanchi.DernierTotal;
     private readonly EventProfiler _evenements = new(Window / 2);
 
     /// <summary>L'etendue de contour apprise par chaque rang. Voir <see cref="ContourRange"/>.</summary>
@@ -429,6 +472,8 @@ public sealed class SpectrumAnalyzer
     {
         _sampleRate = sampleRate;
         _frameSeconds = Window / (float)sampleRate;
+        _binHz = sampleRate / (float)Window;
+        _frameMs = _frameSeconds * 1000f;
         _tempo = new TempoTracker(sampleRate, Window);
         _accord = new GridAgreement(_evenements.Familles);
         _edges = BuildEdges(sampleRate);
@@ -527,6 +572,9 @@ public sealed class SpectrumAnalyzer
         var harmony = _harmony.Feed(samples);
         Etapes.Fin(0);
 
+        // Le releve de la fenetre qui vient d'etre jugee, avant de le remplacer par celui
+        // de la fenetre qui arrive. Voir _offsetPrec : c'est l'ancien qui date la frappe.
+        _offsetPrec = _transient.OffsetMs;
         _transient.Feed(samples, _sampleRate);
         Etapes.Fin(1);
 
@@ -660,12 +708,19 @@ public sealed class SpectrumAnalyzer
 
         var fluxC = _fluxComplexe.DernierTotal;
 
+        // Le flux blanchi regarde plus large que les trois bandes du kick, parce que le
+        // blanchiment lui permet de le faire sans se noyer. Voir WhitenedFlux.
+        if (PoidsBlanchi > 0f)
+            _fluxBlanchi.Feed(spectrum, 1, Math.Min(half, (int)(BlanchiHz / _binHz)));
+
         DernierFluxEnergie = flux;
         DernierFluxComplexe = fluxC;
 
         var onset = _onsets.Feed(FluxComplexeActif ? fluxC : flux);
         Etapes.Fin(6);                       // flux spectral et detection d'attaque
-        if (onset) _tempo.Mark(tMs);
+        // Meme correction que pour la grille : l'attaque a ete jugee sur la fenetre
+        // precedente, elle se date donc a l'endroit ou elle y tombait.
+        if (onset) _tempo.Mark(tMs - (long)_frameMs + (long)_offsetPrec);
 
         var bands = _bandPool[_bandTurn];
         _bandTurn ^= 1;
@@ -702,7 +757,9 @@ public sealed class SpectrumAnalyzer
         // complexe, lui, voit qu'une note repart d'une phase arbitraire meme quand son
         // amplitude bouge peu. Les deux sont ramenes a un rapport sans dimension avant
         // d'etre melanges, sinon le poids du melange dependrait du volume du disque.
-        var brutKick = BandRise(bands, 0, 3) + PoidsComplexe * _fluxComplexe.Rapport;
+        var brutKick = BandRise(bands, 0, 3)
+                     + PoidsComplexe * _fluxComplexe.Rapport
+                     + PoidsBlanchi * _fluxBlanchi.Rapport;
         var rKick = LissageKick ? Smooth(0, brutKick) : brutKick;
         var brutClap = BandRise(bands, 4, 9);
         var rClap = LissageAttaques ? Smooth(1, brutClap) : brutClap;
@@ -832,11 +889,46 @@ public sealed class SpectrumAnalyzer
         var stepped = _grid.Advance(tMs, _tempo.Bpm);
         if (stepped) _arc.Advance();
 
-        // La grille se cale sur l'instant reel de la frappe, pas sur celui de la fenetre
-        // qui la contient. Vingt et une millisecondes d'incertitude en moins, sur le seul
-        // etage ou la justesse de la phase decide de tout.
-        var at = tMs + (long)_transient.OffsetMs;
-        if (hits.Kick) { _grid.Sync(at); _grid.MarkKick(at); }
+        // LA GRILLE SE CALE SUR L'INSTANT REEL DE LA FRAPPE, ET LE CALCUL ETAIT FAUX.
+        //
+        // L'intention etait bonne : ne pas dater une frappe de l'instant de la fenetre qui
+        // la contient, mais de l'endroit ou elle tombe dedans. Le calcul, lui, se trompait
+        // deux fois et dans le meme sens.
+        //
+        //   1. La frappe est jugee sur la fenetre PRECEDENTE — c'est tout le role de
+        //      OnsetDetector.Lookahead, qui attend la fenetre suivante pour confirmer un
+        //      sommet. Il fallait donc retrancher une fenetre, pas partir de celle-ci.
+        //   2. `_transient.OffsetMs` decrit la fenetre COURANTE. On corrigeait la position
+        //      d'une frappe avec le releve d'une autre fenetre.
+        //
+        // On ajoutait donc une dizaine de millisecondes la ou il fallait en retirer une
+        // vingtaine.
+        //
+        // AUCUNE MESURE INTERNE NE POUVAIT LE VOIR, et c'est la lecon. Tous nos indicateurs
+        // comparent les frappes a la grille, laquelle se cale sur ces memes frappes : un
+        // decalage commun aux deux est invisible par construction. Il a fallu confronter
+        // nos instants a ceux d'une autre implementation — les attaques d'aubio, ecart
+        // median :
+        //
+        //                      avant      apres
+        //     metronome     +17,3 ms    +4,9 ms
+        //     macro         +26,8 ms   +14,2 ms
+        //     live          +26,5 ms   +13,0 ms
+        //     instamata     +29,7 ms   +18,8 ms
+        //
+        // Le metronome tranche : on savait y etre exact vis-a-vis de notre propre grille, et
+        // l'on y etait pourtant en retard de dix-sept millisecondes sur le monde.
+        //
+        // La part de nos frappes tombant a moins de vingt millisecondes d'une attaque
+        // d'aubio passe de 17 a 43 % sur Macroblank, pour un niveau de hasard de 21 % :
+        // c'est-a-dire de sous le hasard a deux fois le hasard.
+        //
+        // Un retard constant ne se voit pas a l'ecran tant qu'on ne compare rien — mais la
+        // grille s'en sert pour se caler, et l'horloge a verrouillage de phase predit ses
+        // temps a partir de cette grille. Vingt millisecondes de biais sur l'origine
+        // deviennent vingt millisecondes de retard sur chaque temps annonce.
+        var at = tMs - (long)_frameMs + (long)_offsetPrec;
+        if (hits.Kick) { FrappeMs = at; _grid.Sync(at); _grid.MarkKick(at); }
         if (hits.Clap) _grid.MarkClap(tMs);
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
         if (_novelty.Onset) _grid.MarkSection(tMs);

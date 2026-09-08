@@ -51,6 +51,21 @@ générales** — un crate de drum and bass demanderait d'autres valeurs :
 | `TempoEstimator` repli ternaire | ×2/3 | le répertoire est joué en swing |
 | `ChordChangeVote` | 0,75 | p99 de la distribution mesurée, pas une intuition |
 
+## Une mesure qui se note elle-même ne prouve rien
+
+Tous les indicateurs du détecteur — « intervalles sur la grille », « frappes bien calées »,
+« justesse de phase » — comparent les frappes à la grille, laquelle se cale sur ces mêmes
+frappes. **Un décalage commun aux deux leur est invisible par construction.**
+
+C'est ainsi qu'un retard systématique de 21 ms a survécu à des semaines de réglages : en
+interne il ne coûtait rien, et chaque tentative d'amélioration se notait contre une
+référence qui portait le même biais. Il a fallu deux confrontations extérieures pour le
+voir — un métronome fabriqué dont on connaissait la vérité, et les instants d'une
+implémentation de référence (`aubioonset`).
+
+Depuis : toute affirmation sur la justesse du détecteur doit s'appuyer sur au moins une de
+ces deux références, jamais sur les seuls indicateurs internes.
+
 ## Ce que le diagnostic a appris
 
 Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet esprit.
@@ -69,6 +84,7 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | intervalle de mesure à 149 ms | la grille recalculait sa position depuis une origine lointaine : changer la période faisait sauter le rang de seize temps | la phase s'accumule, elle ne se recalcule pas |
 | 0,90 de confiance sur du bruit blanc | confiance mesurée sur la forme de la courbe, dont la moitié vaut zéro par troncature | sur la hauteur de la corrélation, qui est absolue |
 | écart médian entre kicks = 1,21 temps | courbe moyennée sur deux fenêtres avant jugement : un pic d'une fenêtre en ressort étalé sur **deux fenêtres égales**, que le maximum local strict rejette | juger le kick sans lissage — 1,00 temps, intervalles justes 35 → 52 % |
+| toutes les frappes publiées 17 à 30 ms trop tard | l'instant valait `tMs + offset_courant` alors que la frappe est jugée sur la fenêtre **précédente**, et que l'offset à employer est celui de cette précédente-là — deux erreurs de même sens | `tMs − fenêtre + offset_précédent` ; l'accord avec aubio passe de 17 à 43 % sur macro, pour un hasard de 21 % |
 | `Phase` ne dépassait jamais 0,35 | remplie par `TempoTracker.Phase`, dont l'origine repart **à chaque attaque retenue** : un temps écoulé depuis le dernier coup, pas une position dans la mesure | la prendre sur `BeatGrid`, dont le « 1 » est voté et dont la phase avance seule |
 | le grain sortait de sa case | `◆ ◇` avancent de 18 px et `✳ ✷` de 12,57 sur une grille réglée à 9,00 : ils ne sont pas dans la fonte monospace | palette au bon chasse, découpage sur chaque case, contrôle au démarrage |
 | toute la grille battait avec le morceau | l'échelle de la scène entière était pilotée par `openness`, un descripteur de timbre calculé toutes les 21 ms et lissé par rien | seuls les gestes lents déplacent le cadre ; le filtre agit à l'intérieur des cases |

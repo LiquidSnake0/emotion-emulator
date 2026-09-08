@@ -59,6 +59,20 @@ if (args.Contains("brutmed")) analyzer.LissageAttaques = false;
 // « median » : seuil pris sur la mediane de l'historique plutot que sur sa moyenne.
 if (args.Contains("median")) analyzer.SeuilMedian = true;
 
+// « blanc=X » : part du flux blanchi dans le jugement du kick.
+// « blanchz=X » : jusqu'ou il regarde, en hertz.
+foreach (var a in args)
+{
+    if (a.StartsWith("blanc=") && float.TryParse(a[6..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var bw))
+        analyzer.PoidsBlanchi = bw;
+    if (a.StartsWith("blanchz=") && float.TryParse(a[8..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var bh))
+        analyzer.BlanchiHz = bh;
+}
+
 // « marge=X » : marge du kick au-dessus du fond, pour la balayer.
 foreach (var a in args)
     if (a.StartsWith("marge=") && float.TryParse(a[6..],
@@ -128,6 +142,8 @@ var famTotal = new int[EventFamilies.Max];
 int[] kickCase = new int[16], clapCase = new int[16], hatCase = new int[16];
 int kickTotalC = 0, clapTotalC = 0, hatTotalC = 0;
 var phaseHisto = new int[16];
+var nosTemps = new List<long>();
+var dernierBeat = -2;
 var fluxE = new List<float>();
 var fluxC = new List<float>();
 var annonces = new List<(long T, float Bpm)>();
@@ -197,9 +213,19 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     fluxE.Add(analyzer.DernierFluxEnergie);
     fluxC.Add(analyzer.DernierFluxComplexe);
 
+    // Les instants de temps de NOTRE grille, pour pouvoir la confronter a une autre.
+    if (f.Structure.Beat >= 0 && f.Structure.Beat != dernierBeat)
+    {
+        dernierBeat = f.Structure.Beat;
+        nosTemps.Add(tMs);
+    }
+
     if (f.Hits.Kick)
     {
-        kicks++; kickAt.Add(tMs);
+        kicks++;
+        // L'instant corrige, pas celui de la fenetre : c'est lui que la grille emploie et
+        // lui qu'on confronte au dehors.
+        kickAt.Add(analyzer.FrappeMs);
         syncErr.Add(MathF.Abs(analyzer.SyncError));
         offsets.Add(analyzer.TransientOffsetMs);
     }
@@ -498,6 +524,18 @@ void Motif(string nom, int[] cases, int total)
     var surTemps = (cases[0] + cases[4] + cases[8] + cases[12]) * 100f / total;
     Console.WriteLine($"  {nom,-10} |{dessin}|  4 cases {top4,3:F0} %  ·  la mieux lotie {top1,3:F0} %" +
                       $"  ·  sur les temps {surTemps,3:F0} %  ({total} frappes)");
+}
+
+// « instants=<prefixe> » : ecrit nos frappes et nos temps, pour les confronter a une
+// implementation de reference. Toutes nos autres mesures se notent contre notre propre
+// grille ; celle-ci est la seule qui puisse nous contredire.
+if (args.FirstOrDefault(a => a.StartsWith("instants="))?[9..] is { } prefixe)
+{
+    File.WriteAllLines(prefixe + "-kicks.txt", kickAt.Select(t => (t / 1000.0).ToString("F3",
+        System.Globalization.CultureInfo.InvariantCulture)));
+    File.WriteAllLines(prefixe + "-temps.txt", nosTemps.Select(t => (t / 1000.0).ToString("F3",
+        System.Globalization.CultureInfo.InvariantCulture)));
+    Console.WriteLine($"\n{kickAt.Count} frappes et {nosTemps.Count} temps ecrits vers {prefixe}-*.txt");
 }
 
 Console.WriteLine("\nla phase elle-meme, sur toutes les images  " +
