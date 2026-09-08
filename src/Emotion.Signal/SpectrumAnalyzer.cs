@@ -49,7 +49,7 @@ public sealed class SpectrumAnalyzer
     // Enveloppes lissees des trois registres. Le flux brut est en dents de scie d'une
     // fenetre a l'autre : y chercher un maximum local revient a compter le bruit. Une
     // moyenne mobile courte en fait une enveloppe ou un sommet veut dire quelque chose.
-    private readonly float[] _smooth = new float[3];
+    private readonly float[] _smooth = new float[4];
     private readonly TempoTracker _tempo = new();
 
     // L'harmonie travaille sur une fenetre quatre fois plus longue, pour separer les
@@ -138,6 +138,13 @@ public sealed class SpectrumAnalyzer
     /// <summary>Ce que le profil des quatre temps designe, pour le reglage.</summary>
     public (int Offset, float Confidence, IReadOnlyList<float> Scores, int GridBeat) Downbeat =>
         (_profile.Offset, _profile.Confidence, _profile.Scores, _grid.Beat);
+
+    /// <summary>La courbe d'autocorrelation du tempo, pour le reglage.</summary>
+    public IEnumerable<(float Bpm, float Raw, float Score)> TempoPeaks(int take = 6) =>
+        _tempo.Peaks(take);
+
+    /// <summary>Correlation brute a un tempo donne. Pour verifier une hypothese connue.</summary>
+    public float TempoRawAt(float bpm) => _tempo.RawAt(bpm);
 
     /// <summary>Ce que le systeme sait du disque en cours, et s'il en sait assez.</summary>
     public Readiness Readiness => _gate.Current;
@@ -309,10 +316,26 @@ public sealed class SpectrumAnalyzer
         // rapport, qui les rend invariants au niveau ; les aigus gardent la difference.
         var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount, ratioMode: false));
 
-        // Le tempo se mesure sur l'enveloppe du kick, pas sur les frappes qu'on en tire :
-        // l'autocorrelation n'a besoin d'aucune decision binaire, et se moque donc qu'une
-        // frappe ait ete manquee ou inventee.
-        _tempo.Feed(rKick);
+        // LE TEMPO SE MESURE AVANT LA SEPARATION, SUR LE SPECTRE ENTIER.
+        //
+        // C'est le meme raisonnement que pour le timbre, et il a fallu une verite terrain
+        // pour le voir. Sur un morceau de Macroblank donne a 90 BPM, la separation
+        // faisait disparaitre la pulsation : correlation 0,066 a 90 BPM une fois separe,
+        // contre 0,226 a 85 BPM sur le signal complet. Le pic dominant tombait a 108, un
+        // tempo qui n'existe pas dans ce morceau.
+        //
+        // La raison tient au repertoire. Le barber beats etouffe et filtre ses kicks
+        // jusqu'a les noyer ; ce que HPSS retient comme « percussif » y est alors surtout
+        // du crepitement de bande, qui n'a aucune periode. La pulsation, elle, est portee
+        // par le morceau <b>entier</b> — par la basse, par les accords qui pulsent, par
+        // tout ce que la separation met de cote.
+        //
+        // La separation reste indispensable ailleurs : sans elle, le piano declenche les
+        // claps. Elle sert donc a decider <i>ce qui frappe</i>, jamais a decider <i>a
+        // quelle vitesse ca tourne</i>.
+        var pulse = 0f;
+        for (var i = 1; i < kickBins; i++) pulse += full[i];
+        _tempo.Feed(Smooth(3, PulseRise(pulse)));
 
         var kick = _kick.Feed(rKick);
         var clap = _clap.Feed(rClap);
@@ -466,6 +489,24 @@ public sealed class SpectrumAnalyzer
     /// au-dela, l'attaque s'etale et le sommet se deplace, donc l'effet visuel arrive
     /// en retard sur ce qu'on entend.
     /// </summary>
+    /// <summary>
+    /// Montee de l'energie grave du spectre complet, en rapport contre un masque — meme
+    /// mecanique que pour les registres, et pour la meme raison : un rapport est invariant
+    /// au niveau, un masque se laisse depasser par ce qui est plus fort.
+    /// </summary>
+    private float PulseRise(float energy)
+    {
+        var ratio = energy / (_pulseMask + 1f);
+        if (_pulseAge >= MaskHold) _pulseMask *= MaskDecay;
+        if (energy > _pulseMask) { _pulseMask = energy; _pulseAge = 0; }
+        _pulseAge++;
+
+        return ratio > 1f ? ratio - 1f : 0f;
+    }
+
+    private float _pulseMask;
+    private int _pulseAge;
+
     private float Smooth(int slot, float v)
     {
         var s = (_smooth[slot] + v) * 0.5f;

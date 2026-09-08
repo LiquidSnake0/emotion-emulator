@@ -29,7 +29,11 @@ var exported = new List<string>();
 var (mono, rate) = Wav.ReadMono(path, startS, lengthS);
 Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} s a {rate} Hz");
 
-var analyzer = new SpectrumAnalyzer(rate);
+// Cinquieme argument : « nosep » coupe la separation harmonique/percussive, pour savoir
+// si un tempo introuvable manque au signal ou lui a ete retire en chemin.
+var separate = !(args.Length > 4 && args[4] == "nosep");
+var analyzer = new SpectrumAnalyzer(rate, separate);
+Console.WriteLine(separate ? "separation active" : "separation COUPEE");
 const int hop = SpectrumAnalyzer.Window;
 
 var barStarts = new List<long>();
@@ -191,7 +195,13 @@ if (syncErr.Count > 4)
     var m = syncErr.Average();
     var sd = MathF.Sqrt(syncErr.Sum(e => (e - m) * (e - m)) / syncErr.Count);
     var beatMs = analyzer.Bpm is { } b3 ? 60_000f / b3 : 625f;
-    Console.WriteLine($"periode de la grille  mediane {Median(gridMs):F0} ms" +
+    Console.WriteLine("\ncourbe du tempo, meilleures periodes :");
+foreach (var (pb, raw, sc) in analyzer.TempoPeaks(6))
+    Console.WriteLine($"   {pb,6:F1} BPM   correlation {raw,6:F3}   score {sc,6:F3}");
+Console.WriteLine("   —— hypotheses connues ——");
+foreach (var t in new[] { 87f, 90f, 93f, 96f, 104f, 108f, 117f, 45f, 180f })
+    Console.WriteLine($"   {t,6:F1} BPM   correlation {analyzer.TempoRawAt(t),6:F3}");
+Console.WriteLine($"periode de la grille  mediane {Median(gridMs):F0} ms" +
     (tempoMs.Count > 0 ? $"  ·  tempo publie {Median(tempoMs):F0} ms  ·  ecart {100f * (Median(gridMs) - Median(tempoMs)) / Median(tempoMs):+0.0;-0.0} %" : "  ·  tempo jamais publie"));
 Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F0} ms" +
                       $"  ·  dispersion {sd:F3}  ·  median {Median(syncErr):F3}");

@@ -152,6 +152,43 @@ ni le beat tracking ni le HPSS. Le C++ reste justifié **pour le rendu GPU uniqu
 conteneuriser l'analyse ajouterait un runtime et une frontière IPC pour un gain nul,
 l'écriture d'un message coûtant 2,9 µs.
 
+## Deux corrections trouvées par une vérité terrain
+
+Selim donne un morceau de Macroblank à **87 BPM**. Le système en annonçait **108,4**.
+Deux défauts empilés, dont aucun n'était visible sur le set.
+
+### 1. La séparation détruisait la pulsation
+
+```
+                        90 BPM        108 BPM
+avec HPSS               0,066         0,310      ← le mauvais tempo domine
+sans HPSS               0,226 (85)    0,144
+```
+
+Le barber beats étouffe et filtre ses kicks jusqu'à les noyer. Ce que HPSS retient comme
+« percussif » y est alors surtout du **crépitement de bande**, qui n'a aucune période. La
+pulsation est portée par le morceau *entier* — la basse, les accords qui pulsent, tout ce
+que la séparation met de côté.
+
+> **La séparation sert à décider *ce qui frappe*, jamais *à quelle vitesse ça tourne*.**
+> Le tempo se mesure donc avant elle, sur le spectre complet — exactement comme le timbre,
+> et pour la même raison.
+
+### 2. La fenêtre de Rayleigh est trop plate
+
+Une fois la pulsation retrouvée, 85,2 BPM restait battu par 127,8 — soit **exactement son
+triolet**, et le répertoire est joué en swing. La pondération classique du domaine donnait
+0,80 à 128 contre 0,82 à 85 : autant dire rien.
+
+L'oreille juge les tempos en **rapports**, pas en différences : entre 60 et 70 il y a le
+même intervalle qu'entre 120 et 140. La préférence est donc gaussienne en logarithme du
+tempo, à un quart d'octave d'écart-type — comme le sont déjà les bandes et le centroïde.
+
+| Vérité terrain | Avant | Après |
+|---|---|---|
+| Macroblank, 87 BPM (Selim) | 108,4 | **87,6** |
+| le set, 96,1 BPM (`aubiotrack`) | 96,6 | 94,2 |
+
 ## Le tempo, par autocorrélation
 
 L'ancienne méthode votait sur les écarts entre attaques **consécutives**. Cette seule

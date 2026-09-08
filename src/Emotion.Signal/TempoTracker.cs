@@ -62,9 +62,11 @@ public sealed class TempoTracker
     /// </summary>
     private const float PreferredBpm = 90f;
 
-    /// <summary>Poids minimal de la preference : ce qu'elle laisse a une periode qu'elle
-    /// n'aime pas. A zero elle deciderait seule, a un elle ne servirait a rien.</summary>
-    private const float PreferFloor = 0.55f;
+    /// <summary>
+    /// Largeur de la preference, en octaves de tempo. Un quart d'octave separe 90 BPM de
+    /// 107 d'un cote et de 76 de l'autre.
+    /// </summary>
+    private const float PreferWidth = 0.25f;
 
     /// <summary>
     /// Correlation valant certitude. Le bruit produit environ 0,05 sur huit secondes
@@ -107,6 +109,27 @@ public sealed class TempoTracker
     /// <summary>Nettete du pic, 0 a 1. Sous <see cref="PublishAbove"/> on ne dit rien.</summary>
     public float Confidence { get; private set; }
 
+    /// <summary>
+    /// Les meilleures periodes de la courbe, en BPM, avec leur correlation brute et leur
+    /// score pondere. Pour le reglage : savoir si une hypothese est absente ou seulement
+    /// battue change entierement le diagnostic.
+    /// </summary>
+    public IEnumerable<(float Bpm, float Raw, float Score)> Peaks(int take = 6)
+    {
+        var idx = Enumerable.Range(0, _score.Length).ToList();
+        idx.Sort((a, b) => _score[b].CompareTo(_score[a]));
+
+        foreach (var i in idx.Take(take))
+            yield return (60_000f / ((i + _minLag) * _frameMs), _raw[i], _score[i]);
+    }
+
+    /// <summary>Correlation brute a une periode donnee, en BPM. Pour le reglage.</summary>
+    public float RawAt(float bpm)
+    {
+        var lag = (int)MathF.Round(60_000f / bpm / _frameMs) - _minLag;
+        return lag >= 0 && lag < _raw.Length ? _raw[lag] : 0f;
+    }
+
     public TempoTracker(int sampleRate = 48_000, int window = SpectrumAnalyzer.Window)
     {
         _frameMs = window * 1000f / sampleRate;
@@ -120,29 +143,28 @@ public sealed class TempoTracker
         _raw = new float[_score.Length];
         _prefer = new float[_score.Length];
 
-        // Fenetre de Rayleigh, la ponderation classique du domaine. Elle vaut zero a
-        // periode nulle, culmine sur le tempo prefere et decroit lentement au-dela — ce
-        // qui penalise davantage les periodes trop courtes que les trop longues, dans le
-        // bon sens : entendre un morceau deux fois trop vite est l'erreur la plus commune.
-        var beta = 60_000f / PreferredBpm / _frameMs;
-        var peak = 0f;
+        // PREFERENCE LOG-NORMALE, ET NON UNE FENETRE DE RAYLEIGH.
+        //
+        // La Rayleigh est la ponderation classique du domaine et elle ne convient pas ici,
+        // pour une raison mesurable : elle est trop plate. Sur un morceau donne a 90 BPM
+        // par son proprietaire, elle accordait 0,80 a l'hypothese 128 contre 0,82 a
+        // l'hypothese 85 — autant dire rien, alors que 128 est exactement le triolet de 85
+        // et que le repertoire est joue en swing. Le mauvais tempo l'emportait.
+        //
+        // L'oreille juge les tempos en <b>rapports</b> et non en differences : entre 60 et
+        // 70 il y a le meme intervalle qu'entre 120 et 140. La preference doit donc etre
+        // gaussienne en logarithme du tempo, comme le sont deja les bandes et le
+        // centroide dans ce projet.
+        //
+        // A un quart d'octave d'ecart-type, le triolet d'un tempo prefere ne pese plus
+        // qu'un huitieme de lui — assez pour le battre a correlation comparable, pas assez
+        // pour interdire un tempo franchement hors zone de s'imposer avec un pic net.
         for (var i = 0; i < _prefer.Length; i++)
         {
-            var tau = (_minLag + i) / beta;
-            _prefer[i] = tau * MathF.Exp(-tau * tau / 2f);
-            if (_prefer[i] > peak) peak = _prefer[i];
+            var bpm = 60_000f / ((_minLag + i) * _frameMs);
+            var octaves = MathF.Log2(bpm / PreferredBpm) / PreferWidth;
+            _prefer[i] = MathF.Exp(-octaves * octaves / 2f);
         }
-
-        // ELLE DOIT PENCHER, PAS DECIDER.
-        //
-        // Employee brute, la fenetre ecrase la mesure : trois passages differents d'un
-        // meme set rendaient 96,2, 96,8 et 95,2 BPM — trois morceaux differents ne
-        // peuvent pas avoir presque le meme tempo, c'etait la preference qu'on lisait et
-        // non le son. On la ramene donc entre <see cref="PreferFloor"/> et un : elle
-        // departage deux hypotheses voisines en force, ce pour quoi elle est faite, sans
-        // pouvoir imposer sa zone a un pic franc qui dit autre chose.
-        for (var i = 0; i < _prefer.Length; i++)
-            _prefer[i] = PreferFloor + (1f - PreferFloor) * (_prefer[i] / peak);
     }
 
     /// <summary>
