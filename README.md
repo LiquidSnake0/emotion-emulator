@@ -944,6 +944,34 @@ Chaque décision sert la latence :
 256 octets à 47 messages par seconde font 12 Ko/s : **la bande passante n'est pas le
 sujet, la latence l'est**, et une structure plate se lit d'un bloc.
 
+### Le canal de retour : mesurer la moitié qu'on ignore
+
+Le budget de latence est chiffré jusqu'au paquet — **48 ms** — et estimé au-delà. Ce qui
+vient après (lecture du paquet, rendu, affichage) n'a jamais été mesuré, et **une estimation
+ne se règle pas**.
+
+Le retour ne pilote rien, il mesure. L'unité de rendu y publie, une fois par image : la
+séquence du paquet traité, son horodatage, le temps écoulé jusqu'à la fin du rendu, sa
+cadence, et combien d'images elle a sautées. **64 octets, une ligne de cache.**
+
+```csharp
+[FieldOffset(0)]  public uint  Magic;         // « EMUR »
+[FieldOffset(4)]  public uint  Sequence;      // relie les deux sens
+[FieldOffset(8)]  public long  PacketTimeMs;
+[FieldOffset(16)] public float RenderMs;      // t1 + t2, mesurés
+[FieldOffset(20)] public float Fps;
+[FieldOffset(24)] public uint  Dropped;
+[FieldOffset(28)] public byte  Health;
+```
+
+**Un compteur de version plutôt qu'un verrou, et un seul emplacement plutôt qu'un anneau.**
+À l'aller, aucune image ne doit se perdre en silence, d'où l'anneau. Au retour c'est
+l'inverse : seul le dernier état compte, et une mesure vieille de trois images ne vaut rien.
+L'écrivain incrémente la version avant et après son écriture ; le lecteur relit tant qu'elle
+a bougé ou qu'elle est impaire. **Ni l'un ni l'autre n'attend jamais**, et aucun ne peut voir
+une structure à moitié écrite — vérifié par un test qui fait tourner les deux en parallèle
+sur 20 000 échanges et exige zéro lecture panachée.
+
 ### L'anneau partagé, sans verrou
 
 Le transport vers le processus CUDA. Un socket coûte 10 à 20 µs par message, en appels
