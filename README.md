@@ -818,8 +818,33 @@ divise chaque raie par sa propre crête récente, ce qui permet de regarder plus
 faire noyer. Balayé de 0,3 à 3,0 : il améliore instamata et live, et dégrade le
 verrouillage de Macroblank (67 % → 43-61 %). Gardé, éteint, documenté.
 
-Le motif se répète pour la troisième fois : **le seul disque qu'on connaisse bien veut un
-détecteur étroit, les deux autres veulent un détecteur large.** Ce n'est pas du bruit.
+### Il n'y avait pas de « Macroblank contre les autres »
+
+Ce partage — un disque qui veut un détecteur étroit, deux qui en veulent un large — a tenu
+une soirée. Il était faux, et il venait des indicateurs internes.
+
+Rejugé contre aubio, le blanchiment améliore la **justesse** sur les trois. Validé ensuite
+sur un album entier de Macroblank, dix morceaux jamais servis à régler quoi que ce soit :
+
+| | étroit | blanchi 0,8 | |
+|---|---|---|---|
+| justesse (accord avec aubio, moins le hasard) | +19 p | **+28 p** | gagne sur 8/10 |
+| régularité (sans consulter aucune grille) | 37 % | **41 %** | gagne sur 7/10 |
+| verrouillage de la grille | **43 %** | 36 % | **perd sur 8/10** |
+
+**Les trois lignes sont vraies en même temps**, et c'est la leçon. La justesse mesure « est-ce
+un vrai événement », jamais « est-ce le bon ». Le blanchiment trouve davantage d'attaques
+réelles — c'est vérifié contre une implémentation indépendante — mais ce sont des attaques
+quelconques du bas-médium, pas la pulsation. La grille reçoit alors un mélange de temps et de
+contretemps et lâche : 84 → 42 % sur une piste, 54 → 20 % sur une autre.
+
+Or c'est le verrouillage qui fait le visuel, puisque l'horloge ne peut prédire — donc
+anticiper le retard — que tant qu'elle tient la grille. **L'étroit reste le défaut**, en
+sachant désormais que ce n'est pas parce qu'il voit mieux.
+
+Ce qui manque pour trancher vraiment : une mesure extérieure de la **pulsation**, et non des
+événements. Ni la justesse ni le verrouillage ne la donnent — la première ignore la
+régularité, le second se juge contre une grille calée sur ce qu'il note.
 
 ## Le lissage qui supprimait les attaques
 

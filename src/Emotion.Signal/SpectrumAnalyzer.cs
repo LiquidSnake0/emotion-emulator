@@ -270,13 +270,41 @@ public sealed class SpectrumAnalyzer
     /// Part du flux blanchi dans le jugement du kick. Zero le desactive, et il ne coute
     /// alors rien — le blanchiment n'est calcule que s'il sert.
     ///
-    /// MESURE ET LAISSE ETEINT. Le blanchiment permet de regarder plus large que les trois
-    /// bandes du kick sans se faire noyer, et c'est theoriquement ce qu'il faut ici : a
-    /// 44,1 kHz ces trois bandes ne couvrent que trois raies, ou le kick et la basse
-    /// tombent ensemble. Balaye de 0,3 a 3,0, il ameliore instamata et live mais degrade
-    /// le verrouillage de Macroblank — 67 % sans lui, 43 a 61 % avec. Meme verdict que
-    /// pour le domaine complexe, et pour la meme raison : le seul disque qu'on connaisse
-    /// bien veut un detecteur etroit.
+    /// MESURE SUR TREIZE MORCEAUX, ET LAISSE ETEINT — MAIS PAS POUR LA RAISON QU'ON CROYAIT.
+    ///
+    /// Le blanchiment permet de regarder plus large que les trois bandes du kick sans se
+    /// faire noyer, et c'est theoriquement ce qu'il faut ici : a 44,1 kHz ces trois bandes
+    /// ne couvrent que trois raies, de 43 a 172 Hz, ou le kick et la basse tombent ensemble.
+    ///
+    /// Juge d'abord sur nos propres indicateurs, il paraissait n'aider que deux disques sur
+    /// trois — d'ou l'idee, tenace pendant une soiree, que « Macroblank veut un detecteur
+    /// etroit et les autres un large ». Rejuge contre aubio, le verdict s'inverse : la part
+    /// de nos frappes qui coincide avec une attaque reelle monte sur les trois.
+    ///
+    /// VALIDATION SUR DIX MORCEAUX NEUFS. Un album entier de Macroblank, jamais servi a
+    /// regler quoi que ce soit, 90 s pris au milieu de chaque piste :
+    ///
+    /// <code>
+    ///                        etroit   blanchi 0,8
+    ///   justesse (aubio)      +19 p      +28 p     gagne sur 8/10
+    ///   regularite             37 %       41 %     gagne sur 7/10
+    ///   verrouillage           43 %       36 %     PERD sur 8/10
+    /// </code>
+    ///
+    /// LES DEUX SONT VRAIS, ET C'EST LA LECON. La justesse mesure « est-ce un vrai
+    /// evenement », jamais « est-ce le bon ». Le blanchiment trouve davantage d'attaques
+    /// reelles — c'est verifie contre une implementation independante — mais ce sont des
+    /// attaques quelconques du bas-medium et non la pulsation. La grille recoit alors un
+    /// melange de temps et de contretemps, et lache : 84 a 42 % sur une piste, 54 a 20 %
+    /// sur une autre.
+    ///
+    /// Or c'est le verrouillage qui fait le visuel, puisque l'horloge ne peut predire —
+    /// donc anticiper le retard — que tant qu'elle tient la grille. On garde donc l'etroit
+    /// par defaut, en sachant desormais que ce n'est pas parce qu'il voit mieux.
+    ///
+    /// CE QUI MANQUE POUR TRANCHER VRAIMENT : une mesure exterieure de la PULSATION, et
+    /// non des evenements. Ni la justesse ni le verrouillage ne la donnent — la premiere
+    /// ignore la regularite, le second se juge contre une grille calee sur ce qu'il note.
     /// </summary>
     public float PoidsBlanchi { get; set; }
 

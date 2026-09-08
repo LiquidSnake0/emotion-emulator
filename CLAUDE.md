@@ -66,6 +66,22 @@ implémentation de référence (`aubioonset`).
 Depuis : toute affirmation sur la justesse du détecteur doit s'appuyer sur au moins une de
 ces deux références, jamais sur les seuls indicateurs internes.
 
+## Deux mesures extérieures, et ce qu'elles ne disent pas
+
+- **Le métronome fabriqué** — 90 s à un tempo exact — dit si la chaîne a un défaut
+  systématique. Elle n'en a pas : 100 % d'intervalles justes, 2 ms d'erreur de phase.
+- **`aubioonset`** dit si nos frappes tombent sur de vrais événements. Toujours reporter le
+  niveau de hasard : avec 477 attaques sur 90 s et une fenêtre de ±20 ms, aubio couvre déjà
+  20 % du temps.
+
+**Aucune des deux ne mesure la pulsation.** La justesse dit « est-ce un vrai événement »,
+jamais « est-ce le bon » — un détecteur qui tire sur toutes les attaques y excelle et rend la
+grille inutilisable. C'est exactement ce qui arrive au blanchiment adaptatif : +9 points de
+justesse, −7 points de verrouillage.
+
+Tant que cette troisième mesure n'existe pas, **le verrouillage tranche**, parce que c'est lui
+qui permet à l'horloge de prédire — et donc d'annuler la latence.
+
 ## Ce que le diagnostic a appris
 
 Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet esprit.
