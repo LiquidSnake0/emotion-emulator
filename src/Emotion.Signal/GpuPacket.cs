@@ -129,7 +129,14 @@ public struct GpuPacket
     [FieldOffset(106)] public byte Buildup;
 
     /// <summary>
-    /// Drapeaux de structure : 1 rupture, 2 debut de mesure, 4 debut de phrase.
+    /// Drapeaux de structure et de geste, en un octet.
+    ///
+    /// Structure : 1 rupture, 2 debut de mesure, 4 debut de phrase.
+    /// Gestes : 8 filtre ferme, 16 basse coupee, 32 passage dense.
+    ///
+    /// Les gestes sont des etats a hysteresis, pas des seuils bruts : entre les deux
+    /// bornes, rien ne bascule. Un bit qui changerait plusieurs fois par seconde ferait
+    /// clignoter le motif qu'il commande.
     /// </summary>
     [FieldOffset(107)] public byte StructureBits;
 
@@ -189,6 +196,10 @@ public struct GpuPacket
     public const byte BarBit = 2;
     public const byte PhraseBit = 4;
 
+    public const byte FilterClosedBit = 8;
+    public const byte BassCutBit = 16;
+    public const byte DenseBit = 32;
+
     public static GpuPacket From(in VisualFrame f, TrackContext track, uint sequence)
     {
         var p = new GpuPacket
@@ -233,6 +244,9 @@ public struct GpuPacket
         if (f.Structure.Drop) p.StructureBits |= DropBit;
         if (f.Structure.BarStart) p.StructureBits |= BarBit;
         if (f.Structure.PhraseStart) p.StructureBits |= PhraseBit;
+        if (f.Gestures.FilterClosed) p.StructureBits |= FilterClosedBit;
+        if (f.Gestures.BassCut) p.StructureBits |= BassCutBit;
+        if (f.Gestures.Dense) p.StructureBits |= DenseBit;
         p.PhraseBars = (byte)f.Structure.PhraseBars;
         p.BarsToBoundary = (byte)Math.Clamp(f.Structure.BarsToBoundary, 0, 255);
         p.SectionSure = (byte)Math.Clamp(f.Structure.SectionConfidence * 255f, 0f, 255f);

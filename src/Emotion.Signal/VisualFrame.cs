@@ -82,6 +82,7 @@ public readonly record struct VisualFrame(
     Voices Voices = default,
     Timbre Timbre = default,
     Structure Structure = default,
+    Gestures Gestures = default,
     float Novelty = 0f,
     bool NoveltyOnset = false,
     float Blend = 0f,

@@ -136,9 +136,9 @@ public class MockAudioSourceTests
         long last = -1;
 
         var sawVoice = false; var sawTimbre = false; var sawStructure = false;
-        var sawBar = false; var sawHit = false;
+        var sawBar = false; var sawHit = false; var sawGesture = false;
 
-        for (long t = 0; t < 4_000; t += 21)
+        for (long t = 0; t < 30_000; t += 21)
         {
             var f = mock.At(t, ref last);
             if (f.Voices.Mid > 0f || f.Voices.Low > 0f) sawVoice = true;
@@ -146,6 +146,7 @@ public class MockAudioSourceTests
             if (f.Structure.Confidence > 0f) sawStructure = true;
             if (f.Structure.BarStart) sawBar = true;
             if (f.Hits.Any) sawHit = true;
+            if (f.Gestures.FilterClosed || f.Gestures.Dense) sawGesture = true;
         }
 
         Assert.True(sawHit, "aucune frappe");
@@ -153,5 +154,6 @@ public class MockAudioSourceTests
         Assert.True(sawTimbre, "aucune couleur de son");
         Assert.True(sawStructure, "aucune structure");
         Assert.True(sawBar, "aucun debut de mesure");
+        Assert.True(sawGesture, "aucun geste");
     }
 }

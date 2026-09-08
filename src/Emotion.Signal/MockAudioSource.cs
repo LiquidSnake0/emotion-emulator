@@ -145,8 +145,17 @@ public sealed class MockAudioSource : IAudioSource
             BarStart: barStart,
             PhraseStart: barStart && bar == 0);
 
+        // Les gestes, deduits du meme cycle : quand le filtre se ferme, l'etat suit. Le
+        // mock doit remplir le contrat entier, sous peine de laisser l'ecran eteint en
+        // mode simule — cela s'est deja produit deux fois.
+        var gestures = new Gestures(
+            FilterClosed: openness < 0.55f,
+            BassCut: bands[0] < 0.12f,
+            Dense: timbre.Density > 0.55f);
+
         return new VisualFrame(t, rms, bands, beat, phase, _bpm,
-            Hits: hits, Voices: voices, Timbre: timbre, Structure: structure);
+            Hits: hits, Voices: voices, Timbre: timbre, Structure: structure,
+            Gestures: gestures);
     }
 
     private double _lastOffbeat = -1;

@@ -72,6 +72,9 @@ public sealed class TempoTracker
     /// </summary>
     private const float DecisiveCorrelation = 0.35f;
 
+    /// <summary>Pas minimal du tempo publie, en BPM. Sous cet ecart, rien ne bouge.</summary>
+    private const float TempoStep = 1f;
+
     private const float PublishAbove = 0.35f;
 
     private readonly float[] _history;
@@ -293,10 +296,16 @@ public sealed class TempoTracker
         var bpm = 60_000f / (lag * _frameMs);
         if (bpm < MinBpm || bpm > MaxBpm) { Bpm = null; return; }
 
-        // Hysteresis : tant que la nouvelle valeur est a moins d'un pour cent, on garde
-        // l'ancienne. Un tempo qui bouge de rien fait bouger toute la grille, et l'oeil
-        // voit ce flottement bien avant de voir l'erreur qu'il corrige.
-        Bpm = Bpm is { } previous && MathF.Abs(bpm - previous) < previous * 0.01f
+        // Hysteresis d'un BPM, en valeur absolue et non en pourcentage.
+        //
+        // C'est la formulation de Selim, et elle est meilleure : « passer de 93 a 94 ca va
+        // meme pas se sentir ». Le seuil du perceptible est un ecart de tempo, pas une
+        // proportion — un pourcentage rendrait la grille plus nerveuse sur un morceau lent
+        // que sur un morceau rapide, alors que l'oreille les juge pareil.
+        //
+        // Un tempo qui bouge de rien fait bouger toute la grille, et l'oeil voit ce
+        // flottement bien avant de voir l'erreur qu'il corrige.
+        Bpm = Bpm is { } previous && MathF.Abs(bpm - previous) < TempoStep
             ? previous
             : bpm;
     }

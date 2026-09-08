@@ -102,6 +102,10 @@ public sealed class SpectrumAnalyzer
     // echantillon et un kick au dernier sont annonces au meme instant, a 21 ms pres.
     private readonly TransientLocator _transient = new();
 
+    // Les gestes ramenes a des etats stables. Ce qui flotte n'est pas la valeur d'un
+    // filtre mais la reponse a « est-il ferme », et c'est elle qui fait clignoter un motif.
+    private readonly GestureTracker _gestures = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -406,6 +410,8 @@ public sealed class SpectrumAnalyzer
             _section.Confidence,
             _continuity.Trust);
 
+        var gestures = _gestures.Feed(timbre.Openness, bass, timbre.Density);
+
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
@@ -413,6 +419,7 @@ public sealed class SpectrumAnalyzer
             Voices: voices,
             Timbre: timbre,
             Structure: structure,
+            Gestures: gestures,
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             Flux: Clamp01(rKick / scale),
