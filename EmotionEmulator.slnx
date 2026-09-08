@@ -3,6 +3,10 @@
     <Project Path="src/Emotion.Server/Emotion.Server.csproj" />
     <Project Path="src/Emotion.Signal/Emotion.Signal.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Emotion.Probe/Emotion.Probe.csproj" />
+    <Project Path="tools/Emotion.Pulse/Emotion.Pulse.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Emotion.Signal.Tests/Emotion.Signal.Tests.csproj" />
   </Folder>

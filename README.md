@@ -734,6 +734,69 @@ donc deux fois pour un résultat moins bon.
 
 ---
 
+## Mesurer la pulsation, et non les événements
+
+Le projet avait deux familles d'indicateurs, et aucune ne répondait à la question qui décide
+du détecteur.
+
+Les **indicateurs internes** comparent les frappes à la grille, laquelle se cale sur ces
+mêmes frappes : un défaut commun aux deux leur est invisible, et c'est ainsi qu'un retard de
+21 ms a survécu des semaines. La **confrontation à `aubioonset`** répond « est-ce un vrai
+événement », jamais « est-ce le *bon* ». Un détecteur qui tirerait sur toutes les attaques du
+morceau y excellerait tout en rendant la grille inutilisable — c'est exactement ce qu'a fait
+le blanchiment adaptatif.
+
+`tools/Emotion.Pulse` pose la troisième question : **ces instants forment-ils un pouls ?**
+
+### Sans tolérance, et sans référence
+
+Une période étant donnée, on replie chaque instant sur un cercle — un tour par période — et
+l'on somme les vecteurs unitaires. S'ils tombent tous au même endroit du cycle ils
+s'additionnent ; s'ils sont dispersés ils s'annulent. C'est la statistique de Rayleigh, et
+elle a deux vertus : **aucune fenêtre de tolérance à défendre**, et un niveau de hasard qui se
+calcule au lieu de s'estimer — √π / 2√n pour n instants.
+
+Trois pièges ont dû être traités, et chacun a laissé une trace mesurée dans le code.
+
+**Les sous-divisions.** Des instants posés sur une grille de période P tombent aussi,
+exactement, sur une grille de P/2 et de P/3. La force ne peut donc que croître quand la
+période raccourcit, et un simple maximum choisirait toujours la plus courte période explorée.
+On retient la plus longue des meilleures — puis on affine, parce que la tolérance de 3 % qui
+protège des octaves coûtait 1,5 ms de précision, soit 0,13 temps de dérive sur soixante
+frappes.
+
+**La dérive de tempo.** Mesurée sur un vrai morceau, la force valait **0,062 à 690 ms et
+0,268 à 696 ms**. Huit dixièmes de pour cent, et le score s'effondre : il y a cent trente
+temps dans quatre-vingt-dix secondes, donc 0,8 % d'erreur accumule un temps entier de dérive.
+Une mesure globale exigerait un tempo constant au millième — ce qu'un vinyle joué au fader
+n'est jamais. On découpe donc en fenêtres de quinze secondes et l'on prend la médiane.
+
+**La régularité n'est pas la justesse.** Un détecteur qui tire sur les contretemps a des
+intervalles impeccables et un visuel faux. L'accord contre un pouls de référence vaut alors
+**−1** : c'est la seule grandeur du projet qui sache distinguer ce cas d'un détecteur juste.
+
+### Ce que l'instrument dit du détecteur
+
+Validé d'abord là où la réponse est connue — sur le métronome fabriqué : force **0,973**,
+stabilité **100 %**, 87,3 BPM pour un vrai 87,85.
+
+Puis sur les treize morceaux, en comparant les deux détecteurs en litige :
+
+| | force | stabilité |
+|---|---|---|
+| étroit | 0,623 | 33 % |
+| blanchi 0,8 | 0,645 | 34 % |
+| le blanchiment gagne sur | 8/13 | 4/13 |
+
+**Match nul.** La seule mesure qui pose la bonne question dit que le blanchiment ne change
+rien à la pulsation — il trouve simplement plus d'événements, dont beaucoup ne sont pas des
+temps. L'étroit reste, cette fois pour une raison démontrée et non par défaut.
+
+Et le vrai chiffre est ailleurs : **33 % de stabilité sur du disque contre 100 % sur le
+métronome.** Une fenêtre de quinze secondes sur trois seulement retrouve la même période que
+les autres. C'est l'état réel du détecteur, c'est enfin une cible qui ne se juge pas
+elle-même, et c'est là-dessus que tout travail suivant devra se mesurer.
+
 ## Le retard que nos propres mesures ne pouvaient pas voir
 
 Après avoir retiré le lissage, le détecteur battait sur le temps mais gardait 0,185 temps

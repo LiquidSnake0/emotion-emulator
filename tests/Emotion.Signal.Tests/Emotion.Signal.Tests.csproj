@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Emotion.Signal\Emotion.Signal.csproj" />
+    <ProjectReference Include="..\..\tools\Emotion.Pulse\Emotion.Pulse.csproj" />
   </ItemGroup>
 
 </Project>

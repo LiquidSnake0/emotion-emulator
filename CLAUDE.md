@@ -79,8 +79,17 @@ jamais « est-ce le bon » — un détecteur qui tire sur toutes les attaques y 
 grille inutilisable. C'est exactement ce qui arrive au blanchiment adaptatif : +9 points de
 justesse, −7 points de verrouillage.
 
-Tant que cette troisième mesure n'existe pas, **le verrouillage tranche**, parce que c'est lui
-qui permet à l'horloge de prédire — et donc d'annuler la latence.
+- **`tools/Emotion.Pulse`** est la troisième mesure, et celle qui tranche désormais. Elle
+  demande si une suite d'instants forme un pouls, par la statistique de Rayleigh sur des
+  fenêtres de quinze secondes. Aucune tolérance à régler, un niveau de hasard qui se calcule,
+  et deux sorties : la **force** (concentration) et la **stabilité** (part des fenêtres qui
+  retrouvent la même période). Elle ne consulte aucune grille.
+
+  Repères : le métronome donne 0,973 et 100 %. Le répertoire donne **0,62 et 33 %**.
+
+**Toute comparaison de détecteur passe désormais par elle.** C'est elle qui a clos le débat
+étroit/blanchi — match nul, 0,623 contre 0,645 — après que les deux autres familles
+d'indicateurs eurent donné des réponses opposées et également invérifiables.
 
 ## Ce que le diagnostic a appris
 
