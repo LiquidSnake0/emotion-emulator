@@ -86,7 +86,9 @@ var lastReason = "";
 var coutImage = new List<double>();
 var annonces = new List<(long T, float Bpm)>();
 var murAt = new long[Voices.Registers];
+var assezAt = new long[Voices.Registers];
 Array.Fill(murAt, -1L);
+Array.Fill(assezAt, -1L);
 var chronoImage = new System.Diagnostics.Stopwatch();
 
 // Premier passage, quand on demande la reprise : on ecoute une fois, on garde ce qu'on a
@@ -115,7 +117,12 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     // A quel instant chaque source devient assez sure d'elle pour qu'un nom tienne. Les
     // six ne s'attendent pas : c'est tout l'interet de les faire murir separement.
     for (var r = 0; r < Voices.Registers; r++)
+    {
         if (murAt[r] < 0 && analyzer.Voix.EtatDe(r).Confidence >= 0.6f) murAt[r] = tMs;
+        // Quand la source a ete assez ecoutee — independamment de savoir si sa bande est
+        // nette. Les deux sont differents et etaient confondus dans une seule grandeur.
+        if (assezAt[r] < 0 && analyzer.Voix.PortraitDe(r).Observations >= 200) assezAt[r] = tMs;
+    }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
 
@@ -160,10 +167,14 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
                      "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
                             .Select(i => N(f.Voices.PitchAt(i)))) + "]," +
                      f.Voices.Hits + "," +
-                     // Ce que chaque source sait d'elle-meme : la maturite monte a son
-                     // rythme, sans jamais retenir le reste de l'image.
+                     // Deux grandeurs distinctes, et il faut les deux. « Assez ecoutee »
+                     // est une question de duree et se resout en quelques secondes ;
+                     // « bande nette » est une propriete du disque et ne bouge pas avec le
+                     // temps. Confondues, elles donnaient une barre qui trompait.
                      "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
-                            .Select(i => N(f.Voices.LaneAt(i).Confidence))) + "]," +
+                            .Select(i => N(f.Voices.LaneAt(i).Heard))) + "]," +
+                     "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
+                            .Select(i => N(f.Voices.LaneAt(i).Sharpness))) + "]," +
                      "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
                             .Select(i => (int)f.Voices.LabelAt(i))) + "]," +
                      $"{N(f.AnnouncedBpm)},{(f.TempoAnnounce ? 1 : 0)},{N(f.DriftVisible)}]");
@@ -374,6 +385,8 @@ for (var r = 0; r < Voices.Registers; r++)
     var id = analyzer.Voix.PortraitDe(r);
     Console.WriteLine($"  source {r} : " +
                       (murAt[r] < 0 ? "jamais       " : $"{murAt[r] / 1000f,6:F1} s     ") +
+                      $"assez ecoutee a " +
+                      (assezAt[r] < 0 ? "  jamais" : $"{assezAt[r] / 1000f,6:F1} s") + " · " +
                       $"confiance {e.Confidence:F2} · dispersion {id.Spread:F3} · " +
                       $"{id.Observations} observations · brillance {e.Brightness:F2} · texture {e.Texture:F2}");
 }
@@ -390,7 +403,7 @@ if (exportTo is not null)
         ",\"latenceMs\":" + analyzer.LatencyMs.ToString("F0") +
         ",\"champs\":[\"t\",\"rms\",\"bandes\",\"drapeaux\",\"voixGrave\"," +
         "\"voixMedium\",\"voixAigue\",\"ouverture\",\"brillance\",\"densite\"," +
-        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\",\"pitchGrave\",\"pitchMedium\",\"pitchAigu\",\"registres\",\"contours\",\"attaques\",\"maturites\",\"noms\",\"bpmAnnonce\",\"annonce\",\"derive\"]" +
+        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\",\"pitchGrave\",\"pitchMedium\",\"pitchAigu\",\"registres\",\"contours\",\"attaques\",\"ecoutes\",\"nettetes\",\"noms\",\"bpmAnnonce\",\"annonce\",\"derive\"]" +
         ",\"images\":[\n" + string.Join(",\n", exported) + "\n]}");
     Console.WriteLine($"\n{exported.Count} images exportees vers {exportTo}");
 }

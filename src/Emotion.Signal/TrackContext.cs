@@ -24,8 +24,45 @@ public sealed record TrackContext(
     string Camelot,
     string Family,
     string ColorHex,
-    string? CoverUrl)
+    string? CoverUrl,
+
+    /// <summary>
+    /// La forme a donner a chaque source, decidee dans la fiche et non par l'analyse.
+    ///
+    /// C'EST SELIM QUI CHOISIT, PAS LE SIGNAL.
+    ///
+    /// L'analyse sait separer six sources et dire ce qu'elle sait de chacune ; elle ne sait
+    /// pas, et n'a pas a savoir, laquelle merite une bouche et laquelle un anneau. Ce choix
+    /// est musical : sur un morceau feutre, c'est la voix qu'on veut voir respirer ; sur un
+    /// morceau dense, c'est la frappe. Le fixer dans le code reviendrait a imposer la meme
+    /// lecture a tout un crate.
+    ///
+    /// La fiche le porte donc, et le paquet le transporte tel quel jusqu'a l'unite de
+    /// rendu. Un tableau vide laisse l'ordre par defaut, du grave a l'aigu — ce qui est le
+    /// cas de toutes les fiches ecrites avant ce champ.
+    ///
+    /// Les valeurs sont celles de <see cref="SourceShape"/>.
+    /// </summary>
+    byte[]? Shapes = null,
+
+    /// <summary>
+    /// Le nom pose sur chaque source, quand Selim en a pose un. Zero signifie anonyme.
+    ///
+    /// L'analyse ne nomme rien d'elle-meme : ce qui joue dans une bande change d'un disque
+    /// a l'autre, et annoncer un piano la ou passe un saxophone est pire que ne rien
+    /// annoncer. Elle dit seulement si la bande est assez nette pour porter un nom.
+    /// </summary>
+    byte[]? Names = null)
 {
+    /// <summary>La forme voulue pour une source, ou celle par defaut de son rang.</summary>
+    public byte ShapeOf(int rank) =>
+        Shapes is { } s && rank < s.Length && s[rank] != 0
+            ? s[rank]
+            : SourceShape.Default(rank);
+
+    /// <summary>Le nom pose sur une source, ou zero.</summary>
+    public byte NameOf(int rank) => Names is { } n && rank < n.Length ? n[rank] : (byte)0;
+
     /// <summary>
     /// Le phenomene a projeter, deduit de la famille et calcule une seule fois.
     ///

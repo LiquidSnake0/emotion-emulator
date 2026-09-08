@@ -241,9 +241,19 @@ public struct GpuPacket
     public const int SourcePitch = 1;
     public const int SourceFlags = 2;
     public const int SourceLabel = 3;
-    public const int SourceConfidence = 4;
-    public const int SourceBrightness = 5;
-    public const int SourceTexture = 6;
+    public const int SourceHeard = 4;
+    public const int SourceSharp = 5;
+    public const int SourceBrightness = 6;
+
+    /// <summary>
+    /// La forme a donner a cette source. <b>Elle vient de la fiche, pas de l'analyse.</b>
+    ///
+    /// L'analyse sait separer et decrire ; elle ne sait pas laquelle des six merite une
+    /// bouche. Ce choix est musical et appartient a Selim : sur un morceau feutre c'est la
+    /// voix qu'on veut voir respirer, sur un morceau dense c'est la frappe. Le paquet le
+    /// transporte tel quel jusqu'a l'unite de rendu, qui n'a plus qu'a le lire.
+    /// </summary>
+    public const int SourceShape = 7;
 
     /// <summary>Combien de sources la separation publie aujourd'hui.</summary>
     public const int SourceCount = 6;
@@ -334,19 +344,21 @@ public struct GpuPacket
     /// <param name="Pitch">ou elle joue dans son registre, 0 en bas, 255 en haut.</param>
     /// <param name="Hit">une attaque vient d'etre constatee.</param>
     /// <param name="Label">nom attribue de l'exterieur, 0 tant que la source est anonyme.</param>
-    /// <param name="Confidence">a quel point l'empreinte est fiable.</param>
+    /// <param name="Heard">a-t-on assez ecoute cette source. Une question de duree.</param>
+    /// <param name="Sharp">la bande porte-t-elle un seul timbre. Une propriete du disque.</param>
     /// <param name="Brightness">brillance moyenne de la source.</param>
-    /// <param name="Texture">raie franche a souffle.</param>
+    /// <param name="Shape">la forme voulue par la fiche.</param>
     public readonly record struct SourceState(
         byte Level, byte Pitch, bool Hit,
-        byte Label = 0, byte Confidence = 0, byte Brightness = 128, byte Texture = 128);
+        byte Label = 0, byte Heard = 0, byte Sharp = 0,
+        byte Brightness = 128, byte Shape = 0);
 
     /// <summary>
     /// Ecrit ce qu'une source a a dire, dans les quatre octets qui n'appartiennent qu'a
     /// elle. Deux sources differentes peuvent appeler cette methode en meme temps sans
     /// precaution : leurs mots ne se touchent pas.
     /// </summary>
-    public void WriteSource(int rank, in LaneState state, byte label = 0)
+    public void WriteSource(int rank, in LaneState state, byte label = 0, byte shape = 0)
     {
         if ((uint)rank >= SourceSlots) return;
 
@@ -355,10 +367,10 @@ public struct GpuPacket
         slot[SourcePitch] = Byte255(state.Position);
         slot[SourceFlags] = state.Hit ? SourceHitBit : (byte)0;
         slot[SourceLabel] = label;
-        slot[SourceConfidence] = Byte255(state.Confidence);
+        slot[SourceHeard] = Byte255(state.Heard);
+        slot[SourceSharp] = Byte255(state.Sharpness);
         slot[SourceBrightness] = Byte255(state.Brightness);
-        slot[SourceTexture] = Byte255(state.Texture);
-        slot[7] = 0;
+        slot[SourceShape] = shape != 0 ? shape : Emotion.Signal.SourceShape.Default(rank);
     }
 
     /// <summary>Relit ce qu'une source a ecrit.</summary>
@@ -369,8 +381,8 @@ public struct GpuPacket
         var slot = SourceByte(rank);
         return new SourceState(
             slot[SourceLevel], slot[SourcePitch], (slot[SourceFlags] & SourceHitBit) != 0,
-            slot[SourceLabel], slot[SourceConfidence],
-            slot[SourceBrightness], slot[SourceTexture]);
+            slot[SourceLabel], slot[SourceHeard], slot[SourceSharp],
+            slot[SourceBrightness], slot[SourceShape]);
     }
 
     private Span<byte> SourceByte(int rank)
@@ -447,8 +459,10 @@ public struct GpuPacket
         // Chaque source ecrit sa propre zone. Le contour part maintenant pour les six et
         // non plus pour les quatre premieres : les deux dernieres avaient un niveau qui
         // bougeait et un contour toujours nul, donc des formes qui pulsaient sur place.
+        // Le nom et la forme viennent de la fiche et traversent sans etre recalcules ; le
+        // reste vient de l'analyse. Les deux voyagent dans le meme mot, sans s'attendre.
         for (var i = 0; i < SourceCount; i++)
-            p.WriteSource(i, f.Voices.LaneAt(i), f.Voices.LabelAt(i));
+            p.WriteSource(i, f.Voices.LaneAt(i), track.NameOf(i), track.ShapeOf(i));
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;

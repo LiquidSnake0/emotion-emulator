@@ -62,8 +62,9 @@ public class SourcePipelineTests
             p.WriteSource(
                 i,
                 new LaneState((i + 1) / 10f, (i + 1) / 20f, i % 2 == 0,
-                              Confidence: (i + 1) / 8f, Brightness: (i + 1) / 9f),
-                label: (byte)(i + 10));
+                              Heard: (i + 1) / 8f, Sharpness: (i + 1) / 7f,
+                              Brightness: (i + 1) / 9f),
+                label: (byte)(i + 10), shape: (byte)(6 - i));
 
         for (var i = 0; i < GpuPacket.SourceCount; i++)
         {
@@ -72,9 +73,13 @@ public class SourcePipelineTests
             Assert.Equal((byte)Math.Clamp((i + 1) / 20f * 255f, 0f, 255f), s.Pitch);
             Assert.Equal(i % 2 == 0, s.Hit);
 
-            // Le nom et l'empreinte voyagent dans le meme mot, sans attendre l'un l'autre.
+            // Ce que l'analyse mesure et ce que la fiche decide voyagent dans le meme mot,
+            // sans s'attendre : la forme est connue des la premiere image, l'empreinte met
+            // des secondes a se former.
             Assert.Equal((byte)(i + 10), s.Label);
-            Assert.Equal((byte)Math.Clamp((i + 1) / 8f * 255f, 0f, 255f), s.Confidence);
+            Assert.Equal((byte)(6 - i), s.Shape);
+            Assert.Equal((byte)Math.Clamp((i + 1) / 8f * 255f, 0f, 255f), s.Heard);
+            Assert.Equal((byte)Math.Clamp((i + 1) / 7f * 255f, 0f, 255f), s.Sharp);
             Assert.Equal((byte)Math.Clamp((i + 1) / 9f * 255f, 0f, 255f), s.Brightness);
         }
     }
@@ -481,5 +486,65 @@ public class FonduTests
         for (var t = 600; t < 700; t++) v.Feed(Bruit(t));
 
         Assert.True(v.PortraitDe(0).Observations > avant);
+    }
+}
+
+public class FormeDeLaFicheTests
+{
+    private static TrackContext Fiche(byte[]? formes = null, byte[]? noms = null) =>
+        new("two sided", "RARE PSALMS", "A", "8A", "chill", "#35D07F", null,
+            Shapes: formes, Names: noms);
+
+    /// <summary>
+    /// C'EST LA FICHE QUI CHOISIT LA FORME, PAS L'ANALYSE.
+    ///
+    /// Sur un morceau feutre, Selim veut voir la voix respirer ; sur un morceau dense,
+    /// c'est la frappe. L'analyse sait separer six sources et dire ce qu'elle sait de
+    /// chacune — elle ne sait pas, et n'a pas a savoir, laquelle merite une bouche.
+    /// </summary>
+    [Fact]
+    public void La_fiche_impose_la_forme_de_chaque_source()
+    {
+        var fiche = Fiche(formes: [SourceShape.Levres, SourceShape.Anneau, 0, 0, 0, 0]);
+
+        Assert.Equal(SourceShape.Levres, fiche.ShapeOf(0));
+        Assert.Equal(SourceShape.Anneau, fiche.ShapeOf(1));
+
+        // Un zero laisse la forme par defaut du rang : la fiche n'a rien dit de celle-la.
+        Assert.Equal(SourceShape.Default(2), fiche.ShapeOf(2));
+    }
+
+    /// <summary>
+    /// Une fiche ecrite avant ce champ garde l'ordre par defaut, du grave a l'aigu. Ce
+    /// n'est pas un choix musical : c'est ce qui garantit que six sources restent
+    /// distinguables tant que personne n'a decide autrement.
+    /// </summary>
+    [Fact]
+    public void Une_fiche_sans_formes_garde_l_ordre_par_defaut()
+    {
+        var fiche = Fiche();
+        for (var r = 0; r < 6; r++)
+        {
+            Assert.Equal(SourceShape.Default(r), fiche.ShapeOf(r));
+            Assert.Equal((byte)0, fiche.NameOf(r));
+        }
+    }
+
+    /// <summary>
+    /// La forme part au GPU des la premiere image, sans attendre que la source se soit
+    /// decrite : ce sont deux choses independantes, et les faire s'attendre retarderait la
+    /// seule qui est connue d'avance.
+    /// </summary>
+    [Fact]
+    public void La_forme_part_avant_que_la_source_se_connaisse()
+    {
+        var p = new GpuPacket();
+        p.WriteSource(0, new LaneState(0.5f, 0.5f, false), label: 0,
+                      shape: SourceShape.Levres);
+
+        var s = p.ReadSource(0);
+        Assert.Equal(SourceShape.Levres, s.Shape);
+        Assert.Equal((byte)0, s.Heard);
+        Assert.Equal((byte)0, s.Label);
     }
 }

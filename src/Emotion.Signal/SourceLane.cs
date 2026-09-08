@@ -45,14 +45,19 @@ public interface ISourceLane
 /// <param name="Level">activation, 0 a 1.</param>
 /// <param name="Position">ou joue la source dans son registre, 0 en bas, 1 en haut.</param>
 /// <param name="Hit">une attaque vient d'etre constatee.</param>
-/// <param name="Confidence">a quel point l'empreinte est formee, 0 a 1.</param>
+/// <param name="Heard">a-t-on assez ecoute cette source, 0 a 1. Une question de duree.</param>
+/// <param name="Sharpness">la bande porte-t-elle un seul timbre. Une propriete du disque.</param>
 /// <param name="Brightness">brillance moyenne de la source.</param>
 /// <param name="Texture">raie franche a souffle.</param>
 public readonly record struct LaneState(
     float Level, float Position, bool Hit,
-    float Confidence = 0f, float Brightness = 0.5f, float Texture = 0.5f)
+    float Heard = 0f, float Sharpness = 0f,
+    float Brightness = 0.5f, float Texture = 0.5f)
 {
     public static LaneState Silent => new(0f, 0.5f, false);
+
+    /// <summary>Ce qu'il faut pour poser un nom : avoir assez ecoute, et une bande nette.</summary>
+    public float Confidence => Heard * Sharpness;
 }
 
 /// <summary>
@@ -124,7 +129,8 @@ public sealed class RegisterLane : ISourceLane
         if (hi <= _lo)
         {
             State = new LaneState(0f, _pitch.Value, false,
-                                  _identity.Confidence, _identity.Brightness, _identity.Texture);
+                                  _identity.Heard, _identity.Sharpness,
+                                  _identity.Brightness, _identity.Texture);
             return;
         }
 
@@ -176,7 +182,8 @@ public sealed class RegisterLane : ISourceLane
         if (Learning) _identity.Feed(spectrum, _lo, hi, _level);
 
         State = new LaneState(_level, position, hit,
-                              _identity.Confidence, _identity.Brightness, _identity.Texture);
+                              _identity.Heard, _identity.Sharpness,
+                              _identity.Brightness, _identity.Texture);
     }
 
     /// <summary>Le portrait de la source, pour la sonde.</summary>

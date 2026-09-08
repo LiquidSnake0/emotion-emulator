@@ -118,9 +118,8 @@ public sealed class SourceIdentity
 
     private void Refresh()
     {
-        var maturity = MathF.Min(1f, _observations / (float)Mature);
-        var sharpness = Clamp01(1f - (_spread - Tight) / (Loose - Tight));
-        Confidence = maturity * sharpness;
+        Heard = MathF.Min(1f, _observations / (float)Mature);
+        Sharpness = Clamp01(1f - (_spread - Tight) / (Loose - Tight));
     }
 
     /// <summary>Brillance moyenne de la source, 0 sourde, 1 claire.</summary>
@@ -134,13 +133,37 @@ public sealed class SourceIdentity
     public float Texture { get; private set; } = 0.5f;
 
     /// <summary>
-    /// A quel point on peut se fier a l'empreinte, 0 a 1.
+    /// A-t-on assez ecoute cette source, 0 a 1.
     ///
-    /// Elle croit avec le nombre d'observations et decroit avec leur dispersion : une
-    /// source vue longtemps mais jamais deux fois pareille reste inconnue, et c'est le bon
-    /// resultat — cela veut dire que plusieurs instruments passent dans cette bande.
+    /// C'est une question de <b>duree</b>, et elle se resout vite : sur un morceau du
+    /// crate, les six sources y arrivent entre 4,8 et 8,5 secondes — avant les seize temps
+    /// qui font le palier de travail de Selim.
     /// </summary>
-    public float Confidence { get; private set; }
+    public float Heard { get; private set; }
+
+    /// <summary>
+    /// La bande porte-t-elle un seul timbre, 0 a 1.
+    ///
+    /// C'est une propriete du <b>disque</b>, et aucune duree d'ecoute n'y change rien : si
+    /// un piano et un saxophone se relaient dans la meme octave, la bande restera floue
+    /// apres dix minutes comme apres dix secondes. Elle doit alors rester sans nom, et
+    /// c'est le bon resultat.
+    ///
+    /// POURQUOI CES DEUX GRANDEURS SONT PUBLIEES SEPAREMENT.
+    ///
+    /// Elles etaient confondues dans une seule barre, et cette barre trompait : une source
+    /// entierement apprise en cinq secondes mais logee dans une bande partagee y restait a
+    /// zero. On lisait « le systeme n'apprend pas » la ou il fallait lire « il a fini
+    /// d'apprendre, et sa conclusion est que cette bande est partagee ». Une mesure et un
+    /// verdict ne se resument pas au meme chiffre.
+    /// </summary>
+    public float Sharpness { get; private set; }
+
+    /// <summary>
+    /// Le produit des deux : ce qu'il faut pour poser un nom. Il faut avoir assez ecoute
+    /// <b>et</b> que la bande soit nette.
+    /// </summary>
+    public float Confidence => Heard * Sharpness;
 
     /// <summary>
     /// Classe attribuee de l'exterieur, 0 tant que personne n'a nomme cette source.
@@ -203,7 +226,8 @@ public sealed class SourceIdentity
         _spread = 0f;
         Brightness = 0.5f;
         Texture = 0.5f;
-        Confidence = 0f;
+        Heard = 0f;
+        Sharpness = 0f;
         Label = 0;
     }
 

@@ -143,10 +143,13 @@ public sealed class MockAudioSource : IAudioSource
             // met une minute ; deux registres graves partages entre le kick et la basse ne
             // se tiennent jamais. Le mock reproduit cet etagement — sinon la progression
             // que le renderer affiche ne pourrait pas etre reglee sans materiel.
-            var vitesse = new[] { 0f, 0.02f, 0.05f, 0.20f, 0.10f, 0.14f }[r];
-            var sur = Clamp01((float)(t / 1000.0) * vitesse);
+            // Assez ecoutee : une question de duree, et elle se resout en quelques
+            // secondes pour toutes. Nettete : une propriete de la bande, qui ne bouge pas
+            // avec le temps. Les deux etaient confondues, et la barre trompait.
+            var ecoute = Clamp01((float)(t / 1000.0) / (4f + r * 0.8f));
+            var nette = new[] { 0.05f, 0.30f, 0.45f, 0.90f, 0.60f, 0.80f }[r];
             voies[r] = new LaneState(niveau, contours[r], (attaques >> r & 1) != 0,
-                                     Confidence: sur,
+                                     Heard: ecoute, Sharpness: nette,
                                      Brightness: r / 5f,
                                      Texture: 0.3f + r * 0.1f);
         }
