@@ -908,7 +908,25 @@ public sealed class SpectrumAnalyzer
         Etapes.Image();
 
         return Derniere = new VisualFrame(
-            tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
+            // LA PHASE VIENT DE LA GRILLE, PLUS DE L'ESTIMATEUR.
+            //
+            // Elle etait remplie par TempoTracker.Phase, dont l'origine est remise a zero
+            // <b>a chaque attaque retenue</b>. Ce n'etait donc pas une position dans la
+            // mesure mais un temps ecoule depuis le dernier coup entendu — et comme les
+            // coups tombent a peu pres a chaque temps, la valeur ne montait jamais.
+            //
+            // Mesure sur le repertoire, seize cases de 0 a 1 :
+            //
+            //     31 29 26 8 2 1 0 0 0 0 0 0 0 0 0 0 %
+            //
+            // Elle ne depassait pas 0,35. Tout ce que le renderer anime « plus lentement
+            // que l'attaque » ne parcourait qu'un tiers de son cycle avant de repartir.
+            //
+            // BeatGrid existe precisement pour cela : son origine ne bouge pas a chaque
+            // coup, elle avance seule et se corrige, et son « 1 » est vote. `inBar` en est
+            // la position dans la mesure de quatre temps — c'est-a-dire ce que la
+            // documentation de ce champ decrivait depuis le debut.
+            tMs, level, bands, onset, beat < 0 ? null : inBar, _tempo.Bpm,
             Hits: hits,
             Harmony: harmony,
             Voices: voices,

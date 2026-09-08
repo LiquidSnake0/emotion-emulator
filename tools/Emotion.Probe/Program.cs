@@ -121,6 +121,13 @@ var lastReason = "";
 // et ce retard s'accumule.
 var coutImage = new List<double>();
 var famAt = Enumerable.Range(0, EventFamilies.Max).Select(_ => new List<long>()).ToArray();
+
+// Seize cases par mesure de quatre temps, une par double croche.
+var famCase = Enumerable.Range(0, EventFamilies.Max).Select(_ => new int[16]).ToArray();
+var famTotal = new int[EventFamilies.Max];
+int[] kickCase = new int[16], clapCase = new int[16], hatCase = new int[16];
+int kickTotalC = 0, clapTotalC = 0, hatTotalC = 0;
+var phaseHisto = new int[16];
 var fluxE = new List<float>();
 var fluxC = new List<float>();
 var annonces = new List<(long T, float Bpm)>();
@@ -165,6 +172,28 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
     if (f.EventFamily >= 0) famAt[f.EventFamily].Add(tMs);
+
+    // OU DANS LA MESURE ? La question posee par le DJ : une frappe tombe-t-elle toujours
+    // au meme endroit du cycle de quatre temps ? Si oui, on peut l'annoncer depuis la
+    // grille au lieu de l'attendre — et l'annoncer, c'est l'allumer avant que le son
+    // n'arrive.
+    //
+    // La position se lit sans rien ajouter a la bibliotheque : le rang du temps dans la
+    // mesure, plus la phase a l'interieur du temps. Seize cases par mesure, soit la double
+    // croche : plus fin que ca et la resolution d'analyse deciderait a la place du motif.
+    // ATTENTION AU SENS DE `Phase` : elle vaut deja la position dans la mesure de quatre
+    // temps, de 0 a 1, et non la phase a l'interieur d'un temps. La combiner avec
+    // `Structure.Beat` la recomptait et rabattait toutes les frappes sur les temps forts —
+    // 94 % de charleys pile sur le temps, ce qui ne pouvait pas etre vrai.
+    if (f.Phase is { } ph)
+    {
+        phaseHisto[Math.Clamp((int)(Math.Clamp(ph, 0f, 0.999f) * 16), 0, 15)]++;
+        var case16 = Math.Clamp((int)(Math.Clamp(ph, 0f, 0.999f) * 16), 0, 15);
+        if (f.EventFamily >= 0) { famCase[f.EventFamily][case16]++; famTotal[f.EventFamily]++; }
+        if (f.Hits.Kick)  { kickCase[case16]++; kickTotalC++; }
+        if (f.Hits.Clap)  { clapCase[case16]++; clapTotalC++; }
+        if (f.Hits.Hat)   { hatCase[case16]++;  hatTotalC++;  }
+    }
     fluxE.Add(analyzer.DernierFluxEnergie);
     fluxC.Add(analyzer.DernierFluxComplexe);
 
@@ -443,6 +472,44 @@ if (fluxE.Count > 10)
     var fam = analyzer.Evenements.Familles;
     Console.WriteLine();
     var acc = analyzer.Accord;
+// OU CHAQUE CHOSE TOMBE DANS LA MESURE.
+//
+// L'IDEE. Le tempo est ce que ce projet mesure le mieux. Si une frappe revient toujours au
+// meme endroit du cycle de quatre temps, alors la grille suffit a l'annoncer : on n'attend
+// plus de la detecter, on sait quand elle vient. Et savoir quand elle vient, c'est pouvoir
+// l'allumer AVANT que le son n'arrive — ce qui retire du retard au lieu d'en ajouter.
+//
+// CE QUE MESURE CE TABLEAU. Pour chaque voie, la repartition de ses frappes sur seize
+// cases. Le chiffre qui compte est la part tombant dans les quatre cases les plus
+// frequentees : le hasard en donnerait 25 %, un motif regulier bien davantage. En dessous
+// de 40 % il n'y a pas de motif a annoncer, et il faudra continuer a detecter.
+void Motif(string nom, int[] cases, int total)
+{
+    if (total < 8) { Console.WriteLine($"  {nom,-10} trop peu de frappes ({total})"); return; }
+    var rangs = Enumerable.Range(0, 16).OrderByDescending(c => cases[c]).ToArray();
+    var top4 = rangs.Take(4).Sum(c => cases[c]) * 100f / total;
+    var top1 = cases[rangs[0]] * 100f / total;
+    var dessin = string.Concat(Enumerable.Range(0, 16).Select(c =>
+    {
+        var part = cases[c] / (float)Math.Max(1, cases[rangs[0]]);
+        return part > 0.75f ? '#' : part > 0.45f ? '+' : part > 0.15f ? '.' : ' ';
+    }));
+    // Les temps forts sont les cases 0, 4, 8 et 12.
+    var surTemps = (cases[0] + cases[4] + cases[8] + cases[12]) * 100f / total;
+    Console.WriteLine($"  {nom,-10} |{dessin}|  4 cases {top4,3:F0} %  ·  la mieux lotie {top1,3:F0} %" +
+                      $"  ·  sur les temps {surTemps,3:F0} %  ({total} frappes)");
+}
+
+Console.WriteLine("\nla phase elle-meme, sur toutes les images  " +
+    string.Join(" ", phaseHisto.Select(c => (c * 100 / Math.Max(1, phaseHisto.Sum())).ToString())) + " %");
+Console.WriteLine("\nposition dans la mesure  (16 cases, une par double croche ; hasard = 25 % sur 4 cases)");
+Motif("kick", kickCase, kickTotalC);
+Motif("clap", clapCase, clapTotalC);
+Motif("charley", hatCase, hatTotalC);
+for (var fm = 0; fm < EventFamilies.Max; fm++)
+    if (famTotal[fm] >= 8) Motif($"famille {fm}", famCase[fm], famTotal[fm]);
+Console.WriteLine();
+
     Console.WriteLine($"familles de frappes  {fam.Connues} distinctes · " +
                       $"accord avec la grille {acc.Accord:F2} " +
                       $"({acc.Votantes} familles votantes)");
