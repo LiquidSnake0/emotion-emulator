@@ -117,7 +117,13 @@ public sealed class MockAudioSource : IAudioSource
             High: Clamp01(0.15f + hat * 0.7f),
             LowHit: beat,
             MidHit: beat && beatInBar == 2,
-            HighHit: CrossedOffbeat(beats));
+            HighHit: CrossedOffbeat(beats),
+            // Un contour melodique fabrique : le medium monte et redescend sur quatre
+            // mesures, l'aigu sur deux. Sans lui, rien ne bougerait verticalement en mode
+            // simule et le geste resterait introuvable a regler sans materiel.
+            LowPitch: 0.5f + 0.25f * MathF.Sin((float)(beats * MathF.PI / 8)),
+            MidPitch: 0.5f + 0.35f * MathF.Sin((float)(beats * MathF.PI / 8)),
+            HighPitch: 0.5f + 0.30f * MathF.Sin((float)(beats * MathF.PI / 4)));
 
         // Le filtre s'ouvre et se ferme lentement, sur seize mesures : c'est le geste que
         // Selim fera le plus souvent a la table, et il doit pouvoir le regler sans table.

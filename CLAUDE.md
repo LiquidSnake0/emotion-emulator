@@ -557,6 +557,16 @@ est bas et large, l'aigu est haut et fin. La scène se lit comme un **spectre de
 | claps | cercles ouverts | violet | sur l'horizon, aux bords |
 | basse | arc plein posé au sol | vert | bas |
 
+**Le contour mélodique déplace les formes.** Trois amplitudes ne décrivent aucun
+mouvement : quand une mélodie monte, le médium baisse et l'aigu monte — deux faits
+indépendants dont aucun ne porte le geste, et le visuel n'en montrait qu'un frisson.
+`Voices` transporte maintenant *où* joue chaque registre à l'intérieur du sien, sur échelle
+logarithmique. Le triangle de la voix monte et descend dans sa bande, le nuage des aiguës
+glisse d'un bloc, et l'arc de la basse s'élargit plutôt que de quitter le sol.
+
+> **Une position se déplace ; une amplitude ne fait que grossir.** C'est la seule grandeur
+> du paquet qui décrive un mouvement plutôt qu'un état.
+
 **La palette des sources est fixe d'un disque à l'autre** — sinon l'œil devrait tout
 réapprendre à chaque transition. La couleur du disque n'a pas disparu : elle teinte la
 **trame de fond et l'horizon**. L'identité du morceau devient l'ambiance, les sources

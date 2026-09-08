@@ -83,6 +83,17 @@ export class Visual {
     this.level = new Spring(16);
     this.tonal = new Spring(6);        // la texture change lentement
 
+    // OU JOUE CHAQUE REGISTRE, ET NON COMBIEN.
+    //
+    // Une amplitude ne decrit aucun mouvement : quand une melodie monte, le medium baisse
+    // et l'aigu monte, et le visuel n'en montre qu'un frisson. Une position, elle, se
+    // deplace — et une forme peut la suivre.
+    //
+    // Ressorts souples : c'est un contour melodique, pas une attaque. Il doit glisser.
+    this.lowPitch = new Spring(7, 0.5);
+    this.midPitch = new Spring(9, 0.5);
+    this.highPitch = new Spring(11, 0.5);
+
     // LA STRUCTURE NE PORTE PAS DE FORME A ELLE, ELLE GOUVERNE LES AUTRES.
     //
     // La regle du fichier est « une source de son, une forme ». Or la mesure et la phrase
@@ -241,6 +252,10 @@ export class Visual {
     this.bright.step(tb.centroid ?? 0.5, dt);
     this.density.step(tb.density ?? 0.5, dt);
 
+    this.lowPitch.step(v.lowPitch ?? 0.5, dt);
+    this.midPitch.step(v.midPitch ?? 0.5, dt);
+    this.highPitch.step(v.highPitch ?? 0.5, dt);
+
     this.spin += dt * (0.06 + this.level.value * 0.22 + this.tension.value * 0.55);
     if (this.sweep >= 0) {
       this.sweep += dtMs / (beatMs * 4);
@@ -342,7 +357,11 @@ export class Visual {
   // Un arc plein pose sur l'horizon, qui enfle et retombe. Une masse, pas une tache : le
   // degrade monte, le contour reste net, et rien ne s'estompe dans le vide.
   drawBass(ctx, cx, sol, w, unit) {
-    const r = unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07);
+    // La basse ne se deplace pas : elle est posee au sol, c'est ce qui la rend stable.
+    // Son contour melodique elargit l'arc au lieu de le monter — une note grave qui monte
+    // occupe plus de place, elle ne quitte pas le sol.
+    const large = 1 + (this.lowPitch.value - 0.5) * 0.30;
+    const r = unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07) * large;
     if (r <= 0) return;
 
     ctx.save();
@@ -432,7 +451,17 @@ export class Visual {
   drawVoice(ctx, cx, h, unit, sides) {
     const m = this.voice.value, hit = this.voiceHit.value;
     const r = unit * (0.055 + m * 0.05 + hit * 0.045);
-    const y = h * HAUTEUR.voix - m * unit * 0.03;
+
+    // LE TRIANGLE MONTE ET DESCEND AVEC LA MELODIE.
+    //
+    // C'est le geste que Selim ne voyait pas : « un instrument qui monte dans les notes
+    // et redescend, c'est a peine perceptible ». Il l'etait parce que seule l'amplitude
+    // etait rendue, et qu'une melodie qui monte ne change pas de volume. Le deplacement
+    // reste dans la bande de la voix — assez pour se voir, pas assez pour qu'on la
+    // confonde avec une autre source.
+    const y = h * HAUTEUR.voix
+            - (this.midPitch.value - 0.5) * h * 0.13
+            - m * unit * 0.02;
     const n = sides === 6 ? 3 : sides;
 
     S.polygon(ctx, cx, y, r, n, 0, SRC.voix, 0.22 + m * 0.6, true);
@@ -446,9 +475,13 @@ export class Visual {
     const v = this.bells.value * 0.55 + this.bellHit.value;
     if (v < 0.03 || coupe < 0.05) return;
 
+    // Le nuage entier glisse avec le contour de l'aigu : les losanges gardent leur
+    // dispersion, mais montent et descendent ensemble comme une seule voix.
+    const glisse = (this.highPitch.value - 0.5) * h * 0.10;
     for (let i = 0; i < 6; i++) {
       const p = S.scatter(i);
-      S.polygon(ctx, w * (0.10 + p.x * 0.80), h * (HAUTEUR.aigu - 0.04 + p.y * 0.14),
+      S.polygon(ctx, w * (0.10 + p.x * 0.80),
+                h * (HAUTEUR.aigu - 0.04 + p.y * 0.14) - glisse,
                 unit * 0.020 * (0.45 + v), 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
     }
   }

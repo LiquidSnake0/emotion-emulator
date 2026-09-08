@@ -32,9 +32,10 @@ namespace Emotion.Signal;
 /// <param name="HighHit">Une note vient d'etre jouee dans l'aigu.</param>
 public readonly record struct Voices(
     float Low, float Mid, float High,
-    bool LowHit, bool MidHit, bool HighHit)
+    bool LowHit, bool MidHit, bool HighHit,
+    float LowPitch = 0.5f, float MidPitch = 0.5f, float HighPitch = 0.5f)
 {
-    public static readonly Voices None = default;
+    public static readonly Voices None = new(0f, 0f, 0f, false, false, false);
 
     /// <summary>Une note a ete jouee, quel que soit le registre.</summary>
     public bool Any => LowHit || MidHit || HighHit;
@@ -55,6 +56,7 @@ public sealed class VoiceTracker
     private readonly float[] _level = new float[3];
     private readonly float[] _prev = new float[3];
     private readonly float[] _peak = [1e-3f, 1e-3f, 1e-3f];
+    private readonly float[] _pitch = [0.5f, 0.5f, 0.5f];
 
     private readonly OnsetDetector[] _onsets =
     [
@@ -110,7 +112,8 @@ public sealed class VoiceTracker
             _level[0], _level[1], _level[2],
             _onsets[0].Feed(lowRise),
             _onsets[1].Feed(midRise),
-            _onsets[2].Feed(highRise));
+            _onsets[2].Feed(highRise),
+            _pitch[0], _pitch[1], _pitch[2]);
     }
 
     private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;

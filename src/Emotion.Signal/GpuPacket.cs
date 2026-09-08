@@ -174,6 +174,18 @@ public struct GpuPacket
     /// <summary>Mode mineur, tire de la lettre Camelot. Non nul si mineur.</summary>
     [FieldOffset(113)] public byte Minor;
 
+    /// <summary>
+    /// Ou joue chaque registre a l'interieur du sien, 0 en bas, 255 en haut.
+    ///
+    /// C'est la seule grandeur du paquet qui decrive un <b>mouvement</b> plutot qu'un
+    /// etat. Trois amplitudes ne disent pas qu'une melodie monte : elles disent que le
+    /// medium baisse et que l'aigu monte, deux faits independants dont aucun ne porte le
+    /// geste. Une position, elle, se deplace — et une forme peut la suivre.
+    /// </summary>
+    [FieldOffset(114)] public byte LowPitch;
+    [FieldOffset(115)] public byte MidPitch;
+    [FieldOffset(116)] public byte HighPitch;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -263,6 +275,9 @@ public struct GpuPacket
         p.Trust = (byte)Math.Clamp(f.Structure.Trust * 255f, 0f, 255f);
         p.Sides = (byte)track.Sides;
         p.Minor = track.Minor ? (byte)1 : (byte)0;
+        p.LowPitch = (byte)Math.Clamp(f.Voices.LowPitch * 255f, 0f, 255f);
+        p.MidPitch = (byte)Math.Clamp(f.Voices.MidPitch * 255f, 0f, 255f);
+        p.HighPitch = (byte)Math.Clamp(f.Voices.HighPitch * 255f, 0f, 255f);
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
