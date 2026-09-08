@@ -21,6 +21,11 @@ var path = args[0];
 var startS = args.Length > 1 ? double.Parse(args[1]) : 0;
 var lengthS = args.Length > 2 ? double.Parse(args[2]) : 90;
 
+// Export des images analysees, pour rejouer l'analyse sans materiel ni serveur.
+// Quatrieme argument : le fichier de sortie.
+var exportTo = args.Length > 3 ? args[3] : null;
+var exported = new List<string>();
+
 var (mono, rate) = Wav.ReadMono(path, startS, lengthS);
 Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} s a {rate} Hz");
 
@@ -79,6 +84,25 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     gridMs.Add(analyzer.GridBeatMs);
     if (f.Bpm is { } bq) tempoMs.Add(60_000f / bq);
     if (f.Bpm is { } bp) tempos.Add(bp);
+
+    if (exportTo is not null)
+    {
+        // Format compact : des nombres, pas des objets. Mille images nommees pesent dix
+        // fois ce que pesent mille lignes de valeurs, et c'est une page web qui les lit.
+        var b = string.Join(",", f.Bands.Select(v => v.ToString("F3",
+            System.Globalization.CultureInfo.InvariantCulture)));
+        var flags = (f.Hits.Kick ? 1 : 0) | (f.Hits.Clap ? 2 : 0) | (f.Hits.Hat ? 4 : 0)
+                  | (f.Voices.LowHit ? 8 : 0) | (f.Voices.MidHit ? 16 : 0)
+                  | (f.Voices.HighHit ? 32 : 0) | (f.NoveltyOnset ? 64 : 0)
+                  | (f.Structure.Drop ? 128 : 0) | (f.Gestures.FilterClosed ? 256 : 0)
+                  | (f.Gestures.BassCut ? 512 : 0) | (f.Gestures.Dense ? 1024 : 0);
+        string N(float v) => v.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+        exported.Add($"[{tMs},{N(f.Rms)},[{b}],{flags},{N(f.Voices.Low)},{N(f.Voices.Mid)}," +
+                     $"{N(f.Voices.High)},{N(f.Timbre.Openness)},{N(f.Timbre.Centroid)}," +
+                     $"{N(f.Timbre.Density)},{(f.Bpm is { } bb ? N(bb) : "0")}," +
+                     $"{f.Structure.Beat},{N(f.Structure.Buildup)},{N(f.Novelty)}," +
+                     $"{N(f.Structure.Confidence)},{N(f.Harmony.Tonality)}]");
+    }
 
     var s = f.Structure;
     if (s.BarStart) { barStarts.Add(tMs); barCounter++; }
@@ -255,6 +279,18 @@ if (totalBreaks >= 4)
 Console.WriteLine($"tension mediane     {Median(buildups):F2} · maximum {buildups.Max():F2}");
 Console.WriteLine($"ruptures            {drops.Count}" +
                   (drops.Count > 0 ? "  a " + string.Join(", ", drops.Select(d => $"{d / 1000f:F0} s")) : ""));
+if (exportTo is not null)
+{
+    File.WriteAllText(exportTo,
+        "{\"rate\":" + rate + ",\"window\":" + hop +
+        ",\"latenceMs\":" + analyzer.LatencyMs.ToString("F0") +
+        ",\"champs\":[\"t\",\"rms\",\"bandes\",\"drapeaux\",\"voixGrave\"," +
+        "\"voixMedium\",\"voixAigue\",\"ouverture\",\"brillance\",\"densite\"," +
+        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\"]" +
+        ",\"images\":[\n" + string.Join(",\n", exported) + "\n]}");
+    Console.WriteLine($"\n{exported.Count} images exportees vers {exportTo}");
+}
+
 return 0;
 
 static float Pct(List<float> v, int p)
