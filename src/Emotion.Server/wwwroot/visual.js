@@ -430,10 +430,23 @@ export class Visual {
     // qu'apres l'avoir constate.
     this.clock = new BeatClock();
 
-    // Avance volontaire, pour compenser ce qui reste en aval de l'analyse : la boucle
-    // d'affichage et la dalle, une trentaine de millisecondes. Le visuel part alors un
-    // cheveu avant le son, ce que l'oreille pardonne bien mieux que l'inverse.
-    this.leadMs = 30;
+    // L'AVANCE SE CALCULE, ELLE NE SE DEVINE PAS.
+    //
+    // Elle doit valoir la somme de ce qui reste EN AVAL de l'analyse, puisque c'est
+    // exactement ce qu'il s'agit d'annuler : la boucle d'affichage, l'unite de rendu et la
+    // dalle ou le videoprojecteur. En amont, les 48 ms mesurees de la chaine d'analyse sont
+    // deja comptees dans l'horloge, qui se cale sur les frappes telles qu'elles arrivent.
+    //
+    // Trente millisecondes couvrent une boucle a 60 images par seconde et un ecran ordinaire.
+    // Avec un videoprojecteur — 16 ms en mode faible latence, jusqu'a 33 sinon — et une
+    // unite de rendu externe, il faut monter d'autant : `EMOTION_LEAD_MS` le permet sans
+    // toucher au code.
+    //
+    // La borne n'est pas la perception mais la previsibilite du tempo. A 87 BPM un temps
+    // dure 690 ms, donc 60 ms d'avance en representent 9 % : tant que le plateau tient a
+    // 1 % pres, l'erreur de position reste sous la milliseconde. L'horloge refuse au-dela
+    // de 40 % d'un temps, ou l'on ne predirait plus mais inventerait.
+    this.leadMs = Number(new URLSearchParams(location.search).get('lead')) || 30;
 
     this.clips = new ClipLibrary();
     this.clips.load();
@@ -510,7 +523,7 @@ export class Visual {
     // ---- l'horloge, avant les impulsions ----
     // Elle avance de l'ecart reel plus l'avance voulue, et se recale sur chaque kick
     // detecte sans jamais s'y aligner d'un coup.
-    this.clock.step(dtMs + this.leadMs * 0.02, frame.bpm, this.leadMs);
+    this.clock.step(dtMs, frame.bpm, this.leadMs);
     if (hit.kick) this.clock.sync();
 
     // ---- impulsions ----

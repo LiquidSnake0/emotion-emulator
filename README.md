@@ -393,8 +393,21 @@ d'imperceptibilité**.
 Cette avance n'est pas bornée par la perception mais par la **prévisibilité du tempo** : à
 87 BPM un temps dure 690 ms, donc 30 ms représentent 4 % d'un temps, et 60 ms en
 représenteraient 9 %. Tant que le tempo tient à 1 % près, l'avance peut absorber le GPU et
-le projecteur en plus — il suffit de l'augmenter d'autant. **Le budget prédictif est large ;
-c'est la stabilité du plateau qui le limite, pas l'œil.**
+le projecteur en plus — il suffit de l'augmenter d'autant, ce que `?lead=54` permet sans
+toucher au code. **Le budget prédictif est large ; c'est la stabilité du plateau qui le
+limite, pas l'œil.**
+
+> **Le calcul, avec une unité de rendu et un vidéoprojecteur :**
+> `48 ms` d'analyse `+ 10` de rendu `+ 16` de projecteur `= 74 ms` de chaîne.
+> Pour viser les 20 ms imperceptibles, l'avance doit valoir **54 ms** — soit 7,8 % d'un
+> temps à 87 BPM. L'horloge en accepte jusqu'à 40 %.
+
+**Deux défauts trouvés en vérifiant ce mécanisme, et ils annulaient tous deux l'avance.**
+Le paramètre était reçu par l'horloge puis **multiplié par zéro** : documenté, transmis, et
+sans effet. Et une fois corrigé, l'avance obtenue restait courte — 23 ms pour 30 demandées —
+parce qu'on ne peut tirer qu'aux réveils de la boucle de rendu, soit une fois toutes les
+16,7 ms à 60 images par seconde : on rate donc en moyenne une demi-image. L'horloge
+anticipe désormais cette demi-image, et rend 28,7 ms pour 30 demandées, 60,2 pour 60.
 
 Tout ce qui n'est pas périodique — clap irrégulier, voix, rupture — subit les 48 ms et ne
 peut pas être avancé : prédire l'imprévisible inventerait des événements, ce qui est pire

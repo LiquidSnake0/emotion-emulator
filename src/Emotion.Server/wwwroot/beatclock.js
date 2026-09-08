@@ -27,6 +27,7 @@ export class BeatClock {
     this.locked = false;   // a-t-on vu assez de temps pour se fier a la grille
     this.confidence = 0;   // 0 a 1, monte avec les detections regulieres
     this.justFired = false;
+    this._tire = false;
 
     this._lastError = 0;
   }
@@ -45,13 +46,42 @@ export class BeatClock {
       this.beatMs += (target - this.beatMs) * 0.05;
     }
 
-    const before = this.phase;
-    this.phase += (dtMs + leadMs * 0) / this.beatMs;
+    this.phase += dtMs / this.beatMs;
+
+    // L'AVANCE EST APPLIQUEE AU DECLENCHEMENT, PAS A LA PHASE.
+    //
+    // Elle etait recue puis multipliee par zero : le parametre existait, la documentation
+    // le decrivait, et il ne faisait rien. Toute la strategie de latence du projet repose
+    // pourtant sur lui — c'est ce qui ramene le retard percu du kick sous le seuil ou
+    // l'oeil cesse de lier l'image au son.
+    //
+    // Deux facons de l'appliquer, et une seule est juste. Avancer la phase elle-meme
+    // decalerait aussi le recalage : chaque frappe detectee corrigerait vers une position
+    // fausse, et la grille finirait par courir apres son propre biais. On garde donc la
+    // phase vraie — celle sur laquelle `sync` travaille — et l'on tire simplement plus tot
+    // dans le temps, une fois par temps.
+    // LA MOITIE D'UNE IMAGE, ET CE N'EST PAS UN DETAIL.
+    //
+    // On ne peut tirer qu'aux instants ou la boucle de rendu se reveille : a soixante
+    // images par seconde, une toutes les 16,7 ms. Le seuil est donc franchi quelque part
+    // entre deux reveils, et l'on tire au suivant — en moyenne une demi-image trop tard,
+    // soit 8,3 ms perdues sur une avance qui en vise 30.
+    //
+    // Mesure avant correction : 23,1 ms d'avance reelle pour 30 demandees, 50,9 pour 60.
+    // On anticipe donc d'une demi-image, ce qui centre l'erreur sur zero au lieu de la
+    // laisser toujours du meme cote.
+    const demiImage = dtMs / 2 / this.beatMs;
+    const avance = Math.min(0.4, Math.max(0, leadMs) / this.beatMs + demiImage);
 
     this.justFired = false;
+    if (!this._tire && this.phase >= 1 - avance) {
+      this._tire = true;
+      this.justFired = this.locked;   // on ne declenche que si la grille est fiable
+    }
+
     if (this.phase >= 1) {
       this.phase -= Math.floor(this.phase);
-      this.justFired = this.locked;   // on ne declenche que si la grille est fiable
+      this._tire = false;
     }
 
     return this.phase;
@@ -88,6 +118,7 @@ export class BeatClock {
   reset() {
     this.confidence = 0;
     this.locked = false;
+    this._tire = false;
   }
 
   /** Ecart de la derniere detection a la grille, en millisecondes. Diagnostic. */
