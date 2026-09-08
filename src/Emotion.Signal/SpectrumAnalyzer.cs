@@ -525,6 +525,14 @@ public sealed class SpectrumAnalyzer
         for (var i = 1; i < kickBins; i++) pulse += full[i];
         _tempo.Feed(Smooth(3, PulseRise(pulse)));
 
+        // L'ECART MINIMAL SUIT LE TEMPO, IL N'EST PLUS UNE CONSTANTE.
+        //
+        // Quatre-vingt-cinq centiemes de temps : assez pour refuser tout ce qui tombe entre
+        // deux temps — les 0,75 temps qui dominaient les mesures — sans refuser un temps
+        // dont la frappe arrive un peu tot. Un kick legerement en avance reste un kick ;
+        // une frappe aux trois quarts du temps n'en est pas un.
+        _kick.Suivre(_tempo.Bpm, _frameSeconds * 1000f, 0.85f);
+
         var kick = _kick.Feed(rKick);
         var clap = _clap.Feed(rClap);
 

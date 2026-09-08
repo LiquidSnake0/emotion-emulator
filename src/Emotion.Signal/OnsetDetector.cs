@@ -49,7 +49,33 @@ public sealed class OnsetDetector
     /// C'est un reglage tire du repertoire, pas d'un principe general, d'ou le
     /// parametre : les charleys ont le droit d'aller plus vite que le temps.
     /// </summary>
-    private readonly int _minGap;
+    private int _minGap;
+
+    /// <summary>
+    /// Regle l'ecart minimal sur le tempo mesure, plutot que sur une constante.
+    ///
+    /// POURQUOI UNE CONSTANTE NE POUVAIT PAS MARCHER.
+    ///
+    /// Vingt fenetres valent 427 ms, ce qui a ete regle sur un crate vivant entre 82 et
+    /// 97 BPM. Mais 427 ms represente 0,63 temps a 88 BPM et 0,58 a 82 : dans les deux cas,
+    /// le detecteur laisse passer des attaques qui ne sont pas sur le temps. La mesure le
+    /// confirmait — sur un extrait, <b>24 intervalles sur 39 valaient 0,75 temps</b> et
+    /// neuf seulement un temps entier, ce qui donne a l'oeil un « 1.2..3..4 » au lieu d'un
+    /// « 1..2..3..4 ».
+    ///
+    /// L'ecart doit donc se compter en temps, pas en millisecondes : c'est une grandeur
+    /// musicale. Tant que le tempo n'est pas accroche, on garde la constante — mieux vaut
+    /// un filtre approximatif qu'un filtre calcule sur un tempo invente.
+    /// </summary>
+    public void Suivre(float? bpm, float frameMs, float partDeTemps)
+    {
+        if (bpm is not { } b || b <= 0f) return;
+        var temps = 60_000f / b;
+        _minGap = Math.Max(2, (int)MathF.Round(temps * partDeTemps / frameMs));
+    }
+
+    /// <summary>Ecart minimal en vigueur, en fenetres. Diagnostic.</summary>
+    public int MinGap => _minGap;
 
     /// <summary>
     /// Marge au-dessus de la moyenne recente. Trop bas, chaque nappe declenche ;
