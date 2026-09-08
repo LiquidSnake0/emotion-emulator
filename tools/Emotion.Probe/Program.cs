@@ -137,13 +137,25 @@ if (kickAt.Count > 8 && gridMs.Count > 0)
     // peut se caler sur ces frappes ou si elle poursuit du bruit.
     var beat = Median(gridMs);
     var kg = kickAt.Zip(kickAt.Skip(1), (a, b) => (float)(b - a)).ToList();
-    var onGrid = kg.Count(g =>
-    {
-        var r = g / beat;
-        return MathF.Abs(r - MathF.Round(r)) < 0.15f && r >= 0.6f;
-    });
-    Console.WriteLine($"intervalles sur la grille  {onGrid * 100 / kg.Count} %" +
-                      $"  ({onGrid}/{kg.Count} a moins de 15 % d'un multiple du temps)");
+    // ATTENTION AU CRITERE. Exiger un multiple entier du temps rejette les croches, et
+    // un kick sur un contretemps est parfaitement musical. On compte donc separement les
+    // deux grilles, et la seconde est la seule qui ait un sens musical.
+    // Tolerance absolue, en fraction de temps, et non relative a l'unite testee : sans
+    // quoi la grille la plus fine est jugee le plus severement, ce qui donne des croches
+    // moins souvent justes que des temps — un resultat impossible, puisque tout multiple
+    // du temps est aussi un multiple de la croche.
+    int Near(float r, float unit) => MathF.Abs(r - unit * MathF.Round(r / unit)) < 0.12f ? 1 : 0;
+    // La tolerance doit se resserrer avec la grille, sinon la plus fine est
+    // trivialement satisfaite : a plus ou moins 0,12 temps sur un pas de 0,25, on couvre
+    // 96 % de l'espace et le chiffre ne prouve plus rien.
+    int NearT(float r, float unit, float tol) =>
+        MathF.Abs(r - unit * MathF.Round(r / unit)) < tol ? 1 : 0;
+    var onBeat = kg.Sum(g => NearT(g / beat, 1f, 0.12f));
+    var onEighth = kg.Sum(g => NearT(g / beat, 0.5f, 0.06f));
+    var onSixteenth = kg.Sum(g => NearT(g / beat, 0.25f, 0.03f));
+    Console.WriteLine($"intervalles sur la grille  temps {onBeat * 100 / kg.Count} %" +
+                      $"  ·  croches {onEighth * 100 / kg.Count} %" +
+                      $"  ·  doubles {onSixteenth * 100 / kg.Count} %  (sur {kg.Count})");
 
     var close = syncErr.Count(e => e < 0.1f);
     Console.WriteLine($"frappes bien calees        {close * 100 / syncErr.Count} %" +

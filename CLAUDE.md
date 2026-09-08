@@ -400,6 +400,45 @@ resserrée ensuite.
 
 **Mais rien de tout cela ne vaut avant d'avoir moins de 50 % de fausses frappes.**
 
+### Le détecteur d'attaques : deux échecs, et un fait rassurant
+
+Deux tentatives, aucune ne bat l'existant :
+
+| Tentative | kicks | sur les temps | verrouillage |
+|---|---|---|---|
+| **en place** (moyenne × 1,8) | 142 / 139 / 140 | 43 / 34 / 38 % | **54 / 76 / 51 %** |
+| médiane × 1,8 | 167 / 102 / 108 | 34 / 39 / 43 % | 24 / 60 / 32 % |
+| médiane + 3 écarts absolus médians | 136 / 95 / 104 | 45 / 37 / 39 % | 51 / 45 / 35 % |
+
+La médiane est pourtant la statistique juste — une moyenne est tirée vers le haut par les
+pics qu'elle sert à détecter. Elle échoue quand même, et **réduire le nombre de détections
+n'améliore pas leur qualité** : les frappes supprimées étaient autant des bonnes que des
+mauvaises.
+
+**Comparaison externe, sur les mêmes extraits :**
+
+| | attaques / 100 s | écart médian | sur les temps | sur les croches |
+|---|---|---|---|---|
+| `aubioonset -O hfc` | 483 · 617 | ~160 ms | 3 · 4 % | 16 · 3 % |
+| **ce projet** | 142 · 139 | **619 ms** | **43 · 34 %** | 35 · 28 % |
+
+Le hasard donnerait 24 % sur les temps à cette tolérance. Nous sommes donc
+significativement au-dessus, et **environ dix fois meilleurs qu'`aubio`** — qui détecte
+toutes les micro-attaques sans distinguer le kick.
+
+> **Le blocage n'est plus un algorithme, c'est l'absence de vérité terrain.** On ne peut
+> pas mesurer une précision et un rappel sans savoir où sont les vrais kicks. `aubio` ne
+> peut pas servir de référence ici : il est plus mauvais que nous. Il faut soit une
+> annotation manuelle de quelques mesures, soit un signal de test dont la grille est
+> connue par construction.
+
+**Deux erreurs de mesure commises et corrigées en chemin**, toutes deux dans le sens
+flatteur : une tolérance relative à l'unité testée, qui rendait les croches *moins*
+souvent justes que les temps — impossible, tout multiple du temps étant multiple de la
+croche ; puis une tolérance de ±0,12 temps sur une grille de 0,25, qui couvre 96 % de
+l'espace et annonçait fièrement « 97 % sur la grille ». **Une métrique se vérifie comme un
+algorithme.**
+
 ## Structure
 
 | Projet | Rôle | Dépendances |
