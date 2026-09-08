@@ -54,7 +54,19 @@ const SRC = {
 // couleur seule ne suffisait pas. L'ordre vertical resout les deux d'un coup parce qu'il
 // est deja dans l'oreille : le grave est bas et large, l'aigu est haut et fin. La scene
 // se lit alors comme un spectre debout.
-const HAUTEUR = { aigu: 0.13, voix: 0.31, piano: 0.50, sol: 0.68 };
+// CHAQUE SOURCE A SA BANDE, ET N'EN SORT PAS.
+//
+// Donner une position ne suffit pas : sans borne, une forme qui bouge finit dans celle du
+// voisin — la bande de la voix, avec sa course d'un tiers de hauteur, entrait dans
+// l'octogone du piano. Les zones se touchent sans se recouvrir, et chaque forme est
+// dimensionnee pour tenir dans la sienne.
+const ZONE = {
+  hat:   { de: 0.02, a: 0.13 },
+  aigu:  { de: 0.17, a: 0.29 },
+  voix:  { de: 0.34, a: 0.55 },
+  piano: { de: 0.59, a: 0.73 },
+  sol:   0.82,
+};
 
 export class Visual {
   constructor(canvas) {
@@ -296,7 +308,7 @@ export class Visual {
     ctx.fillRect(0, 0, w, h);
 
     const cx = w / 2, unit = Math.min(w, h);
-    const sol = h * HAUTEUR.sol;
+    const sol = h * ZONE.sol;
 
     // TRAME — quelques verticales tres pales, teintees par le disque en cours. Les formes
     // ont besoin d'un fond a quoi se mesurer ; sans elle, tout flotte dans le vide.
@@ -384,7 +396,11 @@ export class Visual {
     // Son contour melodique elargit l'arc au lieu de le monter — une note grave qui monte
     // occupe plus de place, elle ne quitte pas le sol.
     const large = 1 + (this.lowPitch.value - 0.5) * 0.30;
-    const r = unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07) * large;
+    // Bornee a la hauteur disponible sous l'horizon augmentee d'un tiers : la masse peut
+    // enfler franchement sans jamais atteindre la zone du piano.
+    const plafond = (ZONE.sol - ZONE.piano.a) * 1.35;
+    const r = Math.min(plafond * unit * 1.4,
+                       unit * (0.13 + this.bass.value * 0.22 + this.bassHit.value * 0.07) * large);
     if (r <= 0) return;
 
     ctx.save();
@@ -456,8 +472,9 @@ export class Visual {
   // la ou un clignotement permanent fatiguerait.
   drawPiano(ctx, cx, h, unit) {
     const m = this.voice.value, hit = this.voiceHit.value;
-    const r = unit * (0.105 + m * 0.045 + hit * 0.03);
-    const y = h * HAUTEUR.piano;
+    const zone = (ZONE.piano.a - ZONE.piano.de) * h;
+    const r = Math.min(zone * 0.46, unit * (0.070 + m * 0.030 + hit * 0.020));
+    const y = h * (ZONE.piano.de + ZONE.piano.a) / 2;
 
     S.polygon(ctx, cx, y, r, 8, this.spin * 0.5, SRC.piano, 0.18 + m * 0.55,
               false, Math.max(1.5, unit * 0.005 * (0.6 + m)));
@@ -483,8 +500,12 @@ export class Visual {
 
     // LE GESTE QUE SELIM NE VOYAIT PAS. Monter dans les notes ne change pas le volume :
     // seul un deplacement peut le rendre. La bande occupe la moitie haute de la scene.
-    const y = h * (HAUTEUR.voix + 0.10) - (this.midPitch.value - 0.5) * h * 0.30;
-    const ep = unit * (0.045 + m * 0.075 + hit * 0.05);
+    // La course et l'epaisseur sont taillees pour que la bande tienne entiere dans sa
+    // zone : le contour la promene d'un bord a l'autre sans jamais la faire deborder.
+    const ep = unit * (0.030 + m * 0.040 + hit * 0.025);
+    const marge = ep / h;
+    const de = ZONE.voix.de + marge, a = ZONE.voix.a - marge;
+    const y = h * (a - (a - de) * this.midPitch.value);
 
     const g = ctx.createLinearGradient(0, y - ep, 0, y + ep);
     g.addColorStop(0,    S.rgba(SRC.voix, 0));
@@ -518,12 +539,19 @@ export class Visual {
 
     // Le nuage entier glisse avec le contour de l'aigu : les losanges gardent leur
     // dispersion, mais montent et descendent ensemble comme une seule voix.
-    const glisse = (this.highPitch.value - 0.5) * h * 0.10;
+    // Le nuage glisse dans sa zone avec le contour de l'aigu, en gardant sa dispersion :
+    // le decalage et l'etendue sont calcules pour qu'aucun losange n'en sorte.
+    const r = unit * 0.018 * (0.45 + v);
+    const marge = r / h;
+    const de = ZONE.aigu.de + marge, a = ZONE.aigu.a - marge;
+    const etendue = (a - de) * 0.45;
+    const centre = a - (a - de) * this.highPitch.value;
+
     for (let i = 0; i < 6; i++) {
       const p = S.scatter(i);
       S.polygon(ctx, w * (0.10 + p.x * 0.80),
-                h * (HAUTEUR.aigu - 0.04 + p.y * 0.14) - glisse,
-                unit * 0.020 * (0.45 + v), 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
+                h * (centre + (p.y - 0.5) * etendue),
+                r, 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
     }
   }
 
@@ -553,7 +581,8 @@ export class Visual {
       const r = unit * (0.004 + eclat * 0.006 * (0.5 + v));
       ctx.fillStyle = S.rgba(SRC.hat, eclat * v * coupe * 0.9);
       ctx.beginPath();
-      ctx.arc(w * (0.06 + p.x * 0.88), h * (0.03 + p.y * 0.13), r, 0, TAU);
+      ctx.arc(w * (0.06 + p.x * 0.88),
+              h * (ZONE.hat.de + p.y * (ZONE.hat.a - ZONE.hat.de)), r, 0, TAU);
       ctx.fill();
     }
   }

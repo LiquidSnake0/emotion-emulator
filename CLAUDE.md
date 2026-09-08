@@ -547,6 +547,12 @@ basse, kick et voix se recouvraient — et les séparer par la couleur seule ne 
 L'ordre vertical résout les deux d'un coup parce qu'il est déjà dans l'oreille : le grave
 est bas et large, l'aigu est haut et fin. La scène se lit comme un **spectre debout**.
 
+**Chaque source a sa bande, et n'en sort pas.** Donner une position ne suffit pas : sans
+borne, une forme qui bouge finit dans celle du voisin — la bande de la voix, avec sa course
+d'un tiers de hauteur, entrait dans l'octogone du piano. Les zones se touchent sans se
+recouvrir, et chaque forme est dimensionnée pour tenir dans la sienne, contour mélodique
+compris.
+
 | Source | Forme | Couleur | Hauteur |
 |---|---|---|---|
 | charleys | réglette de traits | gris | tout en haut |
