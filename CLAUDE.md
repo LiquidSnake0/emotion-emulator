@@ -360,8 +360,45 @@ temps fort qui plafonne à une fenêtre sur deux : *un vote porté dans une gril
 désigne un temps au hasard.*
 
 Ce défaut domine complètement les 21 ms que l'emprunt 3 corrige. Il est donc gardé mais
-**non prouvé** : sa valeur ne pourra être jugée qu'une fois la phase réparée. C'est le
-prochain chantier, et il est plus important que tout ce qui précède.
+**non prouvé**.
+
+### Et le diagnostic s'est retourné : ce n'est pas la grille
+
+En cherchant à corriger la phase, deux mesures ont renversé la conclusion :
+
+```
+période de la grille  625 / 619 / 634 ms      tempo publié  625 / 619 / 628 ms   → écart 0 à 0,9 %
+intervalles entre kicks tombant sur un multiple du temps :  51 % · 39 % · 46 %
+frappes à moins de 0,1 temps de la grille :                 35 % · 20 % · 27 %
+```
+
+La grille tourne exactement au bon tempo. Mais **moins d'une frappe détectée sur deux
+tombe sur un multiple du temps.** La détection produit autant de bruit que de signal, et
+une boucle qui se corrige autant sur l'un que sur l'autre poursuit le bruit.
+
+> **Le problème n'est pas dans `BeatGrid`, il est dans `OnsetDetector`.** J'ai passé la
+> soirée à améliorer le vote du temps fort, puis la phase de la grille, alors que les deux
+> reposent sur des frappes fausses une fois sur deux.
+
+### Quatre tentatives sur la phase, quatre reculs
+
+| Tentative | Verrouillage (300 / 900 / 1500 s) |
+|---|---|
+| **état commité** | **54 / 76 / 51 %** |
+| `Sync` utilisant enfin l'instant réel de la frappe (correction d'un vrai bug) | 24 / 55 / 39 % |
+| plus une fenêtre de capture gaussienne | 25 / 65 / 50 % |
+
+Le paramètre `tMs` de `Sync` était bel et bien reçu et jamais lu — un vrai défaut, qui
+rendait `TransientLocator` entièrement inopérant. **Le corriger dégrade** : le système
+bénéficiait accidentellement du bug.
+
+La fenêtre de capture — ne se laisser tirer que par ce qui tombe près de la grille — est
+la bonne réponse de principe, et elle échoue pour une raison connue : un PLL sans phase
+d'acquisition ne peut pas s'accrocher, puisque tant qu'il est mal calé, *toutes* les
+vraies frappes lui paraissent lointaines. Il faudrait une fenêtre large au départ,
+resserrée ensuite.
+
+**Mais rien de tout cela ne vaut avant d'avoir moins de 50 % de fausses frappes.**
 
 ## Structure
 

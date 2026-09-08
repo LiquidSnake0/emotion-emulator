@@ -56,6 +56,8 @@ var ruptures = 0;
 var kickAt = new List<long>();
 var syncErr = new List<float>();
 var offsets = new List<float>();
+var gridMs = new List<float>();
+var tempoMs = new List<float>();
 var lastReason = "";
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
@@ -74,6 +76,8 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     if (f.NoveltyOnset) novelties++;
     if (f.Harmony.Change > 0.45f) chordChanges++;
     changes.Add(f.Harmony.Change);
+    gridMs.Add(analyzer.GridBeatMs);
+    if (f.Bpm is { } bq) tempoMs.Add(60_000f / bq);
     if (f.Bpm is { } bp) tempos.Add(bp);
 
     var s = f.Structure;
@@ -126,12 +130,34 @@ if (kickAt.Count > 4)
         (float.IsNaN(beat) ? "" : $"  =  {kmed / beat:F2} temps") +
         $"  ·  minimum autorise {OnsetDetector.MinGapMs:F0} ms");
 }
+if (kickAt.Count > 8 && gridMs.Count > 0)
+{
+    // La mediane ne dit rien de la dispersion. Ce qui compte est la part des intervalles
+    // qui tombent vraiment sur un multiple du temps : c'est elle qui decide si la grille
+    // peut se caler sur ces frappes ou si elle poursuit du bruit.
+    var beat = Median(gridMs);
+    var kg = kickAt.Zip(kickAt.Skip(1), (a, b) => (float)(b - a)).ToList();
+    var onGrid = kg.Count(g =>
+    {
+        var r = g / beat;
+        return MathF.Abs(r - MathF.Round(r)) < 0.15f && r >= 0.6f;
+    });
+    Console.WriteLine($"intervalles sur la grille  {onGrid * 100 / kg.Count} %" +
+                      $"  ({onGrid}/{kg.Count} a moins de 15 % d'un multiple du temps)");
+
+    var close = syncErr.Count(e => e < 0.1f);
+    Console.WriteLine($"frappes bien calees        {close * 100 / syncErr.Count} %" +
+                      $"  (ecart de phase sous 0,1 temps)");
+}
+
 if (syncErr.Count > 4)
 {
     var m = syncErr.Average();
     var sd = MathF.Sqrt(syncErr.Sum(e => (e - m) * (e - m)) / syncErr.Count);
     var beatMs = analyzer.Bpm is { } b3 ? 60_000f / b3 : 625f;
-    Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F0} ms" +
+    Console.WriteLine($"periode de la grille  mediane {Median(gridMs):F0} ms" +
+    (tempoMs.Count > 0 ? $"  ·  tempo publie {Median(tempoMs):F0} ms  ·  ecart {100f * (Median(gridMs) - Median(tempoMs)) / Median(tempoMs):+0.0;-0.0} %" : "  ·  tempo jamais publie"));
+Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F0} ms" +
                       $"  ·  dispersion {sd:F3}  ·  median {Median(syncErr):F3}");
     Console.WriteLine($"position dans la fenetre  moyenne {offsets.Average():F1} ms sur 21");
 }

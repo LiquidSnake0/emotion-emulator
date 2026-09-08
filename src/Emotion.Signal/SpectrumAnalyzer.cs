@@ -141,6 +141,9 @@ public sealed class SpectrumAnalyzer
     /// </summary>
     public float SyncError => _grid.LastSyncError;
 
+    /// <summary>Periode de la grille, en millisecondes. A comparer au tempo publie.</summary>
+    public float GridBeatMs => _grid.BeatMs;
+
     /// <summary>Position de l'attaque dans la fenetre courante, en millisecondes.</summary>
     public float TransientOffsetMs => _transient.OffsetMs;
 
