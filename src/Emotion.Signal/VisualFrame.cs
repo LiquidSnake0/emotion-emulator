@@ -88,7 +88,22 @@ public readonly record struct VisualFrame(
     bool NoveltyOnset = false,
     float Blend = 0f,
     float Flux = 0f,
-    float Threshold = 0f)
+    float Threshold = 0f,
+
+    /// <summary>Tempo apporte par la fiche du cue, ou null si le disque n'a pas ete prepare.</summary>
+    float? ExpectedBpm = null,
+
+    /// <summary>Decalage accumule entre la grille attendue et la grille reelle, en temps.</summary>
+    float TempoDrift = 0f,
+
+    /// <summary>A quel point cette derive se voit, 0 a 1.</summary>
+    float DriftVisible = 0f,
+
+    /// <summary>Le tempo tel qu'il a ete annonce la derniere fois. Stable entre deux annonces.</summary>
+    float AnnouncedBpm = 0f,
+
+    /// <summary>Une annonce de tempo tombe sur cette image.</summary>
+    bool TempoAnnounce = false)
 {
     /// <summary>Nombre de bandes emises. Fixe : le shader dimensionne ses uniformes dessus.</summary>
     public const int BandCount = 12;

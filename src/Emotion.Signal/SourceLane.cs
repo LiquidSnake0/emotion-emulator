@@ -1,0 +1,188 @@
+namespace Emotion.Signal;
+
+/// <summary>
+/// Une voie d'analyse : une source, isolee, qui ne touche qu'a son propre etat.
+///
+/// POURQUOI UNE INTERFACE PLUTOT QU'UNE BOUCLE SUR DES TABLEAUX.
+///
+/// L'ancienne version tenait les six registres dans huit tableaux paralleles indexes par
+/// rang. Cela marche tant qu'un seul fil s'en occupe, mais rien dans cette forme ne dit
+/// qu'un registre est independant des autres : il faut relire toute la boucle pour s'en
+/// convaincre, et la moindre variable commune s'y glisse sans qu'on la remarque — il y en
+/// avait une, <c>hits</c>, et elle aurait perdu des attaques des la premiere execution
+/// parallele.
+///
+/// Une voie qui possede son etat rend cette independance <b>visible et verifiable</b> :
+/// ce qu'elle ne peut pas atteindre, elle ne peut pas le corrompre. La separation des
+/// donnees remplace la synchronisation, et c'est ce qui permet aux six de tourner
+/// ensemble sans un seul verrou.
+///
+/// C'est aussi ce qui rend le pipeline ouvert a l'extension : ajouter une septieme source
+/// n'oblige a modifier aucune des six autres.
+/// </summary>
+public interface ISourceLane
+{
+    /// <summary>Rang de la voie, du grave a l'aigu. Fixe sa zone dans le paquet GPU.</summary>
+    int Rank { get; }
+
+    /// <summary>Une image de spectre. La voie n'y lit que ce qui la concerne.</summary>
+    void Feed(ReadOnlySpan<float> spectrum);
+
+    /// <summary>Ce que la voie a a dire d'elle-meme, apres analyse.</summary>
+    LaneState State { get; }
+
+    void Reset();
+}
+
+/// <summary>
+/// Ce qu'une voie publie.
+///
+/// Les trois premieres grandeurs decrivent l'instant et sont justes des la premiere image.
+/// Les trois dernieres decrivent la source elle-meme et se forment lentement — la
+/// confiance dit ou en est ce portrait. Les unes n'attendent pas les autres : c'est ce qui
+/// permet au paquet de partir a cadence fixe pendant que chaque source murit a son rythme.
+/// </summary>
+/// <param name="Level">activation, 0 a 1.</param>
+/// <param name="Position">ou joue la source dans son registre, 0 en bas, 1 en haut.</param>
+/// <param name="Hit">une attaque vient d'etre constatee.</param>
+/// <param name="Confidence">a quel point l'empreinte est formee, 0 a 1.</param>
+/// <param name="Brightness">brillance moyenne de la source.</param>
+/// <param name="Texture">raie franche a souffle.</param>
+public readonly record struct LaneState(
+    float Level, float Position, bool Hit,
+    float Confidence = 0f, float Brightness = 0.5f, float Texture = 0.5f)
+{
+    public static LaneState Silent => new(0f, 0.5f, false);
+}
+
+/// <summary>
+/// La voie d'un registre : une octave du spectre, suivie a part.
+///
+/// Elle porte exactement ce que le registre exige et rien de plus — ses bornes, son
+/// maximum recent, son contour, son detecteur d'attaque. Aucune de ces grandeurs n'est
+/// partagee avec un autre registre, ce qui est la condition pour que les six tournent en
+/// meme temps.
+/// </summary>
+public sealed class RegisterLane : ISourceLane
+{
+    private const float FrameSeconds = 1024f / 48_000f;
+
+    private readonly int _lo;
+    private readonly int _hi;
+    private readonly Damper _pitch;
+    private readonly OnsetDetector _onset;
+
+    /// <summary>
+    /// Ce que la voie apprend d'elle-meme au fil du morceau. Elle en est proprietaire :
+    /// une identite qui vivrait dans une table commune redeviendrait un point de
+    /// rencontre entre les six.
+    /// </summary>
+    private readonly SourceIdentity _identity = new();
+
+    private float _peak = 1e-3f;
+    private float _target = 0.5f;
+    private float _level;
+    private float _previous;
+
+    public int Rank { get; }
+    public LaneState State { get; private set; } = LaneState.Silent;
+
+    public RegisterLane(int rank, int lo, int hi)
+    {
+        Rank = rank;
+        _lo = lo;
+        _hi = hi;
+
+        // Le contour glisse d'autant plus vite que le registre est haut : une note aigue
+        // change plus souvent qu'une note grave.
+        _pitch = new Damper(6f + rank * 1.2f, 0.5f);
+
+        // Huit fenetres, soit 170 ms : deux notes par temps restent distinctes a 87 BPM,
+        // la ou la limite des percussions en autoriserait une seule.
+        _onset = new OnsetDetector(minGap: 8);
+    }
+
+    public void Feed(ReadOnlySpan<float> spectrum)
+    {
+        var hi = Math.Min(_hi, spectrum.Length);
+        if (hi <= _lo)
+        {
+            State = new LaneState(0f, _pitch.Value, false,
+                                  _identity.Confidence, _identity.Brightness, _identity.Texture);
+            return;
+        }
+
+        // OU JOUE CE REGISTRE, ET PAS SEULEMENT COMBIEN.
+        //
+        // Un niveau ne decrit aucun mouvement : quand une melodie monte, une bande baisse
+        // et sa voisine monte — deux faits independants dont aucun ne porte le geste. Le
+        // centre de gravite, lui, se deplace, et une forme peut le suivre.
+        double sum = 0, weighted = 0;
+        for (var i = _lo; i < hi; i++)
+        {
+            var v = spectrum[i];
+            sum += v;
+            weighted += v * MathF.Log2(MathF.Max(i, 1));
+        }
+
+        var raw = (float)(sum / (hi - _lo));
+
+        // Normalisation sur le maximum recent du registre : un instrument discret et un
+        // instrument pousse doivent tous deux se voir.
+        _peak = MathF.Max(raw, _peak * 0.9995f);
+        _level = Clamp01(raw / MathF.Max(_peak, 1e-4f));
+
+        if (sum > 1e-6)
+        {
+            var bottom = MathF.Log2(MathF.Max(_lo, 1));
+            var span = MathF.Log2(MathF.Max(hi - 1, 2)) - bottom;
+            var pos = span > 1e-3f ? (float)(weighted / sum - bottom) / span : 0.5f;
+
+            // ON NE SUIT QUE CE QU'ON ENTEND. Un centre de gravite calcule sur un registre
+            // presque muet saute au gre du bruit de fond, puis saute encore au retour du
+            // son. La position d'une note qui n'existe pas n'a pas a etre tenue a jour.
+            var lively = 0.04f + 0.16f * _level;
+            _target += (Clamp01(pos) - _target) * lively;
+        }
+
+        // Puis un ressort, et non une seconde moyenne : une moyenne exponentielle arrive
+        // toujours en retard et sans elan, ce qui fait qu'un mouvement parait mou. Un
+        // ressort a une vitesse, donc de l'inertie.
+        var position = _pitch.Feed(_target, FrameSeconds);
+
+        // La montee, et non le niveau : une note tenue ne doit pas declencher en
+        // permanence, seule son attaque compte.
+        var hit = _onset.Feed(MathF.Max(0f, _level - _previous));
+        _previous = _level;
+
+        // Le portrait se forme ici, sur le meme fil que le reste de la voie : il ne coute
+        // qu'un passage sur la bande, et il ne sort jamais de la voie.
+        _identity.Feed(spectrum, _lo, hi, _level);
+
+        State = new LaneState(_level, position, hit,
+                              _identity.Confidence, _identity.Brightness, _identity.Texture);
+    }
+
+    /// <summary>Le portrait de la source, pour la sonde.</summary>
+    public SourceIdentity Identity => _identity;
+
+    /// <summary>Le nom pose sur cette source, ou zero. Ecrit de l'exterieur, transporte tel quel.</summary>
+    public byte Label
+    {
+        get => _identity.Label;
+        set => _identity.Label = value;
+    }
+
+    public void Reset()
+    {
+        _peak = 1e-3f;
+        _target = 0.5f;
+        _level = 0f;
+        _previous = 0f;
+        _pitch.Reset(0.5f);
+        _identity.Reset();
+        State = LaneState.Silent;
+    }
+
+    private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
+}

@@ -33,6 +33,10 @@ Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} 
 // defaut depuis qu'on l'a mesuree. Sert a comparer les deux sur la meme matiere.
 var separate = args.Length > 4 && args[4] == "sep";
 var analyzer = new SpectrumAnalyzer(rate, separate);
+
+// « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
+// avant. Sert a comparer les deux regimes sur le meme morceau.
+if (args.Contains("inline")) analyzer.Separation.ApprentissageEnLigne = true;
 Console.WriteLine(separate ? "separation active" : "separation COUPEE");
 const int hop = SpectrumAnalyzer.Window;
 
@@ -70,10 +74,28 @@ var gridMs = new List<float>();
 var tempoMs = new List<float>();
 var lastReason = "";
 
+// Combien de temps mur coute une image d'analyse. C'est la seule mesure qui dise si la
+// chaine tient le direct : une image qui depasse le pas de 21 ms fait prendre du retard,
+// et ce retard s'accumule.
+var coutImage = new List<double>();
+var annonces = new List<(long T, float Bpm)>();
+var murAt = new long[Voices.Registers];
+Array.Fill(murAt, -1L);
+var chronoImage = new System.Diagnostics.Stopwatch();
+
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
     var tMs = (long)(i * 1000L / rate);
+    chronoImage.Restart();
     var f = analyzer.Analyze(mono.AsSpan(i, hop), tMs);
+    coutImage.Add(chronoImage.Elapsed.TotalMilliseconds);
+
+    // A quel instant chaque source devient assez sure d'elle pour qu'un nom tienne. Les
+    // six ne s'attendent pas : c'est tout l'interet de les faire murir separement.
+    for (var r = 0; r < Voices.Registers; r++)
+        if (murAt[r] < 0 && analyzer.Voix.EtatDe(r).Confidence >= 0.6f) murAt[r] = tMs;
+
+    if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
 
     if (f.Hits.Kick)
     {
@@ -298,6 +320,38 @@ if (totalBreaks >= 4)
     }
 }
 Console.WriteLine($"tension mediane     {Median(buildups):F2} · maximum {buildups.Max():F2}");
+
+// Ce que le pipeline a mesure sur cette machine, et ce qu'il en a conclu. La decision
+// n'est pas ecrite dans le code : elle depend du nombre de coeurs et de ce que coute une
+// repartition ici.
+var pipe = analyzer.SourcePipeline;
+var (seqUs, parUs) = pipe.Cost;
+Console.WriteLine($"voies               {(pipe.Parallel ? "PARALLELE" : "SEQUENTIEL")} retenu · " +
+                  $"sequentiel {seqUs:F1} us/image · parallele {parUs:F1} us/image");
+coutImage.Sort();
+var pireImage = coutImage[^1];
+var p99 = coutImage[(int)(coutImage.Count * 0.99)];
+var enRetard = coutImage.Count(x => x > 21.3);
+Console.WriteLine($"cout d'une image    median {coutImage[coutImage.Count / 2]:F2} ms · " +
+                  $"99e centile {p99:F2} ms · pire {pireImage:F1} ms · " +
+                  $"{enRetard} images au-dessus du pas de 21 ms");
+
+Console.WriteLine($"annonces de tempo   {annonces.Count} : " +
+                  string.Join(" · ", annonces.Take(12).Select(a => $"{a.T / 1000f:F0}s {a.Bpm:F1}")));
+Console.WriteLine("maturite des sources  (confiance 0,6 atteinte a)");
+for (var r = 0; r < Voices.Registers; r++)
+{
+    var e = analyzer.Voix.EtatDe(r);
+    var id = analyzer.Voix.PortraitDe(r);
+    Console.WriteLine($"  source {r} : " +
+                      (murAt[r] < 0 ? "jamais       " : $"{murAt[r] / 1000f,6:F1} s     ") +
+                      $"confiance {e.Confidence:F2} · dispersion {id.Spread:F3} · " +
+                      $"{id.Observations} observations · brillance {e.Brightness:F2} · texture {e.Texture:F2}");
+}
+
+var sep = analyzer.Separation;
+Console.WriteLine($"apprentissage NMF   {sep.Apprentissages} fois · moyenne {sep.ApprentissageMs:F1} ms · " +
+                  $"pire {sep.ApprentissagePireMs:F1} ms  (une image dure 21 ms)");
 Console.WriteLine($"ruptures            {drops.Count}" +
                   (drops.Count > 0 ? "  a " + string.Join(", ", drops.Select(d => $"{d / 1000f:F0} s")) : ""));
 if (exportTo is not null)

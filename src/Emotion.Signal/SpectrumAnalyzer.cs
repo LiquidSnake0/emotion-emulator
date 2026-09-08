@@ -64,6 +64,28 @@ public sealed class SpectrumAnalyzer
     // la separation, qui etait jusqu'ici calculee puis jetee.
     private readonly VoiceTracker _voices;
 
+    /// <summary>Le pipeline des voies, pour que la sonde rapporte ce qu'il a mesure.</summary>
+    public SourcePipeline SourcePipeline => _voices.Pipeline;
+
+    /// <summary>Les voies, pour lire leur maturite et leur poser un nom.</summary>
+    public VoiceTracker Voix => _voices;
+
+    /// <summary>
+    /// Ce que la fiche du cue affirmait du tempo, confronte a ce que le disque fait.
+    ///
+    /// Poser <c>Reference.Expected</c> depuis la fiche evite de recalculer ce qui a deja
+    /// ete etabli au casque — et fait apparaitre la derive si le plateau s'ecarte.
+    /// </summary>
+    public TempoReference Reference { get; } = new();
+
+    // LA SEPARATION PAR LE TIMBRE, ET NON PAR LA FREQUENCE.
+    //
+    // Un piano et un saxophone qui jouent la meme octave tombent dans la meme bande :
+    // aucune finesse de decoupage ne les separe, on additionne leurs niveaux et l'on
+    // obtient une grandeur qui ne decrit ni l'un ni l'autre. Ils ne partagent pas leur
+    // timbre, et c'est par la qu'on les prend.
+    private readonly SourceSeparator _separation;
+
     // La couleur du son. Elle travaille sur le spectre complet et non sur le percussif :
     // un filtre passe-bas agit sur tout, et le mesurer apres separation reviendrait a
     // regarder par le trou de la serrure.
@@ -117,6 +139,13 @@ public sealed class SpectrumAnalyzer
     // du premier soit plus appuye, si.
     private readonly DownbeatProfile _profile = new();
 
+    // Deux jeux publies a tour de role : rien n'est alloue par image.
+    private readonly float[][] _sepPool =
+        [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
+    private readonly float[][] _hautPool =
+        [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
+    private int _sepTurn;
+
     // Ou tombe l'attaque a l'interieur de la fenetre. Sans lui, un kick au premier
     // echantillon et un kick au dernier sont annonces au meme instant, a 21 ms pres.
     private readonly TransientLocator _transient = new();
@@ -165,6 +194,7 @@ public sealed class SpectrumAnalyzer
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
+        _separation = new SourceSeparator(Window / 2);
         _timbre = new TimbreTracker(sampleRate, Window);
         // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
         // un peu moins nette, mais elle reste tres suffisante pour empecher le piano de
@@ -178,6 +208,9 @@ public sealed class SpectrumAnalyzer
     /// <summary>Ce que le profil des quatre temps designe, pour le reglage.</summary>
     public (int Offset, float Confidence, IReadOnlyList<float> Scores, int GridBeat) Downbeat =>
         (_profile.Offset, _profile.Confidence, _profile.Scores, _grid.Beat);
+
+    /// <summary>Les sources separees par le timbre, du grave a l'aigu.</summary>
+    public SourceSeparator Separation => _separation;
 
     /// <summary>La courbe d'autocorrelation du tempo, pour le reglage.</summary>
     public IEnumerable<(float Bpm, float Raw, float Score)> TempoPeaks(int take = 6) =>
@@ -306,6 +339,28 @@ public sealed class SpectrumAnalyzer
             voices = _voices.Feed(full);
         }
 
+        // Les six niveaux publies deviennent les six sources separees : ils decrivent des
+        // timbres et non des tranches de frequence. Les agregats grave/medium/aigu
+        // continuent de venir des registres, qui les rendent mieux.
+        if (_separation.Pret)
+        {
+            var act = _sepPool[_sepTurn];
+            var haut = _hautPool[_sepTurn];
+            _sepTurn ^= 1;
+
+            var max = 1e-4f;
+            for (var i = 0; i < SourceSeparator.Sources; i++)
+                max = MathF.Max(max, _separation.ActivationOrdonnee(i));
+
+            for (var i = 0; i < SourceSeparator.Sources; i++)
+            {
+                act[i] = Clamp01(_separation.ActivationOrdonnee(i) / max);
+                haut[i] = _separation.HauteurOrdonnee(i);
+            }
+
+            voices = voices with { Levels = act, Pitches = haut };
+        }
+
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint
         // n'est pas une attaque.
         //
@@ -417,6 +472,10 @@ public sealed class SpectrumAnalyzer
         var eventCount = (hits.Kick ? 1 : 0) + (hits.Clap ? 1 : 0) + (hits.Hat ? 1 : 0)
                        + (voices.LowHit ? 1 : 0) + (voices.MidHit ? 1 : 0)
                        + (voices.HighHit ? 1 : 0);
+        // La separation travaille sur le spectre entier : c'est le timbre complet qui
+        // distingue deux instruments, pas sa moitie percussive.
+        _separation.Feed(full);
+
         var timbre = _timbre.Feed(full, eventCount);
 
         // Les grandeurs continues partent amorties ; les evenements restent bruts. Une
@@ -513,6 +572,10 @@ public sealed class SpectrumAnalyzer
         var gestures = _gestures.Feed(timbre.Openness, bass, timbre.Density);
         var readiness = _gate.Feed(tMs, _tempo.Bpm, timbre.Centroid, bass, timbre.Density);
 
+        // La fiche du cue, confrontee au disque. Sans fiche, la derive reste nulle et rien
+        // ne change : on ne fabrique pas d'ecart avec une reference qu'on n'a pas.
+        Reference.Feed(_tempo.Bpm, tMs);
+
         return new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,
             Hits: hits,
@@ -525,7 +588,12 @@ public sealed class SpectrumAnalyzer
             Novelty: _novelty.Level,
             NoveltyOnset: _novelty.Onset,
             Flux: Clamp01(rKick / scale),
-            Threshold: Clamp01(_kick.Threshold / scale));
+            Threshold: Clamp01(_kick.Threshold / scale),
+            ExpectedBpm: Reference.Expected,
+            TempoDrift: Reference.Drift,
+            DriftVisible: Reference.Visible,
+            AnnouncedBpm: Reference.Announcement,
+            TempoAnnounce: Reference.Announced);
     }
 
     /// <summary>

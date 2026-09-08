@@ -29,8 +29,14 @@ namespace Emotion.Signal;
 [StructLayout(LayoutKind.Explicit, Size = Size)]
 public struct GpuPacket
 {
-    /// <summary>Taille exacte du message, en octets. Le lecteur CUDA s'aligne dessus.</summary>
-    public const int Size = 128;
+    /// <summary>
+    /// Taille exacte du message, en octets. Le lecteur CUDA s'aligne dessus.
+    ///
+    /// <b>Quatre lignes de cache exactement.</b> Le paquet est passe de 128 a 256 octets
+    /// pour que chaque source dispose de son propre mot (voir <see cref="SourceOffset"/>)
+    /// au lieu de partager des octets avec ses voisines.
+    /// </summary>
+    public const int Size = 256;
 
     /// <summary>Nombre magique, pour qu'un lecteur detecte tout de suite un flux mal cadre.</summary>
     public const uint MagicValue = 0x454D5531;   // "EMU1"
@@ -187,27 +193,101 @@ public struct GpuPacket
     [FieldOffset(116)] public byte HighPitch;
 
     /// <summary>
-    /// Niveau de chacun des six registres tonals, puis leur contour.
+    /// Ou commence la zone des sources, et combien d'octets chacune occupe.
     ///
-    /// Trois registres ne suffisaient pas : un piano et un saxophone de la meme octave y
-    /// tombaient ensemble et devenaient une seule forme. Six bandes d'une octave separent
-    /// ce que l'oreille separe. <b>Aucune n'est nommee</b> — la bande 3 est la bande 3, et
-    /// ce qui y joue change d'un disque a l'autre.
+    /// POURQUOI QUATRE OCTETS ALIGNES ET NON DES CHAMPS COTE A COTE.
+    ///
+    /// La disposition precedente donnait a chaque source un octet de niveau, puis rangeait
+    /// les six attaques dans <i>un seul octet commun</i>. Tant qu'un seul fil ecrivait, cela
+    /// tenait. Des que les six ecrivent en meme temps, cet octet commun devient le seul
+    /// point de la structure ou deux sources se rencontrent — et poser un bit dans un octet
+    /// se fait en le lisant, en le modifiant, en le reecrivant : deux sources qui le font
+    /// ensemble s'effacent l'une l'autre, et une attaque disparait sans que rien ne le
+    /// signale.
+    ///
+    /// Chaque source a donc maintenant <b>son mot de quatre octets, aligne</b> : son niveau,
+    /// son contour, ses drapeaux, une reserve. Aucune ne partage un octet avec une autre, ce
+    /// qui rend l'ecriture concurrente sure <i>par la forme des donnees</i> et non par un
+    /// verrou. C'est la meme idee qu'ailleurs dans le projet : separer plutot qu'arbitrer.
+    ///
+    /// Huit emplacements sont reserves pour six sources. Le format n'aura pas a bouger le
+    /// jour ou la separation en distinguera davantage.
     /// </summary>
-    [FieldOffset(117)] public byte Reg0;
-    [FieldOffset(118)] public byte Reg1;
-    [FieldOffset(119)] public byte Reg2;
-    [FieldOffset(120)] public byte Reg3;
-    [FieldOffset(121)] public byte Reg4;
-    [FieldOffset(122)] public byte Reg5;
+    public const int SourceOffset = 128;
 
-    [FieldOffset(123)] public byte Pit0;
-    [FieldOffset(124)] public byte Pit1;
-    [FieldOffset(125)] public byte Pit2;
-    [FieldOffset(126)] public byte Pit3;
+    /// <summary>
+    /// Huit octets par source. Ce que la source sait d'elle-meme voyage avec ce qu'elle
+    /// fait a l'instant : niveau, contour, drapeaux, puis empreinte, confiance et
+    /// etiquette.
+    ///
+    /// LES QUATRE DERNIERS OCTETS N'ARRIVENT PAS EN MEME TEMPS QUE LES TROIS PREMIERS, ET
+    /// C'EST VOULU.
+    ///
+    /// Le niveau est juste des la premiere image. L'empreinte, elle, se forme sur quelques
+    /// secondes de jeu effectif — et une source qui n'entre qu'au refrain mettra une
+    /// minute. Faire attendre le paquet que la plus lente soit prete gelerait tout
+    /// l'affichage pour une seule forme.
+    ///
+    /// Le paquet part donc a cadence fixe, et chaque source y ecrit <b>ce qu'elle est en
+    /// mesure d'affirmer a cet instant</b>. La confiance dit au renderer combien de credit
+    /// accorder au reste : a zero, c'est une forme anonyme qui bouge ; a plein, c'est une
+    /// source reconnue, et l'etiquette peut porter un nom venu de la fiche.
+    /// </summary>
+    public const int SourceStride = 8;
+    public const int SourceSlots = 8;
 
-    /// <summary>Un bit par registre : celui qui vient d'etre attaque.</summary>
-    [FieldOffset(127)] public byte RegHits;
+    /// <summary>Rangs des octets a l'interieur du mot d'une source.</summary>
+    public const int SourceLevel = 0;
+    public const int SourcePitch = 1;
+    public const int SourceFlags = 2;
+    public const int SourceLabel = 3;
+    public const int SourceConfidence = 4;
+    public const int SourceBrightness = 5;
+    public const int SourceTexture = 6;
+
+    /// <summary>Combien de sources la separation publie aujourd'hui.</summary>
+    public const int SourceCount = 6;
+
+    /// <summary>Drapeau d'attaque, dans l'octet de drapeaux d'une source.</summary>
+    public const byte SourceHitBit = 1;
+
+    /// <summary>La zone des sources, vue comme des octets bruts.</summary>
+    [FieldOffset(SourceOffset)] public SourceBlock Sources;
+
+    /// <summary>
+    /// Le tempo apporte par la fiche du cue, ou zero si le disque n'a pas ete prepare.
+    ///
+    /// Il n'est pas la pour remplacer <see cref="Bpm"/> mais pour lui etre confronte : le
+    /// renderer voit d'un coup ce qu'on croyait savoir et ce que le disque fait vraiment.
+    /// </summary>
+    [FieldOffset(192)] public float BpmExpected;
+
+    /// <summary>
+    /// Decalage accumule entre la grille attendue et la grille reelle, en fractions de
+    /// temps. Signe : negatif quand le disque traine sur la fiche.
+    ///
+    /// C'est la grandeur qui rend une derive perceptible. Un ecart de 1 BPM sur 87 parait
+    /// negligeable ; le meme ecart deplace la grille d'un cinquieme de temps en seize
+    /// temps, et d'un temps entier en une minute.
+    /// </summary>
+    [FieldOffset(196)] public float TempoDrift;
+
+    /// <summary>A quel point la derive se voit, 0 a 255. Le renderer lit ceci, pas le calcul.</summary>
+    [FieldOffset(200)] public byte DriftVisible;
+
+    /// <summary>
+    /// Le tempo tel qu'il vient d'etre annonce — « on est a 87,9 », puis « 88,1 ».
+    ///
+    /// C'est une valeur qui tient entre deux annonces, la ou <see cref="Bpm"/> tremble
+    /// d'une fenetre a l'autre. Un renderer qui affiche un chiffre lit celle-ci.
+    /// </summary>
+    [FieldOffset(204)] public float BpmAnnounced;
+
+    /// <summary>
+    /// Une annonce vient d'etre faite sur cette image. Ne dure qu'une image : c'est un
+    /// instant, pas un etat.
+    /// </summary>
+    [FieldOffset(208)] public byte TempoAnnounce;
 
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
@@ -247,6 +327,60 @@ public struct GpuPacket
 
     private static byte Byte255(float v) => (byte)Math.Clamp(v * 255f, 0f, 255f);
 
+    /// <summary>
+    /// Ce qu'une source dit d'elle-meme, dans son mot a elle.
+    /// </summary>
+    /// <param name="Level">activation, 0 a 255.</param>
+    /// <param name="Pitch">ou elle joue dans son registre, 0 en bas, 255 en haut.</param>
+    /// <param name="Hit">une attaque vient d'etre constatee.</param>
+    /// <param name="Label">nom attribue de l'exterieur, 0 tant que la source est anonyme.</param>
+    /// <param name="Confidence">a quel point l'empreinte est fiable.</param>
+    /// <param name="Brightness">brillance moyenne de la source.</param>
+    /// <param name="Texture">raie franche a souffle.</param>
+    public readonly record struct SourceState(
+        byte Level, byte Pitch, bool Hit,
+        byte Label = 0, byte Confidence = 0, byte Brightness = 128, byte Texture = 128);
+
+    /// <summary>
+    /// Ecrit ce qu'une source a a dire, dans les quatre octets qui n'appartiennent qu'a
+    /// elle. Deux sources differentes peuvent appeler cette methode en meme temps sans
+    /// precaution : leurs mots ne se touchent pas.
+    /// </summary>
+    public void WriteSource(int rank, in LaneState state, byte label = 0)
+    {
+        if ((uint)rank >= SourceSlots) return;
+
+        var slot = SourceByte(rank);
+        slot[SourceLevel] = Byte255(state.Level);
+        slot[SourcePitch] = Byte255(state.Position);
+        slot[SourceFlags] = state.Hit ? SourceHitBit : (byte)0;
+        slot[SourceLabel] = label;
+        slot[SourceConfidence] = Byte255(state.Confidence);
+        slot[SourceBrightness] = Byte255(state.Brightness);
+        slot[SourceTexture] = Byte255(state.Texture);
+        slot[7] = 0;
+    }
+
+    /// <summary>Relit ce qu'une source a ecrit.</summary>
+    public SourceState ReadSource(int rank)
+    {
+        if ((uint)rank >= SourceSlots) return default;
+
+        var slot = SourceByte(rank);
+        return new SourceState(
+            slot[SourceLevel], slot[SourcePitch], (slot[SourceFlags] & SourceHitBit) != 0,
+            slot[SourceLabel], slot[SourceConfidence],
+            slot[SourceBrightness], slot[SourceTexture]);
+    }
+
+    private Span<byte> SourceByte(int rank)
+    {
+        var all = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+            ref System.Runtime.CompilerServices.Unsafe.As<SourceBlock, byte>(ref Sources),
+            SourceSlots * SourceStride);
+        return all.Slice(rank * SourceStride, SourceStride);
+    }
+
     public static GpuPacket From(in VisualFrame f, TrackContext track, uint sequence)
     {
         var p = new GpuPacket
@@ -278,6 +412,12 @@ public struct GpuPacket
         if (f.Voices.MidHit) p.VoiceHits |= 2;
         if (f.Voices.HighHit) p.VoiceHits |= 4;
 
+        p.BpmExpected = f.ExpectedBpm ?? 0f;
+        p.TempoDrift = f.TempoDrift;
+        p.DriftVisible = (byte)Math.Clamp(f.DriftVisible * 255f, 0f, 255f);
+        p.BpmAnnounced = f.AnnouncedBpm;
+        p.TempoAnnounce = f.TempoAnnounce ? (byte)1 : (byte)0;
+
         p.Centroid = (byte)Math.Clamp(f.Timbre.Centroid * 255f, 0f, 255f);
         p.Openness = (byte)Math.Clamp(f.Timbre.Openness * 255f, 0f, 255f);
         p.Density = (byte)Math.Clamp(f.Timbre.Density * 255f, 0f, 255f);
@@ -304,12 +444,11 @@ public struct GpuPacket
         p.MidPitch = (byte)Math.Clamp(f.Voices.MidPitch * 255f, 0f, 255f);
         p.HighPitch = (byte)Math.Clamp(f.Voices.HighPitch * 255f, 0f, 255f);
 
-        p.Reg0 = Byte255(f.Voices.LevelAt(0)); p.Reg1 = Byte255(f.Voices.LevelAt(1));
-        p.Reg2 = Byte255(f.Voices.LevelAt(2)); p.Reg3 = Byte255(f.Voices.LevelAt(3));
-        p.Reg4 = Byte255(f.Voices.LevelAt(4)); p.Reg5 = Byte255(f.Voices.LevelAt(5));
-        p.Pit0 = Byte255(f.Voices.PitchAt(0)); p.Pit1 = Byte255(f.Voices.PitchAt(1));
-        p.Pit2 = Byte255(f.Voices.PitchAt(2)); p.Pit3 = Byte255(f.Voices.PitchAt(3));
-        p.RegHits = (byte)(f.Voices.Hits & 0x3F);
+        // Chaque source ecrit sa propre zone. Le contour part maintenant pour les six et
+        // non plus pour les quatre premieres : les deux dernieres avaient un niveau qui
+        // bougeait et un contour toujours nul, donc des formes qui pulsaient sur place.
+        for (var i = 0; i < SourceCount; i++)
+            p.WriteSource(i, f.Voices.LaneAt(i), f.Voices.LabelAt(i));
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
@@ -322,4 +461,14 @@ public struct GpuPacket
 
         return p;
     }
+}
+
+/// <summary>
+/// Les huit mots de source, cote a cote. Un bloc plat pour que le lecteur CUDA le lise
+/// d'un seul acces au lieu de suivre huit champs.
+/// </summary>
+[System.Runtime.CompilerServices.InlineArray(GpuPacket.SourceSlots * GpuPacket.SourceStride)]
+public struct SourceBlock
+{
+    private byte _first;
 }

@@ -13,7 +13,8 @@ public readonly record struct Voices(
     float Low, float Mid, float High,
     bool LowHit, bool MidHit, bool HighHit,
     float LowPitch = 0.5f, float MidPitch = 0.5f, float HighPitch = 0.5f,
-    float[]? Levels = null, float[]? Pitches = null, int Hits = 0)
+    float[]? Levels = null, float[]? Pitches = null, int Hits = 0,
+    LaneState[]? Lanes = null, byte[]? Labels = null)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.
@@ -43,29 +44,37 @@ public readonly record struct Voices(
 
     public float LevelAt(int i) => Levels is { } l && i < l.Length ? l[i] : 0f;
     public float PitchAt(int i) => Pitches is { } p && i < p.Length ? p[i] : 0.5f;
+
+    /// <summary>Tout ce que la voie publie, empreinte comprise.</summary>
+    public LaneState LaneAt(int i) =>
+        Lanes is { } v && i < v.Length ? v[i] : new LaneState(LevelAt(i), PitchAt(i), HitAt(i));
+
+    /// <summary>Le nom pose sur cette source, ou zero tant qu'elle est anonyme.</summary>
+    public byte LabelAt(int i) => Labels is { } n && i < n.Length ? n[i] : (byte)0;
 }
 
 /// <summary>
-/// Suit ce qui joue sans frapper, dans chaque registre pris a part.
+/// Suit ce qui joue sans frapper, chaque registre pris a part et calcule a part.
+///
+/// Le tracker ne calcule plus rien lui-meme : il tient six voies independantes, les fait
+/// tourner par le pipeline — qui decide seul si le parallele vaut le coup sur cette
+/// machine — puis assemble ce qu'elles ont publie. Cet assemblage, lui, se fait apres que
+/// toutes ont fini, donc sur un seul fil : c'est le seul endroit ou les six grandeurs se
+/// rencontrent, et il n'y a la aucune concurrence a arbitrer.
 /// </summary>
 public sealed class VoiceTracker
 {
     private const int N = Voices.Registers;
-    private const float FrameSeconds = 1024f / 48_000f;
 
-    private readonly int[] _edges;
-    private readonly float[] _level = new float[N];
-    private readonly float[] _prev = new float[N];
-    private readonly float[] _peak = new float[N];
-    private readonly float[] _cible = new float[N];
-    private readonly Damper[] _pitch = new Damper[N];
-    private readonly OnsetDetector[] _onsets = new OnsetDetector[N];
+    private readonly SourcePipeline _pipeline;
 
     // Deux jeux publies a tour de role, pour ne rien allouer par image : le consommateur
     // en ligne a fini de lire l'un avant que l'autre ne soit reecrit. Meme raison que pour
     // les douze bandes du spectre.
     private readonly float[][] _levelPool = [new float[N], new float[N]];
     private readonly float[][] _pitchPool = [new float[N], new float[N]];
+    private readonly LaneState[][] _statePool = [new LaneState[N], new LaneState[N]];
+    private readonly byte[] _labels = new byte[N];
     private int _turn;
 
     public VoiceTracker(int sampleRate, int window)
@@ -74,85 +83,38 @@ public sealed class VoiceTracker
 
         // Bandes logarithmiques parce que l'oreille entend des rapports : de 100 a 200 il
         // y a le meme intervalle que de 3200 a 6400.
-        _edges = new int[N + 1];
+        var edges = new int[N + 1];
         for (var i = 0; i <= N; i++)
-            _edges[i] = Math.Max(i + 1, (int)(100f * MathF.Pow(2f, i) / binHz));
+            edges[i] = Math.Max(i + 1, (int)(100f * MathF.Pow(2f, i) / binHz));
         for (var i = 1; i <= N; i++)
-            if (_edges[i] <= _edges[i - 1]) _edges[i] = _edges[i - 1] + 1;
+            if (edges[i] <= edges[i - 1]) edges[i] = edges[i - 1] + 1;
 
-        for (var r = 0; r < N; r++)
-        {
-            _peak[r] = 1e-3f;
-            _cible[r] = 0.5f;
-
-            // Le contour glisse d'autant plus vite que le registre est haut : une note
-            // aigue change plus souvent qu'une note grave.
-            _pitch[r] = new Damper(6f + r * 1.2f, 0.5f);
-
-            // Huit fenetres, soit 170 ms : deux notes par temps restent distinctes a
-            // 87 BPM, la ou la limite des percussions en autoriserait une seule.
-            _onsets[r] = new OnsetDetector(minGap: 8);
-        }
+        var lanes = new ISourceLane[N];
+        for (var r = 0; r < N; r++) lanes[r] = new RegisterLane(r, edges[r], edges[r + 1]);
+        _pipeline = new SourcePipeline(lanes);
     }
+
+    /// <summary>Le pipeline, pour que la sonde puisse rapporter ce qu'il a mesure.</summary>
+    public SourcePipeline Pipeline => _pipeline;
 
     public Voices Feed(ReadOnlySpan<float> spectre)
     {
+        _pipeline.Feed(spectre);
+
         var levels = _levelPool[_turn];
         var pitches = _pitchPool[_turn];
+        var states = _statePool[_turn];
         _turn ^= 1;
 
         var hits = 0;
-
+        var lanes = _pipeline.Lanes;
         for (var r = 0; r < N; r++)
         {
-            var lo = _edges[r];
-            var hi = Math.Min(_edges[r + 1], spectre.Length);
-            if (hi <= lo) { levels[r] = 0f; pitches[r] = _pitch[r].Value; continue; }
-
-            // OU JOUE CE REGISTRE, ET PAS SEULEMENT COMBIEN.
-            //
-            // Un niveau ne decrit aucun mouvement : quand une melodie monte, une bande
-            // baisse et sa voisine monte — deux faits independants dont aucun ne porte le
-            // geste. Le centre de gravite, lui, se deplace, et une forme peut le suivre.
-            double sum = 0, weighted = 0;
-            for (var i = lo; i < hi; i++)
-            {
-                var v = spectre[i];
-                sum += v;
-                weighted += v * MathF.Log2(MathF.Max(i, 1));
-            }
-
-            var brut = (float)(sum / (hi - lo));
-
-            // Normalisation sur le maximum recent du registre : un instrument discret et
-            // un instrument pousse doivent tous deux se voir.
-            _peak[r] = MathF.Max(brut, _peak[r] * 0.9995f);
-            _level[r] = Clamp01(brut / MathF.Max(_peak[r], 1e-4f));
-
-            if (sum > 1e-6)
-            {
-                var bas = MathF.Log2(MathF.Max(lo, 1));
-                var etendue = MathF.Log2(MathF.Max(hi - 1, 2)) - bas;
-                var pos = etendue > 1e-3f ? (float)(weighted / sum - bas) / etendue : 0.5f;
-
-                // ON NE SUIT QUE CE QU'ON ENTEND. Un centre de gravite calcule sur un
-                // registre presque muet saute au gre du bruit de fond, puis saute encore
-                // au retour du son. La position d'une note qui n'existe pas n'a pas a
-                // etre tenue a jour.
-                var vif = 0.04f + 0.16f * _level[r];
-                _cible[r] += (Clamp01(pos) - _cible[r]) * vif;
-            }
-
-            // Puis un ressort, et non une seconde moyenne : une moyenne exponentielle
-            // arrive toujours en retard et sans elan, ce qui fait qu'un mouvement parait
-            // mou. Un ressort a une vitesse, donc de l'inertie.
-            pitches[r] = _pitch[r].Feed(_cible[r], FrameSeconds);
-            levels[r] = _level[r];
-
-            // La montee, et non le niveau : une note tenue ne doit pas declencher en
-            // permanence, seule son attaque compte.
-            if (_onsets[r].Feed(MathF.Max(0f, _level[r] - _prev[r]))) hits |= 1 << r;
-            _prev[r] = _level[r];
+            var state = lanes[r].State;
+            states[r] = state;
+            levels[r] = state.Level;
+            pitches[r] = state.Position;
+            if (state.Hit) hits |= 1 << r;
         }
 
         // Les trois agregats restent publies : le paquet GPU et le rendu s'en servent pour
@@ -169,8 +131,29 @@ public sealed class VoiceTracker
             (pitches[0] + pitches[1]) * 0.5f,
             (pitches[2] + pitches[3]) * 0.5f,
             (pitches[4] + pitches[5]) * 0.5f,
-            levels, pitches, hits);
+            levels, pitches, hits, states, _labels);
     }
 
-    private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
+    /// <summary>
+    /// Pose un nom sur une source, ou l'efface avec zero.
+    ///
+    /// L'analyse ne nomme rien d'elle-meme : elle transporte. Ce nom vient de la fiche du
+    /// crate ou de Selim, et il se pose sur une empreinte que la voie a mise plusieurs
+    /// secondes a former — c'est la confiance publiee par la voie qui dit si elle est
+    /// prete a le porter.
+    /// </summary>
+    public void Nommer(int registre, byte nom)
+    {
+        if ((uint)registre >= N) return;
+        _labels[registre] = nom;
+        if (_pipeline.Lanes[registre] is RegisterLane lane) lane.Label = nom;
+    }
+
+    /// <summary>Le portrait d'une voie, pour la sonde et le reglage.</summary>
+    public SourceIdentity PortraitDe(int registre) =>
+        _pipeline.Lanes[registre] is RegisterLane lane ? lane.Identity : new SourceIdentity();
+
+    /// <summary>Ce que chaque voie sait d'elle-meme en ce moment.</summary>
+    public LaneState EtatDe(int registre) =>
+        (uint)registre < N ? _pipeline.Lanes[registre].State : LaneState.Silent;
 }
