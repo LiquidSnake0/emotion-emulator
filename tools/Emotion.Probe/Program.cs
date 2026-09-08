@@ -37,6 +37,7 @@ var analyzer = new SpectrumAnalyzer(rate, separate);
 // « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
 // avant. Sert a comparer les deux regimes sur le meme morceau.
 if (args.Contains("inline")) analyzer.Separation.ApprentissageEnLigne = true;
+analyzer.Etapes.Actif = true;
 
 // « memoire » en argument : joue l'extrait DEUX FOIS de suite dans le meme processus, la
 // seconde reprenant ce que la premiere a etabli. C'est ainsi que la reprise se produit
@@ -388,6 +389,69 @@ for (var r = 0; r < Voices.Registers; r++)
                       "assez ecoutee a " +
                       (assezAt[r] < 0 ? " jamais" : $"{assezAt[r] / 1000f,6:F1} s") + " · " +
                       $"nettete {e.Sharpness:F2} · brillance {e.Brightness:F2}");
+}
+
+// ------------------------------------------------------------------ OU PASSE LE TEMPS
+//
+// Deux retards, et il ne faut pas les confondre. Le temps de CALCUL se reduit en ecrivant
+// mieux ; le retard ALGORITHMIQUE ne se reduit pas du tout — il faut avoir entendu une
+// fenetre avant de la transformer, et la suivante avant de dire qu'on etait sur un sommet.
+{
+    var e = analyzer.Etapes;
+    var total = e.Totale();
+    var large = 0.0;
+    for (var i = 0; i < Etapes.Noms.Length; i++) large = Math.Max(large, e.Moyenne(i));
+
+    Console.WriteLine();
+    Console.WriteLine($"CALCUL, etage par etage  ({e.Images} images · {total:F0} us au total, "
+                      + $"soit {total / 1000 / (hop * 1000f / rate) * 100:F1} % du pas de "
+                      + $"{hop * 1000f / rate:F1} ms)");
+    Console.WriteLine();
+
+    for (var i = 0; i < Etapes.Noms.Length; i++)
+    {
+        var us = e.Moyenne(i);
+        var n = large > 0 ? (int)Math.Round(us / large * 46) : 0;
+        Console.WriteLine($"  {Etapes.Noms[i],-16} {new string('#', n)}{new string('.', 46 - n)} "
+                          + $"{us,7:F1} us   pire {e.Pire(i),7:F1}");
+    }
+
+    // Le pas d'une fenetre, et ce que le calcul en occupe.
+    var pasMs = hop * 1000f / rate;
+    var occupe = (int)Math.Round(total / 1000 / pasMs * 46);
+    Console.WriteLine();
+    Console.WriteLine($"  {"pas de fenetre",-16} {new string('=', 46)} {pasMs * 1000,7:F0} us");
+    Console.WriteLine($"  {"occupe par nous",-16} {new string('#', Math.Min(46, occupe))}"
+                      + $"{new string('.', Math.Max(0, 46 - occupe))} {total,7:F0} us");
+
+    Console.WriteLine();
+    Console.WriteLine("RETARD ALGORITHMIQUE  (ce qu'aucune optimisation ne retire)");
+    Console.WriteLine();
+
+    var etages = new (string Nom, float Ms, string Pourquoi)[]
+    {
+        ("fenetre", pasMs, "il faut l'avoir entendue en entier avant de la transformer"),
+        ("separation H/P", analyzer.Separating ? pasMs * 3 : 0f,
+            analyzer.Separating ? "voir si un bin dure demande de voir la suite" : "coupee"),
+        ("sommet d'attaque", pasMs, "un maximum ne se reconnait qu'apres la valeur suivante"),
+        ("calcul", (float)(total / 1000), "mesure ci-dessus"),
+    };
+
+    var cumul = 0f;
+    foreach (var (nom, ms, pourquoi) in etages)
+    {
+        cumul += ms;
+        var n = (int)Math.Round(ms / 70f * 46);
+        Console.WriteLine($"  {nom,-17} {new string('#', n)}{new string('.', Math.Max(0, 46 - n))} "
+                          + $"{ms,6:F1} ms   {pourquoi}");
+    }
+
+    Console.WriteLine($"  {"─── total",-17} {new string(' ', 46)} {cumul,6:F1} ms   "
+                      + (cumul <= 40 ? "sous le seuil ou l'oeil decroche (40 ms)"
+                                     : "AU-DESSUS du seuil de 40 ms"));
+    Console.WriteLine();
+    Console.WriteLine($"  L'horloge a verrouillage de phase annule ce retard sur le kick :");
+    Console.WriteLine($"  elle n'attend pas la frappe, elle la prevoit. Le reste le subit.");
 }
 
 var sep = analyzer.Separation;

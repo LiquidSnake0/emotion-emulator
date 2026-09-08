@@ -89,6 +89,9 @@ public sealed class SpectrumAnalyzer
     /// <summary>La derniere image publiee, pour la sonde. Ce que le renderer a recu.</summary>
     public VisualFrame Derniere { get; private set; }
 
+    /// <summary>Ou passe le temps, etage par etage. Eteint par defaut, et alors gratuit.</summary>
+    public Etapes Etapes { get; } = new();
+
     /// <summary>
     /// Ce que la fiche du cue affirmait du tempo, confronte a ce que le disque fait.
     ///
@@ -342,8 +345,12 @@ public sealed class SpectrumAnalyzer
         if (samples.Length != Window)
             throw new ArgumentException($"fenetre de {Window} echantillons attendue", nameof(samples));
 
+        Etapes.Debut();
         var harmony = _harmony.Feed(samples);
+        Etapes.Fin(0);
+
         _transient.Feed(samples, _sampleRate);
+        Etapes.Fin(1);
 
         var sum = 0f;
         for (var i = 0; i < Window; i++)
@@ -378,10 +385,13 @@ public sealed class SpectrumAnalyzer
         var voices = Voices.None;
         Span<float> full = stackalloc float[half];
         spectrum.CopyTo(full);
+        Etapes.Fin(2);                       // fenetrage, FFT et module
 
         if (_hpss is not null && _hpss.Feed(spectrum))
         {
+            Etapes.Fin(3);                   // separation harmonique / percussive
             voices = _voices.Feed(_hpss.Harmonic);
+            Etapes.Fin(4);                   // registres
             _hpss.Percussive.CopyTo(spectrum);
         }
         else
@@ -396,7 +406,9 @@ public sealed class SpectrumAnalyzer
             // Sans separation, on leur donne le spectre entier. C'est moins net qu'une
             // moitie harmonique — un coup de caisse claire fera bouger les trois
             // registres a la fois — mais infiniment preferable au silence.
+            Etapes.Fin(3);                   // separation coupee : rien a compter
             voices = _voices.Feed(full);
+            Etapes.Fin(4);
         }
 
         // Les six niveaux publies deviennent les six sources separees : ils decrivent des
@@ -460,6 +472,7 @@ public sealed class SpectrumAnalyzer
         }
 
         var onset = _onsets.Feed(flux);
+        Etapes.Fin(6);                       // flux spectral et detection d'attaque
         if (onset) _tempo.Mark(tMs);
 
         var bands = _bandPool[_bandTurn];
@@ -524,7 +537,9 @@ public sealed class SpectrumAnalyzer
         // quelle vitesse ca tourne</i>.
         var pulse = 0f;
         for (var i = 1; i < kickBins; i++) pulse += full[i];
+        Etapes.Fin(7);                       // les douze bandes
         _tempo.Feed(Smooth(3, PulseRise(pulse)));
+        Etapes.Fin(8);                       // autocorrelation du tempo
 
         // L'ECART MINIMAL SUIT LE TEMPO, IL N'EST PLUS UNE CONSTANTE.
         //
@@ -543,6 +558,7 @@ public sealed class SpectrumAnalyzer
         if (clap && rClap < rKick * 1.3f) clap = false;
 
         var hits = new Hits(kick, clap, _hat.Feed(rHat));
+        Etapes.Fin(9);                       // kick, clap, charley
 
         UpdateMasks(bands);
         Array.Copy(bands, _prevBand, bands.Length);
@@ -562,9 +578,13 @@ public sealed class SpectrumAnalyzer
                        + (voices.HighHit ? 1 : 0);
         // La separation travaille sur le spectre entier : c'est le timbre complet qui
         // distingue deux instruments, pas sa moitie percussive.
+        // Le suivi seul : l'apprentissage des profils tourne dans un fil de fond et ne
+        // compte pas dans le temps d'une image. C'est tout l'interet de l'avoir sorti.
         _separation.Feed(full);
+        Etapes.Fin(5);                       // suivi des timbres separes
 
         var timbre = _timbre.Feed(full, eventCount);
+        Etapes.Fin(10);                      // couleur du son
 
         // Les grandeurs continues partent amorties ; les evenements restent bruts. Une
         // impulsion lissee n'est plus une impulsion, et c'est le renderer qui les
@@ -665,6 +685,9 @@ public sealed class SpectrumAnalyzer
         // La fiche du cue, confrontee au disque. Sans fiche, la derive reste nulle et rien
         // ne change : on ne fabrique pas d'ecart avec une reference qu'on n'a pas.
         Reference.Feed(_tempo.Bpm, tMs);
+
+        Etapes.Fin(11);                      // structure, gestes, nouveaute
+        Etapes.Image();
 
         return Derniere = new VisualFrame(
             tMs, level, bands, onset, _tempo.Phase(tMs), _tempo.Bpm,

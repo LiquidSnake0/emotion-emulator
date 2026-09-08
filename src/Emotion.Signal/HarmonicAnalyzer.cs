@@ -86,6 +86,24 @@ public sealed class HarmonicAnalyzer
         }
 
         _since += samples.Length;
+
+        // UN RECALCUL PAR IMAGE, ET RALENTIR A ETE TESTE PUIS REJETE.
+        //
+        // Cet etage coute a lui seul 1,74 ms sur les 1,93 ms d'une image — quatre-vingt-dix
+        // pour cent du calcul, pour une FFT de 4096 points, une separation interne et deux
+        // mille logarithmes. Le ralentir semblait evident : un accord ne change pas
+        // quarante-sept fois par seconde.
+        //
+        // La mesure a dit non. Le changement d'accord se mesure comme la distance entre le
+        // profil courant et le precedent ; espacer les calculs eloigne mecaniquement ces
+        // deux profils, et fabrique donc des changements qui n'existent pas. Sur trente
+        // secondes du repertoire : 223 changements a 21 ms, 431 a 43 ms, <b>747 a 85 ms</b>
+        // — vingt-cinq par seconde, ce qui n'a aucun sens musical.
+        //
+        // Et l'economie ne servirait a rien : le calcul entier occupe 9 % du pas de
+        // 21,3 ms. Ce qui retarde la chaine n'est pas le calcul, c'est l'attente — une
+        // fenetre pour l'entendre, une autre pour reconnaitre un sommet. Optimiser ici
+        // reviendrait a courir plus vite dans une file d'attente.
         if (_since < Window / 4) return _last;     // saut de 1024, soit 21 ms
         _since = 0;
 
