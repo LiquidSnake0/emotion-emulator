@@ -471,7 +471,18 @@ for (var r = 0; r < Voices.Registers; r++)
 
     var chaine = new (string Nom, float Ms, string Qui)[]
     {
-        ("capture PulseAudio",  20f,               "subi · --latency-msec=20, reglable"),
+        // MESUREE, ET NON PRISE POUR ARGENT COMPTANT.
+        //
+        // Le budget portait ici 20 ms, la valeur demandee a parec. Le serveur audio en rend
+        // beaucoup moins : 4,4 ms de tampon reel pour 20 demandes, 3,3 pour 5. Le budget
+        // etait donc surestime de 15 ms, et c'est un poste qu'on croyait couteux alors qu'il
+        // ne l'est pas.
+        //
+        // Descendre reste utile, mais pour la regularite plus que pour le retard : mesuree
+        // sur douze secondes, machine chargee sur ses huit coeurs et le serveur en marche,
+        // la gigue d'arrivee des blocs tombe de 3,1 ms a 0,9 — et aucun bloc n'arrive en
+        // retard, meme a 2 ms de demande.
+        ("capture PulseAudio", 3.3f,               "mesure · 5 ms demandes, tampon reel"),
         ("fenetre d'analyse",   pasMs,             "incompressible · 1024 echantillons"),
         ("sommet d'attaque",    pasMs,             "incompressible · un pic se voit apres"),
         ("calcul",              (float)(total / 1000), "maitrise · 8,8 % du pas"),
@@ -511,7 +522,8 @@ for (var r = 0; r < Voices.Registers; r++)
 
     Console.WriteLine();
     Console.WriteLine("  Un videoprojecteur consomme a lui seul 16 a 33 ms selon son mode de");
-    Console.WriteLine("  traitement d'image — soit tout ce qui reste, et souvent davantage.");
+    Console.WriteLine("  traitement d'image. Un modele de mapping en mode faible latence");
+    Console.WriteLine("  descend vers 16 ms, ce qui laisse alors de quoi travailler.");
     Console.WriteLine();
     Console.WriteLine("  CE QUI SAUVE LA MISE : on ne reagit pas au kick, on l'attend.");
     Console.WriteLine("  L'horloge a verrouillage de phase le declenche a l'instant prevu et");
