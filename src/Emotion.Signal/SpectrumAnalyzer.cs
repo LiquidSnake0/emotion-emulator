@@ -244,6 +244,12 @@ public sealed class SpectrumAnalyzer
     private readonly ComplexFlux _fluxComplexe = new(Window / 2);
     private readonly EventProfiler _evenements = new(Window / 2);
 
+    /// <summary>L'etendue de contour apprise par chaque rang. Voir <see cref="ContourRange"/>.</summary>
+    private readonly ContourRange _etendues;
+
+    /// <summary>Ce que les rangs ont appris de leur propre etendue. Pour la sonde.</summary>
+    public ContourRange Etendues => _etendues;
+
     /// <summary>Les familles de frappes rencontrees sur ce disque, pour la sonde.</summary>
     public EventProfiler Evenements => _evenements;
 
@@ -428,7 +434,8 @@ public sealed class SpectrumAnalyzer
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
-        _separation = new SourceSeparator(Window / 2);
+        _separation = new SourceSeparator(Window / 2, sampleRate);
+        _etendues = new ContourRange(SourceSeparator.Sources);
         _timbre = new TimbreTracker(sampleRate, Window);
         // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
         // un peu moins nette, mais elle reste tres suffisante pour empecher le piano de
@@ -603,7 +610,11 @@ public sealed class SpectrumAnalyzer
             for (var i = 0; i < SourceSeparator.Sources; i++)
             {
                 act[i] = Clamp01(_separation.ActivationOrdonnee(i) / max);
-                haut[i] = _separation.HauteurOrdonnee(i);
+                // La hauteur mesuree porte sur huit octaves ; ce qu'on affiche, c'est la
+                // place de la source dans l'etendue qu'elle parcourt vraiment. Voir
+                // ContourRange : sans cela, une source qui ne couvre qu'une octave et
+                // demie se deplace dans un cinquieme de sa case.
+                haut[i] = _etendues.Situer(i, _separation.HauteurOrdonnee(i), act[i] > 0.12f);
             }
 
             // CE QUI EST MESURE DOIT DECRIRE CE QUI EST AFFICHE.

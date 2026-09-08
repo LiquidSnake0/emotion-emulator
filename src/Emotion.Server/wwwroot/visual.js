@@ -227,7 +227,7 @@ function forme(ctx, b, nom, teinte, v, pos, frappe, tempo){
         case 'losange': {
           const d=Math.abs(dx)+Math.abs(dy);
           const r=(0.30+force*0.70)*RMAX;
-          ch = Math.abs(d-r)<0.9 ? '◆' : (d<r&&frappe>0.25 ? '◇' : ' ');
+          ch = Math.abs(d-r)<0.9 ? '⬥' : (d<r&&frappe>0.25 ? '⬦' : ' ');
           break;
         }
         // ETOILE — elle eclate ; ses branches tournent avec le contour.
@@ -237,7 +237,7 @@ function forme(ctx, b, nom, teinte, v, pos, frappe, tempo){
           if(d>r+0.6) break;
           const ang=Math.atan2(dy,dx)+pos*3.14;
           const branche=Math.abs(Math.cos(ang*3));
-          ch = (branche>0.88 || d<0.9) ? (d<0.9?'✳':'✷') : ' ';
+          ch = (branche>0.88 || d<0.9) ? (d<0.9?'⁕':'⁎') : ' ';
           break;
         }
         // GRAIN — il scintille, et se concentre a la hauteur du contour.
@@ -245,7 +245,7 @@ function forme(ctx, b, nom, teinte, v, pos, frappe, tempo){
           const i=l*G.cols+c, phase=(i*0.618)%1;
           const pres=Math.max(0,1-Math.abs(l-cy)/Math.max(1,rayon));
           const eclat=Math.max(0,1-Math.abs(((force+phase)%1)-0.5)*2.6)*pres;
-          ch = eclat>0.55 ? '✳' : (eclat>0.34 ? '·' : (eclat>0.18 ? '˙' : ' '));
+          ch = eclat>0.55 ? '⁕' : (eclat>0.34 ? '·' : (eclat>0.18 ? '˙' : ' '));
           break;
         }
       }
@@ -304,10 +304,44 @@ function dansLaCase(ctx, b, trace) {
   ctx.restore();
 }
 
+// TOUTE LA PALETTE DOIT TENIR DANS LE MEME CHASSE, ET RIEN NE LE GARANTISSAIT.
+//
+// Le rendu dessine des lignes entieres d'un coup — `fillText(ligne, x0, y)` — et la
+// grille compte les colonnes en supposant une avance constante. C'est vrai d'une fonte
+// monospace, et faux des le premier glyphe qu'elle ne contient pas : le navigateur va le
+// chercher dans une fonte de repli, avec l'avance de cette fonte-la.
+//
+// Ce n'est pas une hypothese. Mesure dans le navigateur, grille reglee sur 9,00 px :
+//
+//     ◆ ◇   18,00 px   le double
+//     ✳ ✷   12,57 px
+//
+// La case GRAIN faisait 595 px et sa ligne en mesurait 804 : 213 px hors du cadre, chez
+// le voisin. Et le glyphe suivant est decale d'autant, si bien que la forme entiere
+// derive — ce qu'on prenait pour un effet de champ etait un defaut de fonte.
+//
+// Le decoupage empeche desormais de deborder, mais il masquerait le desalignement sans
+// le dire. Ce controle, lui, le dit. Il tourne une fois au demarrage et ne coute rien.
+const PALETTE = '~·˙…≈─│╭╮╯╰▁▂▃▄▅▆▇█░▒▓▔▚▞▪▬⬥⬦●⁕⁎ ';
+
+export function verifierPalette(ctx) {
+  ctx.font = '15px ui-monospace, "JetBrains Mono", Menlo, monospace';
+  const ref = ctx.measureText('M').width;
+  const hors = [...PALETTE].filter(c => Math.abs(ctx.measureText(c).width - ref) > 0.01);
+  if (hors.length) {
+    console.warn(`[visual] glyphes hors gabarit, la grille va deriver : ${hors.join(' ')} ` +
+                 `(reference ${ref.toFixed(2)} px)`);
+  }
+  return hors;
+}
+
 export class Visual {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
+
+    // Une fois, au demarrage : la fonte disponible tient-elle toute la palette ?
+    verifierPalette(this.ctx);
 
     // Ce qui joue, et ce qui se prepare.
     this.color = { r: 110, g: 110, b: 110 };
@@ -696,10 +730,16 @@ export class Visual {
     this.drawTension(ctx, w, h);
     this.drawCadres(ctx, w, h, c);
     for (let r = 0; r < 6; r++) this.drawRegistre(ctx, boite(CASE['r' + r], w, h), r);
-    this.drawGrave(ctx, boite(CASE.grave, w, h));
-    this.drawGrain(ctx, boite(CASE.grain, w, h), coupe);
-    this.drawSpectre(ctx, boite(CASE.spec, w, h), bands);
-    this.drawFrappes(ctx, boite(CASE.bas, w, h));
+    // Chaque case decoupe la sienne. Les registres le faisaient deja ; ces quatre-la non,
+    // et c'est par GRAIN que le debordement s'est vu.
+    const bGrave = boite(CASE.grave, w, h);
+    const bGrain = boite(CASE.grain, w, h);
+    const bSpec = boite(CASE.spec, w, h);
+    const bBas = boite(CASE.bas, w, h);
+    dansLaCase(ctx, bGrave, () => this.drawGrave(ctx, bGrave));
+    dansLaCase(ctx, bGrain, () => this.drawGrain(ctx, bGrain, coupe));
+    dansLaCase(ctx, bSpec, () => this.drawSpectre(ctx, bSpec, bands));
+    dansLaCase(ctx, bBas, () => this.drawFrappes(ctx, bBas));
     this.drawSweep(ctx, w, h, c);
     ctx.restore();
 
@@ -833,7 +873,7 @@ export class Visual {
         const i = l * G.cols + col, phase = (i * 0.618) % 1;
         const eclat = Math.max(0,
           1 - Math.abs(((this.hat.value * 0.7 + fond * 0.3 + phase) % 1) - 0.5) * 2.6);
-        ligne += eclat > 0.62 ? '✳' : (eclat > 0.42 ? '·' : (eclat > 0.25 ? '˙' : ' '));
+        ligne += eclat > 0.62 ? '⁕' : (eclat > 0.42 ? '·' : (eclat > 0.25 ? '˙' : ' '));
       }
       ctx.fillText(ligne, G.x0, G.y0 + l * G.ch);
     }

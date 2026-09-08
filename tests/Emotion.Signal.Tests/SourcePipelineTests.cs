@@ -657,3 +657,72 @@ public class PrecisionTempoTests
                     $"{vrai:F1} BPM mesure a {bpm:F2}, soit {bpm - vrai:+0.00;-0.00} d'ecart");
     }
 }
+
+public class HauteurPerceptiveTests
+{
+    /// <summary>
+    /// Une octave doit valoir un pas constant, quelle que soit la region du spectre.
+    ///
+    /// C'est toute la difference avec l'echelle precedente, qui etait lineaire en hertz :
+    /// de 100 a 200 Hz elle ne bougeait presque pas, de 5 a 10 kHz elle traversait la case.
+    /// L'oreille, elle, entend la meme montee dans les deux cas.
+    /// </summary>
+    [Fact]
+    public void Une_octave_vaut_toujours_le_meme_pas()
+    {
+        const int rate = 44_100;
+        float H(float hz) => SourceSeparator.EnOctaves(hz / (rate * 0.5f), rate);
+
+        var basDuSpectre = H(200f) - H(100f);
+        var hautDuSpectre = H(8000f) - H(4000f);
+
+        Assert.Equal(basDuSpectre, hautDuSpectre, 3);
+        Assert.True(basDuSpectre > 0.1f, "une octave doit se voir");
+    }
+
+    /// <summary>
+    /// La conversion est monotone : l'ordre du grave a l'aigu, qui est l'autre usage de
+    /// cette grandeur, ne peut pas changer.
+    /// </summary>
+    [Fact]
+    public void L_ordre_des_sources_ne_peut_pas_changer()
+    {
+        const int rate = 48_000;
+        var precedent = -1f;
+        for (var f = 0.001f; f < 1f; f += 0.01f)
+        {
+            var h = SourceSeparator.EnOctaves(f, rate);
+            Assert.True(h >= precedent);
+            precedent = h;
+        }
+    }
+
+    /// <summary>
+    /// Ce qui sort de la plage utile est colle au bord plutot que rendu faux : une source
+    /// sous 40 Hz est en bas de sa case, une au-dessus de 10 kHz est en haut.
+    /// </summary>
+    [Fact]
+    public void Hors_de_la_plage_utile_on_colle_au_bord()
+    {
+        const int rate = 48_000;
+        Assert.Equal(0f, SourceSeparator.EnOctaves(20f / (rate * 0.5f), rate));
+        Assert.Equal(1f, SourceSeparator.EnOctaves(1f, rate));
+    }
+
+    /// <summary>
+    /// Le repertoire mesure a l'ecran occupait 0,007 a 0,130 — les treize pour cent du bas.
+    /// Les memes centres de gravite doivent maintenant se repartir dans la case.
+    /// </summary>
+    [Fact]
+    public void Les_six_sources_du_repertoire_se_repartissent()
+    {
+        const int rate = 44_100;
+        float[] mesures = [0.012f, 0.019f, 0.028f, 0.044f, 0.088f, 0.113f];
+        var hauteurs = mesures.Select(m => SourceSeparator.EnOctaves(m, rate)).ToArray();
+
+        Assert.True(hauteurs[0] > 0.25f, $"la plus grave etait a {hauteurs[0]:F2}, trop au bord");
+        Assert.True(hauteurs[^1] < 0.85f, $"la plus aigue etait a {hauteurs[^1]:F2}, trop au bord");
+        Assert.True(hauteurs[^1] - hauteurs[0] > 0.35f,
+            $"etendue de {hauteurs[^1] - hauteurs[0]:F2}, il en fallait plus du triple de 0,12");
+    }
+}

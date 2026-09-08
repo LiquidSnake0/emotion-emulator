@@ -64,6 +64,7 @@ public sealed class SourceSeparator
     private const float Eps = 1e-9f;
 
     private readonly int _bins;
+    private readonly int _rate;
     private readonly float[] _w;          // profils spectraux : bins x Sources
     private readonly float[] _v;          // spectrogramme glissant : bins x Memoire
     private readonly float[] _courant;    // activations de l'image courante
@@ -83,8 +84,12 @@ public sealed class SourceSeparator
     public bool Pret { get; private set; }
 
     /// <summary>
-    /// Centre de gravite spectral de chaque profil, en fraction de la bande analysee.
-    /// Sert a ordonner les sources du grave a l'aigu, faute de savoir les nommer.
+    /// Hauteur du timbre de chaque profil, sur une echelle d'octaves entre 0 et 1.
+    ///
+    /// C'est le centre de gravite spectral, converti en octaves par <see cref="EnOctaves"/> —
+    /// parce que l'oreille compte en rapports et non en ecarts. Sert a la fois a ordonner
+    /// les sources du grave a l'aigu, faute de savoir les nommer, et a placer leur forme
+    /// dans sa case.
     /// </summary>
     public IReadOnlyList<float> Hauteurs => _hauteurs;
 
@@ -138,9 +143,10 @@ public sealed class SourceSeparator
             ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
             : 0f;
 
-    public SourceSeparator(int bins)
+    public SourceSeparator(int bins, int sampleRate = 48_000)
     {
         _bins = bins;
+        _rate = sampleRate;
         _w = new float[bins * Sources];
         _v = new float[bins * Memoire];
         _courant = new float[Sources];
@@ -277,7 +283,7 @@ public sealed class SourceSeparator
                 total += w;
             }
 
-            _hauteurs[s] = total > Eps ? (float)(poids / total) / _bins : 0.5f;
+            _hauteurs[s] = total > Eps ? EnOctaves((float)(poids / total) / _bins, _rate) : 0.5f;
         }
 
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
@@ -343,6 +349,49 @@ public sealed class SourceSeparator
     /// <summary>Hauteur du timbre de la source de rang donne.</summary>
     public float HauteurOrdonnee(int rang) =>
         rang >= 0 && rang < Sources ? _hauteurs[_ordre[rang]] : 0.5f;
+
+    /// <summary>
+    /// Grave et aigu du crate, en hertz. Sept octaves, ce qui couvre du sub au cymbale.
+    ///
+    /// Ce ne sont pas des bornes absolues : ce qui sort en dessous ou au-dessus est
+    /// simplement colle au bord. Elles decrivent la plage ou l'on veut du relief.
+    /// </summary>
+    private const float GraveHz = 40f, AiguHz = 10_000f;
+
+    /// <summary>
+    /// Convertit un centre de gravite spectral, exprime en rang de raie, en une position
+    /// perceptive entre 0 et 1.
+    ///
+    /// LA HAUTEUR S'ENTEND EN OCTAVES, ET ELLE ETAIT RENDUE EN HERTZ.
+    ///
+    /// Le centre de gravite valait <c>rang / nombre_de_raies</c>, c'est-a-dire une fraction
+    /// de la bande analysee — une echelle lineaire en frequence. Mesure a l'ecran, les six
+    /// contours tenaient alors <b>dans les treize pour cent du bas</b> :
+    ///
+    /// <code>
+    ///   source 1  0,007 → 0,025      source 4  0,025 → 0,070
+    ///   source 2  0,010 → 0,029      source 5  0,046 → 0,115
+    ///   source 3  0,012 → 0,048      source 6  0,093 → 0,130
+    /// </code>
+    ///
+    /// L'ordre etait juste, l'etendue non. La raison est que l'oreille compte en rapports
+    /// et non en ecarts : de 200 a 800 Hz il y a deux octaves — un mouvement enorme — et
+    /// seulement 0,027 sur une echelle lineaire allant jusqu'a 22 kHz. Une voix qui monte
+    /// franchement ne deplacait donc presque rien a l'ecran.
+    ///
+    /// Sur la meme mesure, en octaves, la source 3 va de 0,34 a 0,59 : sept fois plus de
+    /// course, dans la partie utile de la case.
+    ///
+    /// LE CLASSEMENT NE BOUGE PAS. La conversion est monotone, donc l'ordre du grave a
+    /// l'aigu — qui est l'autre usage de cette grandeur — reste exactement le meme.
+    /// </summary>
+    public static float EnOctaves(float rangMoyen, int sampleRate)
+    {
+        var hz = rangMoyen * sampleRate * 0.5f;
+        if (hz <= GraveHz) return 0f;
+        var octaves = MathF.Log2(hz / GraveHz) / MathF.Log2(AiguHz / GraveHz);
+        return Clamp01(octaves);
+    }
 
     private static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
 }
