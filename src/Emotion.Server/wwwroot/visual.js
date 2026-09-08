@@ -437,16 +437,23 @@ export class Visual {
     // dalle ou le videoprojecteur. En amont, les 48 ms mesurees de la chaine d'analyse sont
     // deja comptees dans l'horloge, qui se cale sur les frappes telles qu'elles arrivent.
     //
-    // Trente millisecondes couvrent une boucle a 60 images par seconde et un ecran ordinaire.
-    // Avec un videoprojecteur — 16 ms en mode faible latence, jusqu'a 33 sinon — et une
-    // unite de rendu externe, il faut monter d'autant : `EMOTION_LEAD_MS` le permet sans
-    // toucher au code.
+    // CINQUANTE-QUATRE MILLISECONDES, ET LE CHIFFRE SE CALCULE.
+    //
+    // La chaine visee est celle du set : 48 ms d'analyse mesurees, une dizaine pour l'unite
+    // de rendu aller-retour, seize pour un videoprojecteur de mapping en mode faible
+    // latence. Soit 74 ms, dont il faut retrancher les 20 en deca desquels l'oeil cesse de
+    // lier l'image au son — 54.
+    //
+    // Sur un simple ecran d'ordinateur, sans unite externe, la chaine est plus courte d'une
+    // vingtaine de millisecondes et l'avance devient excessive : le visuel part alors trop
+    // tot, ce qui se detecte a partir de 45 ms d'apres l'ITU. `?lead=30` remet le reglage
+    // d'un ecran ordinaire.
     //
     // La borne n'est pas la perception mais la previsibilite du tempo. A 87 BPM un temps
     // dure 690 ms, donc 60 ms d'avance en representent 9 % : tant que le plateau tient a
     // 1 % pres, l'erreur de position reste sous la milliseconde. L'horloge refuse au-dela
     // de 40 % d'un temps, ou l'on ne predirait plus mais inventerait.
-    this.leadMs = Number(new URLSearchParams(location.search).get('lead')) || 30;
+    this.leadMs = Number(new URLSearchParams(location.search).get('lead')) || 54;
 
     this.clips = new ClipLibrary();
     this.clips.load();

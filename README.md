@@ -400,7 +400,9 @@ limite, pas l'œil.**
 > **Le calcul, avec une unité de rendu et un vidéoprojecteur :**
 > `48 ms` d'analyse `+ 10` de rendu `+ 16` de projecteur `= 74 ms` de chaîne.
 > Pour viser les 20 ms imperceptibles, l'avance doit valoir **54 ms** — soit 7,8 % d'un
-> temps à 87 BPM. L'horloge en accepte jusqu'à 40 %.
+> temps à 87 BPM. L'horloge en accepte jusqu'à 40 %. C'est le défaut ; `?lead=30` remet le
+> réglage d'un écran d'ordinateur, où la chaîne est plus courte d'une vingtaine de
+> millisecondes et où 54 ferait partir le visuel trop tôt.
 
 **Deux défauts trouvés en vérifiant ce mécanisme, et ils annulaient tous deux l'avance.**
 Le paramètre était reçu par l'horloge puis **multiplié par zéro** : documenté, transmis, et
