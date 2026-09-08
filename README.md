@@ -1217,10 +1217,13 @@ serveur, sans carte son et sans navigateur**.
   l'écart minimal sur le tempo plutôt que sur une constante a fait passer ce chiffre de 23 à
   28 % et les frappes bien calées de 12 à 20 %, mais filtrer ne crée pas les détections
   manquantes. L'horloge à verrouillage de phase compense — elle n'excuse pas.
-- **Le pas d'annonce du tempo est plus fin que la résolution de la mesure.** L'annonce part
-  tous les 0,68 BPM, calculé pour être visible sur seize temps ; entre deux périodes
-  candidates de l'autocorrélation il y a pourtant 2,8 BPM à 87. L'interpolation parabolique
-  rattrape en partie, le reste est à revoir.
+- **Le tempo porte un biais systématique de +0,6 BPM**, dont la cause n'est pas trouvée.
+  Mesuré sur huit tempos fabriqués exactement entre 82 et 120 : l'écart moyen est de
+  0,60 BPM et le pire de 0,87, presque toujours vers le haut dans la plage 82–96. Sur les
+  seize temps du palier cela fait 77 ms de dérive, sous le seuil du huitième de temps où
+  l'œil décroche — mais c'est un biais, pas du bruit, et un biais a une cause. Deux
+  hypothèses ont été testées et écartées : l'hystérésis d'un BPM (0,60 → 0,62, sans effet)
+  et l'interpolation sur la courbe non pondérée (0,60 → 1,17, franchement pire).
 - **Nommer les sources depuis la fiche** — le transport existe, l'interface dans crate non.
 - **Les huit phénomènes non dessinés.**
 - **Le mapping proprement dit** — déformation par homographie pour caler l'image sur la

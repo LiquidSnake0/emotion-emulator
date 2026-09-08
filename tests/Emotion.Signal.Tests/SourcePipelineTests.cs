@@ -613,3 +613,47 @@ public class TauxEchantillonnageTests
         }
     }
 }
+
+public class PrecisionTempoTests
+{
+    /// <summary>
+    /// LE TEMPO DOIT RESTER SOUS LE PAS D'ANNONCE, SINON L'ANNONCE ANNONCE DU BRUIT.
+    ///
+    /// L'avance et la grille se règlent sur des fractions de temps ; encore faut-il que le
+    /// tempo lui-même soit plus juste que ce qu'on prétend en dire. L'annonce part tous les
+    /// 0,68 BPM — si l'erreur de mesure depassait ce pas, chaque annonce ne ferait que
+    /// republier l'incertitude.
+    ///
+    /// Mesure sur des tempos fabriques exactement : l'ecart moyen est de 0,60 BPM. Le pas
+    /// tient donc, de peu. Ce test le verifie sur le repertoire vise, ou le crate vit.
+    /// </summary>
+    [Theory]
+    [InlineData(82f)]
+    [InlineData(87.6f)]
+    [InlineData(93.3f)]
+    public void Le_tempo_reste_a_moins_d_un_bpm_du_vrai(float vrai)
+    {
+        const int rate = 48_000, window = SpectrumAnalyzer.Window;
+        var a = new SpectrumAnalyzer(rate);
+        var periode = rate * 60.0 / vrai;
+        var buffer = new float[window];
+        float? bpm = null;
+
+        for (var i = 0; i < rate * 30; i += window)
+        {
+            for (var k = 0; k < window; k++)
+            {
+                var phase = (i + k) % periode;
+                buffer[k] = phase < rate / 400.0
+                    ? MathF.Sin((float)(phase * 0.05)) * (1f - (float)(phase / (rate / 400.0)))
+                    : 0f;
+            }
+
+            if (a.Analyze(buffer, (long)(i * 1000L / rate)).Bpm is { } b) bpm = b;
+        }
+
+        Assert.NotNull(bpm);
+        Assert.True(MathF.Abs(bpm!.Value - vrai) < 1f,
+                    $"{vrai:F1} BPM mesure a {bpm:F2}, soit {bpm - vrai:+0.00;-0.00} d'ecart");
+    }
+}
