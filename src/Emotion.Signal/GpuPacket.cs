@@ -186,6 +186,29 @@ public struct GpuPacket
     [FieldOffset(115)] public byte MidPitch;
     [FieldOffset(116)] public byte HighPitch;
 
+    /// <summary>
+    /// Niveau de chacun des six registres tonals, puis leur contour.
+    ///
+    /// Trois registres ne suffisaient pas : un piano et un saxophone de la meme octave y
+    /// tombaient ensemble et devenaient une seule forme. Six bandes d'une octave separent
+    /// ce que l'oreille separe. <b>Aucune n'est nommee</b> — la bande 3 est la bande 3, et
+    /// ce qui y joue change d'un disque a l'autre.
+    /// </summary>
+    [FieldOffset(117)] public byte Reg0;
+    [FieldOffset(118)] public byte Reg1;
+    [FieldOffset(119)] public byte Reg2;
+    [FieldOffset(120)] public byte Reg3;
+    [FieldOffset(121)] public byte Reg4;
+    [FieldOffset(122)] public byte Reg5;
+
+    [FieldOffset(123)] public byte Pit0;
+    [FieldOffset(124)] public byte Pit1;
+    [FieldOffset(125)] public byte Pit2;
+    [FieldOffset(126)] public byte Pit3;
+
+    /// <summary>Un bit par registre : celui qui vient d'etre attaque.</summary>
+    [FieldOffset(127)] public byte RegHits;
+
     public const byte KickBit = 1;
     public const byte ClapBit = 2;
     public const byte HatBit = 4;
@@ -221,6 +244,8 @@ public struct GpuPacket
     public const byte FilterClosedBit = 8;
     public const byte BassCutBit = 16;
     public const byte DenseBit = 32;
+
+    private static byte Byte255(float v) => (byte)Math.Clamp(v * 255f, 0f, 255f);
 
     public static GpuPacket From(in VisualFrame f, TrackContext track, uint sequence)
     {
@@ -278,6 +303,13 @@ public struct GpuPacket
         p.LowPitch = (byte)Math.Clamp(f.Voices.LowPitch * 255f, 0f, 255f);
         p.MidPitch = (byte)Math.Clamp(f.Voices.MidPitch * 255f, 0f, 255f);
         p.HighPitch = (byte)Math.Clamp(f.Voices.HighPitch * 255f, 0f, 255f);
+
+        p.Reg0 = Byte255(f.Voices.LevelAt(0)); p.Reg1 = Byte255(f.Voices.LevelAt(1));
+        p.Reg2 = Byte255(f.Voices.LevelAt(2)); p.Reg3 = Byte255(f.Voices.LevelAt(3));
+        p.Reg4 = Byte255(f.Voices.LevelAt(4)); p.Reg5 = Byte255(f.Voices.LevelAt(5));
+        p.Pit0 = Byte255(f.Voices.PitchAt(0)); p.Pit1 = Byte255(f.Voices.PitchAt(1));
+        p.Pit2 = Byte255(f.Voices.PitchAt(2)); p.Pit3 = Byte255(f.Voices.PitchAt(3));
+        p.RegHits = (byte)(f.Voices.Hits & 0x3F);
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;

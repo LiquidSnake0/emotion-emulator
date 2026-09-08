@@ -109,7 +109,13 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
                      $"{N(f.Voices.High)},{N(f.Timbre.Openness)},{N(f.Timbre.Centroid)}," +
                      $"{N(f.Timbre.Density)},{(f.Bpm is { } bb ? N(bb) : "0")}," +
                      $"{f.Structure.Beat},{N(f.Structure.Buildup)},{N(f.Novelty)}," +
-                     $"{N(f.Structure.Confidence)},{N(f.Harmony.Tonality)}]");
+                     $"{N(f.Structure.Confidence)},{N(f.Harmony.Tonality)}," +
+                     $"{N(f.Voices.LowPitch)},{N(f.Voices.MidPitch)},{N(f.Voices.HighPitch)}," +
+                     "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
+                            .Select(i => N(f.Voices.LevelAt(i)))) + "]," +
+                     "[" + string.Join(",", Enumerable.Range(0, Voices.Registers)
+                            .Select(i => N(f.Voices.PitchAt(i)))) + "]," +
+                     f.Voices.Hits + "]");
     }
 
     var s = f.Structure;
@@ -301,7 +307,7 @@ if (exportTo is not null)
         ",\"latenceMs\":" + analyzer.LatencyMs.ToString("F0") +
         ",\"champs\":[\"t\",\"rms\",\"bandes\",\"drapeaux\",\"voixGrave\"," +
         "\"voixMedium\",\"voixAigue\",\"ouverture\",\"brillance\",\"densite\"," +
-        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\"]" +
+        "\"bpm\",\"temps\",\"tension\",\"nouveaute\",\"confianceTemps\",\"tonalite\",\"pitchGrave\",\"pitchMedium\",\"pitchAigu\",\"registres\",\"contours\",\"attaques\"]" +
         ",\"images\":[\n" + string.Join(",\n", exported) + "\n]}");
     Console.WriteLine($"\n{exported.Count} images exportees vers {exportTo}");
 }
