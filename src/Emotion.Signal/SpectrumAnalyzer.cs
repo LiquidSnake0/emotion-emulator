@@ -264,7 +264,18 @@ public sealed class SpectrumAnalyzer
         // diagnostic : 80 kicks et 81 claps, tombant aux memes instants.
         var rKick = Smooth(0, BandRise(bands, 0, 3));
         var rClap = Smooth(1, BandRise(bands, 4, 9));
-        var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount));
+        // LES CHARLEYS GARDENT LA DIFFERENCE, ET CE N'EST PAS UNE EXCEPTION DE CONFORT.
+        //
+        // Un rapport n'est informatif que dans un registre qui se vide entre deux frappes.
+        // Or les aigus de ce repertoire ne se vident jamais : le souffle de bande et le
+        // crepitement de vinyle y entretiennent un plancher permanent — c'est deja ce qui
+        // avait force a limiter le flux au registre du kick. Le masque y reste donc haut,
+        // le rapport ne depasse jamais un, et la mesure est sans appel : 23 charleys au
+        // lieu de 302 sur cent secondes.
+        //
+        // Le grave et le medium, eux, se vident entre deux frappes. Ils prennent le
+        // rapport, qui les rend invariants au niveau ; les aigus gardent la difference.
+        var rHat  = Smooth(2, BandRise(bands, 9, VisualFrame.BandCount, ratioMode: false));
 
         // Le tempo se mesure sur l'enveloppe du kick, pas sur les frappes qu'on en tire :
         // l'autocorrelation n'a besoin d'aucune decision binaire, et se moque donc qu'une
@@ -281,6 +292,7 @@ public sealed class SpectrumAnalyzer
 
         var hits = new Hits(kick, clap, _hat.Feed(rHat));
 
+        UpdateMasks(bands);
         Array.Copy(bands, _prevBand, bands.Length);
 
         // Ce que rapporte le diagnostic est l'enveloppe du <b>kick</b> et son seuil, pas
@@ -421,16 +433,90 @@ public sealed class SpectrumAnalyzer
     }
 
     /// <summary>Montee d'energie sur une tranche de bandes, depuis la fenetre precedente.</summary>
-    private float BandRise(float[] bands, int from, int to)
+    /// <summary>
+    /// Montee d'un registre, mesuree comme un <b>rapport</b> et non comme une difference.
+    ///
+    /// C'est le choix de <c>bonk~</c>, le detecteur d'attaques de Puckette, et il tient a
+    /// une propriete simple : un rapport est invariant au niveau. Un kick doux dans un
+    /// passage doux produit la meme montee qu'un kick fort dans un passage fort, tandis
+    /// qu'une difference ne voit que le second.
+    ///
+    /// C'est exactement le probleme rencontre ici — un mix charge en graves qui eteignait
+    /// la detection des claps — traite a sa source plutot que contourne par une
+    /// normalisation.
+    ///
+    /// LE RAPPORT SE PREND CONTRE UN MASQUE, JAMAIS CONTRE LA FENETRE PRECEDENTE.
+    ///
+    /// Les deux emprunts a <c>bonk~</c> sont indissociables, et l'avoir ignore s'est vu
+    /// tout de suite : rapporte a la fenetre precedente, qui peut etre quasi nulle, le
+    /// rapport explose sur du bruit. Mesure : les charleys tombaient de 331 a 121 sur le
+    /// meme passage.
+    ///
+    /// Le masque, lui, suit la crete de la bande — il monte instantanement avec le signal,
+    /// se maintient quelques fenetres, puis decroit. C'est une reference stable, et un
+    /// rapport pris contre lui veut dire quelque chose.
+    ///
+    /// Il remplace du meme coup l'ecart minimal, qui interdisait toute detection pendant
+    /// vingt fenetres sans nuance : une frappe forte suivant de peu une frappe faible
+    /// etait perdue. Le masque, lui, se laisse depasser par ce qui est plus fort. Il est
+    /// musical la ou la regle etait administrative.
+    /// </summary>
+    private float BandRise(float[] bands, int from, int to, bool ratioMode = true)
     {
         var rise = 0f;
         for (var i = from; i < to && i < bands.Length; i++)
         {
-            var d = bands[i] - _prevBand[i];
-            if (d > 0) rise += d;
+            if (ratioMode)
+            {
+                var ratio = bands[i] / (_bandMask[i] + RiseFloor);
+                if (ratio > 1f) rise += ratio - 1f;
+            }
+            else
+            {
+                var d = bands[i] - _prevBand[i];
+                if (d > 0) rise += d;
+            }
         }
+
         return rise;
     }
+
+    /// <summary>
+    /// Met a jour le masque de chaque bande : maintien puis decroissance, et remontee
+    /// immediate des que le signal depasse.
+    /// </summary>
+    private void UpdateMasks(float[] bands)
+    {
+        for (var i = 0; i < bands.Length; i++)
+        {
+            if (_maskAge[i] >= MaskHold) _bandMask[i] *= MaskDecay;
+            if (bands[i] > _bandMask[i]) { _bandMask[i] = bands[i]; _maskAge[i] = 0; }
+            _maskAge[i]++;
+        }
+    }
+
+    private readonly float[] _bandMask = new float[VisualFrame.BandCount];
+    private readonly int[] _maskAge = new int[VisualFrame.BandCount];
+
+    private const float RiseFloor = 0.05f;
+
+    /// <summary>Fenetres de maintien du masque avant qu'il ne commence a decroitre.</summary>
+    private const int MaskHold = 1;
+
+    /// <summary>
+    /// Decroissance du masque, par fenetre.
+    ///
+    /// J'ai d'abord voulu « adapter » le 0,7 de <c>bonk~</c> a nos fenetres huit fois plus
+    /// longues, en le remontant a 0,94 pour garder la meme constante de temps. C'etait
+    /// prendre le probleme a l'envers, et la mesure l'a dit aussitot : <b>5 charleys
+    /// detectes sur cent secondes</b> au lieu de trois cents.
+    ///
+    /// La raison est que le masque n'est pas la pour lisser mais pour <b>s'effacer entre
+    /// deux frappes</b>. S'il tient encore quand la suivante arrive, une frappe reguliere
+    /// de meme amplitude ne produit aucun rapport et devient invisible. Il doit donc
+    /// s'effondrer en moins d'une croche — soit precisement ce que fait le 0,7 d'origine.
+    /// </summary>
+    private const float MaskDecay = 0.7f;
 
     /// <summary>
     /// Jusqu'ou monte le registre pris en compte pour les attaques : les cinq premieres

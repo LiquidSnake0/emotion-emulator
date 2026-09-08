@@ -61,6 +61,9 @@ public sealed class OnsetDetector
     /// Ecart minimal en fenetres. La valeur par defaut est reglee sur le temps du crate ;
     /// les charleys, eux, ont le droit d'aller au double de vitesse.
     /// </param>
+    /// <summary>Ecart minimal en millisecondes, pour le diagnostic.</summary>
+    public static float MinGapMs => 20 * SpectrumAnalyzer.Window * 1000f / 48_000f;
+
     public OnsetDetector(int minGap = 20) => _minGap = minGap;
 
     /// <summary>Moyenne recente du flux, base du seuil. Diagnostic.</summary>

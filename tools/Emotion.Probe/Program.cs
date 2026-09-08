@@ -53,6 +53,7 @@ var profileConf = new List<float>();
 var agree = 0;
 var compared = 0;
 var ruptures = 0;
+var kickAt = new List<long>();
 var lastReason = "";
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
@@ -60,7 +61,7 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     var tMs = (long)(i * 1000L / rate);
     var f = analyzer.Analyze(mono.AsSpan(i, hop), tMs);
 
-    if (f.Hits.Kick) kicks++;
+    if (f.Hits.Kick) { kicks++; kickAt.Add(tMs); }
     if (f.Hits.Clap) claps++;
     if (f.Hits.Hat) hats++;
     if (f.NoveltyOnset) novelties++;
@@ -106,6 +107,18 @@ Console.WriteLine($"changement d'accord p50 {Pct(changes, 50):F2} · p90 {Pct(ch
 Console.WriteLine($"pentes cumulees     p50 {Pct(slopes, 50):F3} · p95 {Pct(slopes, 95):F3} · max {slopes.Max():F3}");
 Console.WriteLine($"tempo               {analyzer.Bpm?.ToString("F1") ?? "—"} BPM");
 Console.WriteLine($"frappes             {kicks} kicks · {claps} claps · {hats} charleys");
+if (kickAt.Count > 4)
+{
+    var kg = kickAt.Zip(kickAt.Skip(1), (a, b) => (float)(b - a)).ToList();
+    var kmed = Median(kg);
+    // LA METRIQUE QUI JUGE LA DETECTION. L'ecart median entre kicks doit tomber sur un
+    // multiple simple du temps. S'il colle au minimum autorise, le detecteur sature et
+    // compte du bruit ; s'il vaut la moitie d'un temps, il entend les croches.
+    var beat = analyzer.Bpm is { } b2 ? 60_000f / b2 : float.NaN;
+    Console.WriteLine($"ecart median entre kicks {kmed:F0} ms" +
+        (float.IsNaN(beat) ? "" : $"  =  {kmed / beat:F2} temps") +
+        $"  ·  minimum autorise {OnsetDetector.MinGapMs:F0} ms");
+}
 Console.WriteLine($"indices de structure {chordChanges} changements d'accord · {novelties} ruptures");
 
 Console.WriteLine($"\nconfiance du temps fort  finale {confidences[^1]:F2} · mediane {Median(confidences):F2}");

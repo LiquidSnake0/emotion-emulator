@@ -307,6 +307,35 @@ Les scores sont négatifs, et c'est normal : la somme de vecteurs centrés est n
 la somme de leurs produits scalaires vaut l'opposé de la somme de leurs carrés. On compare
 les hypothèses entre elles, jamais à zéro.
 
+## Emprunts à `bonk~`
+
+Le détecteur d'attaques de Puckette, en production depuis 1998. Voir `docs/pd-gem.md`.
+
+| Mesure sur 3 × 100 s | Avant | Après |
+|---|---|---|
+| écart médian entre kicks | 619 / 597 / 597 ms — **0,94 temps** | **619 / 619 / 619 ms — 0,97 à 0,99 temps** |
+| kicks détectés | 140 / 157 / 155 | 142 / 139 / 140 |
+| verrouillage du temps fort | 59 / 71 / 53 % | 54 / 76 / 51 % |
+| charleys | 331 / 302 / 302 | 331 / 302 / 302 |
+
+Les kicks tombent désormais **sur** les temps, avec un écart identique d'un passage à
+l'autre. Le reste est inchangé.
+
+**Le rapport et le masque sont indissociables.** Pris contre la fenêtre précédente — qui
+peut être quasi nulle — un rapport explose sur du bruit : les charleys tombaient de 331 à
+121. Il se prend contre un masque qui suit la crête, seule référence stable.
+
+**Le masque doit s'effacer entre deux frappes.** J'ai voulu « adapter » le `maskdecay` de
+0,7 à 0,94 pour compenser nos fenêtres huit fois plus longues. C'était l'inverse du
+raisonnement : s'il tient encore quand la frappe suivante arrive, une frappe régulière de
+même amplitude ne produit aucun rapport. **5 charleys détectés au lieu de 302.** La valeur
+d'origine était la bonne.
+
+**Un rapport n'a de sens que dans un registre qui se vide.** Les aigus de ce répertoire ne
+se vident jamais — souffle de bande et crépitement de vinyle y entretiennent un plancher
+permanent, ce qui avait déjà forcé à limiter le flux au registre du kick. Le grave et le
+médium prennent le rapport ; **les aigus gardent la différence**.
+
 ## Structure
 
 | Projet | Rôle | Dépendances |
