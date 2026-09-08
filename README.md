@@ -404,6 +404,39 @@ limite, pas l'œil.**
 > réglage d'un écran d'ordinateur, où la chaîne est plus courte d'une vingtaine de
 > millisecondes et où 54 ferait partir le visuel trop tôt.
 
+### Le poste le plus gros n'est ni dans le code ni dans la machine
+
+**Le son met du temps à traverser la salle, la lumière non.** À 343 m/s, un public placé à
+dix mètres des enceintes entend le kick **29 ms après** qu'il en soit sorti, alors qu'il voit
+le mur à l'instant même. Ce retard-là joue en notre faveur, et il est plus gros que tout ce
+qu'on a optimisé jusqu'ici.
+
+| Distance aux enceintes | Vol du son | Retard visuel perçu (chaîne à 48 ms, sans avance) |
+|---|---|---|
+| 3 m | 8,7 ms | 39,3 ms |
+| 5 m | 14,6 ms | 33,4 ms |
+| 8 m | 23,3 ms | 24,7 ms |
+| **10 m** | **29,2 ms** | **18,8 ms** ← déjà sous le seuil |
+| 15 m | 43,7 ms | 4,3 ms |
+
+Le retard qui compte n'est pas celui du visuel par rapport au son qui **sort de la table**,
+mais par rapport au son qui **arrive aux oreilles**. L'avance doit donc en être diminuée,
+sans quoi elle ferait partir le mur trop tôt : 54 ms d'avance à dix mètres feraient
+précéder le visuel de 35 ms, ce qui se détecte aussi. `?salle=10` donne la distance moyenne
+du public aux enceintes, et l'avance s'ajuste.
+
+**Conséquence contre-intuitive : plus la salle est grande, plus c'est facile.** À quinze
+mètres, la chaîne actuelle est déjà synchrone sans aucune avance. C'est en petit club, le
+public collé aux enceintes, que le budget se resserre.
+
+### Ce qui reste non mesuré
+
+**Le trajet table de mixage → carte son.** Une sortie booth analogique n'ajoute
+quasiment rien ; une liaison USB ajoute une conversion et un transport qui n'ont jamais été
+chronométrés ici. Ce qui compte est le **différentiel** entre les deux sorties de la table —
+celle qui va aux enceintes et celle qui vient à l'analyse — et non la latence absolue de
+l'une ou de l'autre.
+
 **Deux défauts trouvés en vérifiant ce mécanisme, et ils annulaient tous deux l'avance.**
 Le paramètre était reçu par l'horloge puis **multiplié par zéro** : documenté, transmis, et
 sans effet. Et une fois corrigé, l'avance obtenue restait courte — 23 ms pour 30 demandées —

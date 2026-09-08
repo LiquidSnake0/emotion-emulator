@@ -453,7 +453,31 @@ export class Visual {
     // dure 690 ms, donc 60 ms d'avance en representent 9 % : tant que le plateau tient a
     // 1 % pres, l'erreur de position reste sous la milliseconde. L'horloge refuse au-dela
     // de 40 % d'un temps, ou l'on ne predirait plus mais inventerait.
-    this.leadMs = Number(new URLSearchParams(location.search).get('lead')) || 54;
+    const reglages = new URLSearchParams(location.search);
+
+    // LE SON MET DU TEMPS A TRAVERSER LA SALLE, LA LUMIERE NON.
+    //
+    // C'est le poste le plus gros du budget, et il avait ete oublie parce qu'il n'est ni
+    // dans le code ni dans la machine : il est dans la piece. Le son parcourt 343 metres par
+    // seconde ; le public place a dix metres des enceintes l'entend donc <b>29 ms apres</b>
+    // qu'il en soit sorti, alors qu'il voit le mur a l'instant meme.
+    //
+    // Le retard qui compte n'est pas celui du visuel par rapport au son qui sort de la
+    // table, mais par rapport au son qui arrive aux oreilles. Ces 29 ms viennent donc en
+    // deduction : la chaine mesuree a 48 ms devient 19 de retard percu, soit deja sous le
+    // seuil des 20.
+    //
+    // Et l'avance doit en tenir compte, sans quoi elle ferait partir le visuel trop tot —
+    // avec 54 ms d'avance a dix metres, le mur precederait le son de 35 ms, ce qui se
+    // detecte aussi. `?salle=10` donne la distance moyenne du public aux enceintes.
+    const salleM = Number(reglages.get('salle'));
+    this.volSonMs = Number.isFinite(salleM) && salleM > 0
+        ? Math.min(80, salleM / 343 * 1000)
+        : 0;
+
+    const leadDemande = Number(reglages.get('lead'));
+    this.leadMs = Math.max(0,
+        (Number.isFinite(leadDemande) && leadDemande > 0 ? leadDemande : 54) - this.volSonMs);
 
     this.clips = new ClipLibrary();
     this.clips.load();
