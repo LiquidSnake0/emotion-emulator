@@ -69,6 +69,24 @@ const ZONE = {
   sol:   0.78,     // l'horizon
 };
 
+// CHAQUE FORME SE DIMENSIONNE EN FRACTION DE SA ZONE, JAMAIS EN UNITES ABSOLUES.
+//
+// Borner la position ne suffit pas : une forme plus haute que sa zone deborde meme
+// parfaitement centree. La bande de la voix mesurait jusqu'a dix-neuf centiemes de
+// hauteur pour une zone qui en faisait quinze — et la marge devenant negative, le calcul
+// de position lui-meme perdait son sens.
+//
+// Une forme demande donc a sa zone combien de place elle a, puis se taille dedans. Les
+// deux tiers pour l'objet, un tiers pour sa course : c'est ce qui permet au contour
+// melodique de se voir sans qu'aucune forme n'aille chez le voisin.
+const PART_FORME = 0.66;
+
+function zoneDe(z, h) {
+  const haut = (z.a - z.de) * h;
+  return { haut, forme: haut * PART_FORME, course: haut * (1 - PART_FORME),
+           centre: (z.de + z.a) / 2 * h, de: z.de * h, a: z.a * h };
+}
+
 // L'HORIZON SEPARE, IL NE RASSEMBLE PAS.
 //
 // La basse et le kick partaient tous deux du sol vers le haut : ils se croisaient a
@@ -345,7 +363,9 @@ export class Visual {
     const shrink = (0.80 + open * 0.20) * swell;
     ctx.translate(cx, sol); ctx.scale(shrink, shrink); ctx.translate(-cx, -sol);
 
-    const blur = (1 - open) * 9;
+    // Le flou etale chaque forme de son rayon au-dela de ses bornes. Plafonne a la
+    // moitie de la plus petite marge entre deux zones, il ne peut pas les faire mordre.
+    const blur = (1 - open) * Math.min(9, h * 0.012);
     if (blur > 0.5) ctx.filter = `blur(${blur.toFixed(1)}px)`;
 
     this.drawTension(ctx, w, h, sol, unit);
@@ -483,9 +503,9 @@ export class Visual {
   // la ou un clignotement permanent fatiguerait.
   drawPiano(ctx, cx, h, unit) {
     const m = this.voice.value, hit = this.voiceHit.value;
-    const zone = (ZONE.piano.a - ZONE.piano.de) * h;
-    const r = Math.min(zone * 0.46, unit * (0.070 + m * 0.030 + hit * 0.020));
-    const y = h * (ZONE.piano.de + ZONE.piano.a) / 2;
+    const z = zoneDe(ZONE.piano, h);
+    const r = z.forme * 0.5 * (0.62 + m * 0.28 + hit * 0.20);
+    const y = z.centre;
 
     S.polygon(ctx, cx, y, r, 8, this.spin * 0.5, SRC.piano, 0.18 + m * 0.55,
               false, Math.max(1.5, unit * 0.005 * (0.6 + m)));
@@ -511,12 +531,11 @@ export class Visual {
 
     // LE GESTE QUE SELIM NE VOYAIT PAS. Monter dans les notes ne change pas le volume :
     // seul un deplacement peut le rendre. La bande occupe la moitie haute de la scene.
-    // La course et l'epaisseur sont taillees pour que la bande tienne entiere dans sa
-    // zone : le contour la promene d'un bord a l'autre sans jamais la faire deborder.
-    const ep = unit * (0.030 + m * 0.040 + hit * 0.025);
-    const marge = ep / h;
-    const de = ZONE.voix.de + marge, a = ZONE.voix.a - marge;
-    const y = h * (a - (a - de) * this.midPitch.value);
+    // La bande se taille dans sa zone : deux tiers pour son epaisseur, un tiers pour la
+    // course du contour. Elle ne peut donc pas deborder, quelle que soit sa force.
+    const z = zoneDe(ZONE.voix, h);
+    const ep = z.forme * 0.5 * (0.55 + force * 0.45);
+    const y = z.a - ep - (z.course + z.forme - 2 * ep) * this.midPitch.value;
 
     const g = ctx.createLinearGradient(0, y - ep, 0, y + ep);
     g.addColorStop(0,    S.rgba(SRC.voix, 0));
@@ -552,16 +571,17 @@ export class Visual {
     // dispersion, mais montent et descendent ensemble comme une seule voix.
     // Le nuage glisse dans sa zone avec le contour de l'aigu, en gardant sa dispersion :
     // le decalage et l'etendue sont calcules pour qu'aucun losange n'en sorte.
-    const r = unit * 0.018 * (0.45 + v);
-    const marge = r / h;
-    const de = ZONE.aigu.de + marge, a = ZONE.aigu.a - marge;
-    const etendue = (a - de) * 0.45;
-    const centre = a - (a - de) * this.highPitch.value;
+    const z = zoneDe(ZONE.aigu, h);
+    const r = z.forme * 0.16 * (0.55 + v);
+    // Le nuage occupe exactement la part reservee a la forme — sa dispersion plus le
+    // rayon des losanges — et son centre parcourt la course restante. Meme regle que
+    // pour la bande de la voix, ecrite de la meme facon pour qu'on la verifie du regard.
+    const etendue = z.forme - 2 * r;
+    const centre = z.a - z.forme / 2 - z.course * this.highPitch.value;
 
     for (let i = 0; i < 6; i++) {
       const p = S.scatter(i);
-      S.polygon(ctx, w * (0.06 + p.x * 0.88),
-                h * (centre + (p.y - 0.5) * etendue),
+      S.polygon(ctx, w * (0.06 + p.x * 0.88), centre + (p.y - 0.5) * etendue,
                 r, 4, Math.PI / 4, SRC.aigu, v * coupe * 0.9, true);
     }
   }
@@ -589,11 +609,11 @@ export class Visual {
       const eclat = Math.max(0, 1 - Math.abs(((v + phase) % 1) - 0.5) * 2.6);
       if (eclat < 0.05) continue;
 
-      const r = unit * (0.004 + eclat * 0.006 * (0.5 + v));
+      const z = zoneDe(ZONE.hat, h);
+      const r = z.haut * 0.055 * (1 + eclat * (0.5 + v));
       ctx.fillStyle = S.rgba(SRC.hat, eclat * v * coupe * 0.9);
       ctx.beginPath();
-      ctx.arc(w * (0.04 + p.x * 0.92),
-              h * (ZONE.hat.de + p.y * (ZONE.hat.a - ZONE.hat.de)), r, 0, TAU);
+      ctx.arc(w * (0.04 + p.x * 0.92), z.de + r + p.y * (z.haut - 2 * r), r, 0, TAU);
       ctx.fill();
     }
   }

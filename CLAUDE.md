@@ -553,11 +553,15 @@ donnait. Aucune zone ne pouvait les séparer tant qu'ils partageaient la même d
 basse monte au-dessus de l'horizon, le kick descend en dessous — ils se touchent sur la
 ligne, ce qui est juste puisqu'une frappe grave est bien les deux à la fois.
 
-**Chaque source a sa bande, et n'en sort pas.** Donner une position ne suffit pas : sans
-borne, une forme qui bouge finit dans celle du voisin — la bande de la voix, avec sa course
-d'un tiers de hauteur, entrait dans l'octogone du piano. Les zones se touchent sans se
-recouvrir, et chaque forme est dimensionnée pour tenir dans la sienne, contour mélodique
-compris.
+**Chaque forme se dimensionne en fraction de sa zone, jamais en unités absolues.** Borner
+la *position* ne suffit pas : une forme plus haute que sa zone déborde même parfaitement
+centrée. La bande de la voix mesurait jusqu'à 19 % de la hauteur pour une zone qui en
+faisait 15 — et la marge devenant négative, le calcul de position lui-même perdait son
+sens. J'ai corrigé trois fois la position avant de voir que le problème était la taille.
+
+La règle : **deux tiers de la zone pour l'objet, un tiers pour sa course.** Le contour
+mélodique se voit, aucune forme ne va chez le voisin. Un contrôle géométrique vérifie
+chaque forme à ses valeurs extrêmes.
 
 | Source | Forme | Couleur | Zone (fraction de hauteur) |
 |---|---|---|---|
