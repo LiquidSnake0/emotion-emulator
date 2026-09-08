@@ -121,7 +121,7 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
         if (murAt[r] < 0 && f.Voices.LaneAt(r).Confidence >= 0.6f) murAt[r] = tMs;
         // Quand la source a ete assez ecoutee — independamment de savoir si sa bande est
         // nette. Les deux sont differents et etaient confondus dans une seule grandeur.
-        if (assezAt[r] < 0 && analyzer.Voix.PortraitDe(r).Observations >= 200) assezAt[r] = tMs;
+        if (assezAt[r] < 0 && f.Voices.LaneAt(r).Heard >= 0.99f) assezAt[r] = tMs;
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
@@ -383,13 +383,11 @@ for (var r = 0; r < Voices.Registers; r++)
 {
     // Ce qui est publie, donc ce que le renderer voit : la separation par timbre.
     var e = analyzer.Derniere.Voices.LaneAt(r);
-    var id = analyzer.Voix.PortraitDe(r);
-    Console.WriteLine($"  source {r} : " +
-                      (murAt[r] < 0 ? "jamais       " : $"{murAt[r] / 1000f,6:F1} s     ") +
-                      $"assez ecoutee a " +
-                      (assezAt[r] < 0 ? "  jamais" : $"{assezAt[r] / 1000f,6:F1} s") + " · " +
-                      $"confiance {e.Confidence:F2} · dispersion {id.Spread:F3} · " +
-                      $"{id.Observations} observations · brillance {e.Brightness:F2} · texture {e.Texture:F2}");
+    Console.WriteLine($"  source {r} : nommable a " +
+                      (murAt[r] < 0 ? " jamais" : $"{murAt[r] / 1000f,6:F1} s") + " · " +
+                      "assez ecoutee a " +
+                      (assezAt[r] < 0 ? " jamais" : $"{assezAt[r] / 1000f,6:F1} s") + " · " +
+                      $"nettete {e.Sharpness:F2} · brillance {e.Brightness:F2}");
 }
 
 var sep = analyzer.Separation;

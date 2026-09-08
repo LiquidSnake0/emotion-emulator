@@ -433,6 +433,7 @@ public sealed class SpectrumAnalyzer
                 {
                     Level = act[i],
                     Position = haut[i],
+                    Heard = _separation.EcouteOrdonnee(i),
                     Sharpness = _separation.StabiliteOrdonnee(i),
                 };
             }

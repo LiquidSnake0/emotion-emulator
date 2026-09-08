@@ -117,6 +117,27 @@ public sealed class SourceSeparator
     public float StabiliteOrdonnee(int rang) =>
         rang >= 0 && rang < Sources ? _stabilite[_ordre[rang]] : 0f;
 
+    /// <summary>
+    /// Combien d'images cette source a passe a jouer. C'est le pendant de la stabilite :
+    /// l'une dit si la source est un objet net, l'autre si on l'a assez vue pour en juger.
+    ///
+    /// ELLE DOIT SE COMPTER SUR LA SOURCE, PAS SUR LA BANDE DE FREQUENCE. Les deux
+    /// grandeurs publiees decrivaient encore deux objets differents : la nettete portait
+    /// sur le timbre separe, l'ecoute sur la tranche d'octave du meme rang. Une source qui
+    /// n'entre qu'au refrain se serait donc declaree « assez ecoutee » parce que sa bande
+    /// de frequence, elle, contenait du son en permanence.
+    /// </summary>
+    private const int Assez = 200;
+    private readonly int[] _vues = new int[Sources];
+
+    /// <summary>Sous ce niveau relatif, la source ne joue pas et n'apprend rien d'elle.</summary>
+    private const float Audible = 0.12f;
+
+    public float EcouteOrdonnee(int rang) =>
+        rang >= 0 && rang < Sources
+            ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
+            : 0f;
+
     public SourceSeparator(int bins)
     {
         _bins = bins;
@@ -167,6 +188,13 @@ public sealed class SourceSeparator
         }
 
         Suivre(spectre, n);
+
+        // Une source ne compte comme vue que quand elle joue. Le maximum sert de reference :
+        // une source discrete mais presente doit compter, une source a zero non.
+        var fort = 1e-4f;
+        for (var i = 0; i < Sources; i++) fort = MathF.Max(fort, _courant[i]);
+        for (var i = 0; i < Sources; i++)
+            if (_courant[i] / fort > Audible && _vues[i] < Assez) _vues[i]++;
     }
 
     /// <summary>Fait apprendre sur le fil d'analyse. Pour la mesure comparative seulement.</summary>
@@ -184,6 +212,9 @@ public sealed class SourceSeparator
     public void Reset()
     {
         Array.Clear(_v);
+        Array.Clear(_vues);
+        _profilConnu = false;
+        Array.Clear(_stabilite);
         _remplies = _ecrit = _depuisApprentissage = 0;
         Pret = false;
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
@@ -277,6 +308,15 @@ public sealed class SourceSeparator
                     nb += (double)b * b;
                 }
 
+                // LES COLONNES RESTENT A LEUR PLACE, ET CE N'EST PAS UN HASARD.
+                //
+                // Rien dans la factorisation n'impose que la source « 2 » d'un
+                // apprentissage soit la source « 2 » du suivant : les colonnes pourraient
+                // permuter, et l'on comparerait alors deux timbres sans rapport. Ce qui les
+                // fixe, c'est l'amorcage — chaque apprentissage repart des profils courants
+                // au lieu de tirer au hasard, donc il les raffine au lieu de les
+                // redistribuer. La mesure le confirme : les stabilites relevees sont entre
+                // 0,85 et 0,99, ce qu'une permutation ferait immediatement chuter.
                 var cos = na > Eps && nb > Eps
                     ? (float)(ps / (Math.Sqrt(na) * Math.Sqrt(nb)))
                     : 0f;

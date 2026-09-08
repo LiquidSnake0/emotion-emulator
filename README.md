@@ -18,7 +18,28 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
-**67 tests** · **zéro dépendance tierce dans le cœur**
+**128 tests** · **zéro dépendance tierce dans le cœur**
+
+---
+
+## Voir tourner
+
+**[Démo interactive](https://claude.ai/code/artifact/9ff0e42a-dd2f-4eb5-ac62-3ee1f99671c7)** —
+vingt-six secondes de vinyle passées dans la chaîne d'analyse, rejouées **avec le son**.
+Deux extraits : un disque seul, comme au casque pendant le calage, et deux disques
+superposés pendant une transition. Chaque forme y est commandée par une grandeur mesurée,
+et le panneau de droite montre ce que le système sait à chaque instant.
+
+<table>
+<tr>
+<td width="52%"><img src="docs/images/renderer.jpg" alt="Le renderer en marche"><br>
+<sub><b>Le mur</b> · six sources séparées, une forme chacune ; le verdict de chaque bande
+dans son titre</sub></td>
+<td width="48%"><img src="docs/images/demo.jpg" alt="La démo interactive"><br>
+<sub><b>La démo</b> · les mêmes images, avec le son et les grandeurs mesurées en
+regard</sub></td>
+</tr>
+</table>
 
 ---
 
@@ -308,7 +329,13 @@ peut pas être en retard. Tout ce qui passe par une décision l'était.
 Des fenêtres plus courtes préservent mieux la netteté temporelle de l'attaque. Le
 filtrage supplémentaire qu'on payait en désynchronisation ne rapportait rien.
 
-Le retard est désormais **affiché** — `retard 43 ms` dans le nom de la source, en rouge
+**Puis la séparation harmonique a été coupée par défaut, et le retard est tombé à 21 ms.**
+Sur ce répertoire elle coûtait plus qu'elle ne rapportait : mesurée sur un morceau à
+barber beats, la corrélation d'autocorrélation du tempo passait de 0,226 sans elle à 0,066
+avec — elle effaçait la pulsation d'un genre qui étouffe ses kicks. Elle reste activable
+par configuration, pour comparer.
+
+Le retard est désormais **affiché** — `retard 21 ms` dans le nom de la source, en rouge
 au-delà de 40 dans l'écran de calage. C'est une grandeur qu'on regarde, pas qu'on subit.
 
 **Fenêtre de Hann.** Sans elle, une note qui ne tombe pas exactement sur un bin fuit sur
@@ -493,6 +520,145 @@ le signale.
 
 ---
 
+## Séparer les sources, et savoir ce qu'on en sait
+
+Douze bandes de fréquence décrivent un spectre ; elles ne décrivent pas une scène. Un kick
+et une basse tombent dans la même octave, un piano et un saxophone aussi — et deviennent
+alors une seule grandeur, donc une seule forme. Tout ce que l'oreille distingue entre eux
+disparaît.
+
+La séparation se fait donc **par le timbre** et non par la fréquence, avec une
+factorisation en matrices positives : le spectrogramme récent est décomposé en un petit
+nombre de profils spectraux et de leurs activations. Un profil est un timbre ; son
+activation dit quand il joue.
+
+> **Rien n'est nommé.** Le système ne décide pas qu'une source est un piano — ce qui joue
+> dans une bande change d'un disque à l'autre, et annoncer un piano là où passe un
+> saxophone est pire que ne rien annoncer. Il dit seulement si la source est assez stable
+> pour porter un nom, et laisse la fiche le poser.
+
+### Deux grandeurs, et elles ne disent pas la même chose
+
+Une seule barre portait les deux, et elle trompait.
+
+| Grandeur | Ce qu'elle mesure | Ce qui la fait monter |
+|---|---|---|
+| **Assez écoutée** | une durée | le temps de jeu effectif de la source |
+| **Nette** | une propriété du disque | son profil se retrouve d'un apprentissage au suivant |
+
+Sur un morceau du crate, les six sources sont **toutes assez écoutées entre 4,2 et 8,8
+secondes** — avant la fin des seize temps qui font le palier de travail aux platines. Ce
+qui varie ensuite, c'est la netteté, et aucune durée d'écoute n'y change rien : si deux
+instruments se relaient dans la même bande, elle restera floue après dix minutes comme
+après dix secondes.
+
+Confondues, la source la plus grave affichait zéro après 692 observations. On lisait « le
+système n'apprend pas » là où il fallait lire « il a fini d'apprendre, et sa conclusion est
+que cette bande est partagée ». **Une mesure et un verdict ne se résument pas au même
+chiffre.**
+
+### Six sources, et le chiffre est mesuré
+
+L'intuition dit qu'en demander davantage séparerait mieux. La mesure dit l'inverse.
+
+| Sources | Netteté obtenue | Coût d'un apprentissage |
+|---|---|---|
+| **6** | **0,87 – 0,99** | **167 ms** |
+| 9 | 0,85 – 0,92 | 284 ms |
+| 12 | 0,76 – 0,92 | 355 ms |
+
+Passé six, la factorisation n'a plus d'objets à trouver et se met à couper des instruments
+en morceaux — des morceaux qui ne se retrouvent plus d'une fois sur l'autre. On paierait
+donc deux fois pour un résultat moins bon.
+
+---
+
+## Le parallélisme, et ce que la mesure en a dit
+
+La demande était directe : faire calculer les six sources en parallèle, chacune écrivant sa
+part de ce qui part au GPU, sans concurrence à arbitrer puisque chacune est isolée.
+
+La **structure de données** a suivi, et elle en valait la peine. Chaque source possède
+désormais son mot de huit octets aligné dans le paquet : niveau, contour, drapeaux,
+empreinte, forme, nom. Aucune ne partage un octet avec une autre, ce qui rend l'écriture
+concurrente sûre **par la forme des données** plutôt que par un verrou.
+
+Deux défauts sont tombés au passage, et aucun test ne les voyait :
+
+- les six attaques vivaient dans **un seul octet commun** — poser un bit s'y fait en lisant,
+  modifiant, réécrivant, donc deux sources écrivant ensemble se seraient effacées ;
+- les contours des sources 4 et 5 **n'étaient pas transmis du tout**, ce qui expliquait des
+  formes qui pulsaient sur place au lieu de suivre leur mélodie.
+
+### Mais répartir six calculs sur six cœurs coûte plus que de les faire
+
+| Mode | Coût par image |
+|---|---|
+| séquentiel | **17 µs** |
+| parallèle | 160 µs |
+
+Réveiller des fils, distribuer, attendre le dernier : cette dépense est fixe et se compte en
+dizaines de microsecondes, quand le travail d'une voie se compte en microsecondes. Le
+pipeline sait faire les deux, **mesure lequel gagne sur la machine qui l'exécute**, puis s'en
+tient au meilleur. Le jour où chaque voie portera sa propre transformée, la balance
+s'inversera d'elle-même sans que le code change.
+
+### Le vrai gain était ailleurs, et il était énorme
+
+L'apprentissage des profils tournait dans le fil d'analyse. Il coûtait **268 ms en moyenne
+et 605 ms au pire, toutes les 1,4 seconde**, quand une image d'analyse en dure 21 : treize
+images gelées d'affilée, puis rattrapées d'un coup, deux fois par phrase.
+
+| | pire image | images au-dessus du pas de 21 ms |
+|---|---|---|
+| apprentissage dans le fil | 608 ms | 38 |
+| **apprentissage en fond** | **17 ms** | **0** |
+
+Il ne calcule pas plus vite — il calcule exactement aussi vite. Il rapporte parce qu'il
+calcule *ailleurs* : l'analyse continue de suivre l'image courante avec les profils qu'elle
+a déjà, pendant que les prochains se calculent à côté. Un morceau ne change pas de timbre en
+trois secondes.
+
+Un seul fil écrit, un seul lit, et jamais la même chose au même moment : l'analyse dépose une
+copie du spectrogramme puis n'y touche plus, l'apprentissage travaille sur ses propres
+tableaux et publie un résultat, l'analyse le reprend à l'image suivante. **Le seul état
+partagé est un drapeau.** Rien à arbitrer, donc rien à verrouiller.
+
+---
+
+## Ce que le casque transmet aux enceintes
+
+Caler une face au casque, c'est reposer l'aiguille au début plusieurs fois pour vérifier le
+tempo. Chacun de ces passages est une écoute de plus du même extrait, et leur cumul dépasse
+de loin ce qu'une seule écoute continue donnerait. C'est là que le système apprend le plus,
+et c'est justement le moment où personne ne regarde l'écran.
+
+Quand la face calée passe aux enceintes, **ce qu'on a appris la suit**. Le master reprend un
+disque déjà décrit au lieu de tout redécouvrir au moment où il en a le moins le temps. C'est
+le seul instant du système où quoi que ce soit est recopié — une transition est un geste,
+pas une boucle.
+
+**Pendant le fondu, le master suit mais n'apprend plus.** Les deux disques sonnent ensemble
+et ce qu'il entend est une somme qui n'existe dans aucun des deux : un portrait formé
+là-dessus écraserait celui que le casque vient de transmettre. Le rendu, lui, ne s'interrompt
+pas — niveaux, contours et attaques continuent de partir à cadence pleine.
+
+### En mémoire vive, et nulle part ailleurs
+
+Une version rangeait ces portraits sur le disque dur, un fichier par face toutes les dix
+secondes : 996 octets, ce qui paraît indolore. La mesure a dit autre chose, sur trois
+exécutions de chaque :
+
+| | coût médian d'une image | pire |
+|---|---|---|
+| avec écriture disque | 3,2 ms | 25 – 34 ms |
+| **en mémoire vive** | **2,0 ms** | 17 – 21 ms |
+
+**Soixante pour cent de plus pour ranger un kilo-octet.** Reconnaître un disque la semaine
+prochaine ne valait pas d'alourdir la soirée en cours. Une face rangée est oubliée.
+
+---
+
 ## Pourquoi pas une bibliothèque existante
 
 La question mérite d'être posée avant d'écrire la moindre FFT, et elle l'a été. Voici
@@ -575,21 +741,34 @@ avant le branchement, et il est visible dès aujourd'hui.
 champ par champ, sous les noms exacts de `GpuPacket`. Aucune traduction mentale entre ce
 qu'on regarde ici et ce qu'on lira de l'autre côté.
 
-### Le contrat : 96 octets, plats
+### Le contrat : 256 octets, plats
 
 ```csharp
-[StructLayout(LayoutKind.Explicit, Size = 96)]
+[StructLayout(LayoutKind.Explicit, Size = 256)]   // quatre lignes de cache exactement
 public struct GpuPacket
 {
-    [FieldOffset(0)]  public uint  Magic;      // 0x454D5531 — "EMU1"
-    [FieldOffset(4)]  public uint  Sequence;   // un saut = messages perdus, c'est permis
-    [FieldOffset(8)]  public long  TimeMs;
-    [FieldOffset(16)] public float Level;
-    [FieldOffset(20)] public float Bpm;        // 0 = pas encore accroché
-    [FieldOffset(40)] public byte  Hits;       // bit 0 kick · 1 clap · 2 hat
-    [FieldOffset(48)] public Bands12 Bands;    // douze flottants en ligne
+    [FieldOffset(0)]   public uint  Magic;      // 0x454D5531 — "EMU1"
+    [FieldOffset(4)]   public uint  Sequence;   // un saut = messages perdus, c'est permis
+    [FieldOffset(8)]   public long  TimeMs;
+    [FieldOffset(16)]  public float Level;
+    [FieldOffset(20)]  public float Bpm;        // 0 = pas encore accroché
+    [FieldOffset(40)]  public byte  Hits;       // bit 0 kick · 1 clap · 2 hat
+    [FieldOffset(48)]  public Bands12 Bands;    // douze flottants en ligne
+
+    // Huit octets par source, alignés : niveau, contour, drapeaux, nom, écoute,
+    // netteté, brillance, forme. Aucune source ne partage un octet avec une autre.
+    [FieldOffset(128)] public SourceBlock Sources;
+
+    [FieldOffset(192)] public float BpmExpected;  // ce que la fiche affirmait
+    [FieldOffset(196)] public float TempoDrift;   // décalage accumulé, en temps
+    [FieldOffset(204)] public float BpmAnnounced; // la dernière annonce
 }
 ```
+
+**Chaque source a son mot, et c'est ce qui rend l'écriture concurrente sûre.** La
+disposition précédente rangeait les six attaques dans un seul octet commun : poser un bit
+s'y fait en lisant, modifiant, réécrivant, donc deux sources écrivant ensemble se seraient
+effacées sans que rien ne le signale. Séparer les données remplace l'arbitrage.
 
 Chaque décision sert la latence :
 
@@ -601,7 +780,7 @@ Chaque décision sert la latence :
 | Masque de bits pour les attaques | trois booléens dans un octet |
 | Zéro pour « pas de valeur » | CUDA n'a pas de notion de valeur absente ; c'est documenté dans le contrat |
 
-96 octets à 47 messages par seconde font 4,5 Ko/s : **la bande passante n'est pas le
+256 octets à 47 messages par seconde font 12 Ko/s : **la bande passante n'est pas le
 sujet, la latence l'est**, et une structure plate se lit d'un bloc.
 
 ### L'anneau partagé, sans verrou
@@ -739,6 +918,65 @@ diagnostics successifs :
 
 ---
 
+## L'écosystème : trois pièces, trois responsabilités
+
+Le moteur ne fait pas tout, et c'est délibéré. Chaque pièce sait une chose que les deux
+autres ne peuvent pas savoir.
+
+```
+   ┌──────────────┐  fiche du disque : famille, Camelot,   ┌──────────────────┐
+   │              │  couleur, forme voulue par source      │                  │
+   │    crate     │ ────────────── HTTP ─────────────────► │ emotion-emulator │
+   │  (le bac)    │                                        │   (l'analyse)    │
+   │              │ ◄───────────── HTTP ────────────────── │                  │
+   └──────────────┘  feu vert : « ce disque est connu »    └────────┬─────────┘
+                                                                    │
+                                                        paquet de 256 octets
+                                                        /dev/shm, sans verrou
+                                                                    │
+                                                                    ▼
+                                                           ┌──────────────────┐
+                                                           │ emotion-renderer │
+                                                           │   (CUDA, à venir)│
+                                                           └──────────────────┘
+```
+
+### crate — ce que le signal ne dira jamais
+
+[**crate**](https://github.com/LiquidSnake0/crate) est la base du bac de disques. Elle porte
+ce qui ne s'entend pas ou se détecte mal : la famille du morceau, le Camelot, la couleur, et
+désormais **la forme voulue pour chaque source**.
+
+Ce dernier point est un choix d'architecture. Le moteur sait séparer six sources et décrire
+chacune ; il ne sait pas, et n'a pas à savoir, laquelle mérite une bouche plutôt qu'un
+anneau. Ce choix est musical et dépend du morceau — sur une face feutrée c'est la voix qu'on
+veut voir respirer, sur une face dense c'est la frappe. Le fixer dans le code imposerait la
+même lecture à tout un bac.
+
+Le moteur **transporte** donc la forme, il n'en décide pas : un octet par source, qui part au
+GPU dès la première image sans attendre que la source se soit décrite. Une fiche muette
+laisse l'ordre par défaut, du grave à l'aigu — ce n'est pas un choix musical, seulement ce
+qui garantit que six sources restent distinguables.
+
+Les deux se parlent par HTTP et **ne fusionnent pas**. Une commande est rare, doit être
+acquittée et peut échouer ; un événement est continu et sa perte est sans conséquence. Ce
+sont deux besoins opposés, donc deux canaux.
+
+### emotion-renderer — ce qui viendra derrière
+
+Le rendu tourne aujourd'hui en Canvas 2D dans un navigateur, entièrement en caractères
+monospace : une chaîne par ligne, un remplissage par chaîne. Ce n'est pas un pis-aller, c'est
+une décision de mesure — réduit à du texte, le rendu devient trop rapide pour qu'un retard
+perçu puisse venir de lui, et ce qui reste se mesure ailleurs.
+
+C'est aussi ce qui prépare l'unité externe. Un GPU qui affiche une grille de caractères n'a
+rien à réimplémenter : il lit une matrice et l'affiche. Le contrat est déjà écrit et déjà
+alimenté — **256 octets plats**, poussés dans un anneau sans verrou en mémoire partagée,
+avec un coût d'écriture de 1,5 µs. Le renderer CUDA se branchera dessus sans que l'analyse
+change d'une ligne.
+
+---
+
 ## Faire tourner
 
 ```sh
@@ -771,7 +1009,7 @@ curl -X POST localhost:5299/deck/take
 ```
 
 ```sh
-dotnet test        # 67 tests
+dotnet test        # 128 tests
 ```
 
 ### Les images et les clips
@@ -798,7 +1036,7 @@ inerte et la géométrie tourne seule.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
 | `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 67 tests | xUnit |
+| `Emotion.Signal.Tests` | 128 tests | xUnit |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans
@@ -813,7 +1051,16 @@ serveur, sans carte son et sans navigateur**.
   nommer.
 - **Structure du morceau** — densité et énergie sur fenêtre glissante, détection de
   rupture pour repérer les sections.
-- **Geler le tempo pendant un fondu**, où les attaques de deux disques se mélangent.
+- **Le détecteur d'attaques reste le maillon faible.** Sur un répertoire aux kicks
+  étouffés, 28 % seulement des intervalles entre frappes tombent sur un temps entier. Régler
+  l'écart minimal sur le tempo plutôt que sur une constante a fait passer ce chiffre de 23 à
+  28 % et les frappes bien calées de 12 à 20 %, mais filtrer ne crée pas les détections
+  manquantes. L'horloge à verrouillage de phase compense — elle n'excuse pas.
+- **Le pas d'annonce du tempo est plus fin que la résolution de la mesure.** L'annonce part
+  tous les 0,68 BPM, calculé pour être visible sur seize temps ; entre deux périodes
+  candidates de l'autocorrélation il y a pourtant 2,8 BPM à 87. L'interpolation parabolique
+  rattrape en partie, le reste est à revoir.
+- **Nommer les sources depuis la fiche** — le transport existe, l'interface dans crate non.
 - **Les huit phénomènes non dessinés.**
 - **Le mapping proprement dit** — déformation par homographie pour caler l'image sur la
   surface physique projetée.
