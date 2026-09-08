@@ -98,6 +98,10 @@ public sealed class SpectrumAnalyzer
     // du premier soit plus appuye, si.
     private readonly DownbeatProfile _profile = new();
 
+    // Ou tombe l'attaque a l'interieur de la fenetre. Sans lui, un kick au premier
+    // echantillon et un kick au dernier sont annonces au meme instant, a 21 ms pres.
+    private readonly TransientLocator _transient = new();
+
     // Les bandes suivent une echelle logarithmique : l'oreille entend le rapport entre
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
@@ -129,6 +133,16 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
     public string LastBreak => _continuity.Reason;
+
+    /// <summary>
+    /// Ecart de la derniere frappe a la grille, en fraction de temps. C'est la seule
+    /// grandeur qui mesure la <b>justesse de la phase</b> — le verrouillage et l'ecart
+    /// entre frappes, eux, sont comptes a la fenetre et ne peuvent pas la voir.
+    /// </summary>
+    public float SyncError => _grid.LastSyncError;
+
+    /// <summary>Position de l'attaque dans la fenetre courante, en millisecondes.</summary>
+    public float TransientOffsetMs => _transient.OffsetMs;
 
     /// <summary>Une rupture vient d'etre constatee sur cette fenetre.</summary>
     public bool ContinuityBroken => _continuity.Broken;
@@ -172,6 +186,7 @@ public sealed class SpectrumAnalyzer
             throw new ArgumentException($"fenetre de {Window} echantillons attendue", nameof(samples));
 
         var harmony = _harmony.Feed(samples);
+        _transient.Feed(samples, _sampleRate);
 
         var sum = 0f;
         for (var i = 0; i < Window; i++)
@@ -325,7 +340,11 @@ public sealed class SpectrumAnalyzer
         var stepped = _grid.Advance(tMs, _tempo.Bpm);
         if (stepped) _arc.Advance();
 
-        if (hits.Kick) { _grid.Sync(tMs); _grid.MarkKick(tMs); }
+        // La grille se cale sur l'instant reel de la frappe, pas sur celui de la fenetre
+        // qui la contient. Vingt et une millisecondes d'incertitude en moins, sur le seul
+        // etage ou la justesse de la phase decide de tout.
+        var at = tMs + (long)_transient.OffsetMs;
+        if (hits.Kick) { _grid.Sync(at); _grid.MarkKick(at); }
         if (hits.Clap) _grid.MarkClap(tMs);
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
         if (_novelty.Onset) _grid.MarkSection(tMs);

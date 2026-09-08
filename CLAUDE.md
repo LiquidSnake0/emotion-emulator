@@ -336,6 +336,33 @@ se vident jamais — souffle de bande et crépitement de vinyle y entretiennent 
 permanent, ce qui avait déjà forcé à limiter le flux au registre du kick. Le grave et le
 médium prennent le rapport ; **les aigus gardent la différence**.
 
+### Emprunt 3 : non prouvé, mais il a trouvé autre chose
+
+`TransientLocator` situe l'attaque *dans* la fenêtre — passe-bas sur le signal brut, huit
+sous-blocs de 2,7 ms — pour que la grille se cale sur l'instant réel de la frappe plutôt
+que sur celui de la fenêtre qui la contient.
+
+**Aucune métrique existante ne bouge d'un chiffre.** C'est normal : le verrouillage et
+l'écart entre frappes sont comptés à la fenêtre, ils ne peuvent pas voir 21 ms.
+
+La métrique qu'il a fallu créer pour le juger — l'écart des frappes à la grille — a révélé
+autre chose :
+
+```
+300 s   écart moyen 0,200 temps = 124 ms   dispersion 0,140
+900 s   écart moyen 0,217 temps = 139 ms   dispersion 0,125
+1500 s  écart moyen 0,225 temps = 144 ms   dispersion 0,149
+```
+
+**Une distribution parfaitement aléatoire donnerait 0,25.** La grille n'est donc presque
+pas synchronisée avec les frappes qu'elle suit — et c'est cohérent avec le verrouillage du
+temps fort qui plafonne à une fenêtre sur deux : *un vote porté dans une grille mal calée
+désigne un temps au hasard.*
+
+Ce défaut domine complètement les 21 ms que l'emprunt 3 corrige. Il est donc gardé mais
+**non prouvé** : sa valeur ne pourra être jugée qu'une fois la phase réparée. C'est le
+prochain chantier, et il est plus important que tout ce qui précède.
+
 ## Structure
 
 | Projet | Rôle | Dépendances |

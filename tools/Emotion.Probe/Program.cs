@@ -54,6 +54,8 @@ var agree = 0;
 var compared = 0;
 var ruptures = 0;
 var kickAt = new List<long>();
+var syncErr = new List<float>();
+var offsets = new List<float>();
 var lastReason = "";
 
 for (var i = 0; i + hop <= mono.Length; i += hop)
@@ -61,7 +63,12 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     var tMs = (long)(i * 1000L / rate);
     var f = analyzer.Analyze(mono.AsSpan(i, hop), tMs);
 
-    if (f.Hits.Kick) { kicks++; kickAt.Add(tMs); }
+    if (f.Hits.Kick)
+    {
+        kicks++; kickAt.Add(tMs);
+        syncErr.Add(MathF.Abs(analyzer.SyncError));
+        offsets.Add(analyzer.TransientOffsetMs);
+    }
     if (f.Hits.Clap) claps++;
     if (f.Hits.Hat) hats++;
     if (f.NoveltyOnset) novelties++;
@@ -118,6 +125,15 @@ if (kickAt.Count > 4)
     Console.WriteLine($"ecart median entre kicks {kmed:F0} ms" +
         (float.IsNaN(beat) ? "" : $"  =  {kmed / beat:F2} temps") +
         $"  ·  minimum autorise {OnsetDetector.MinGapMs:F0} ms");
+}
+if (syncErr.Count > 4)
+{
+    var m = syncErr.Average();
+    var sd = MathF.Sqrt(syncErr.Sum(e => (e - m) * (e - m)) / syncErr.Count);
+    var beatMs = analyzer.Bpm is { } b3 ? 60_000f / b3 : 625f;
+    Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F0} ms" +
+                      $"  ·  dispersion {sd:F3}  ·  median {Median(syncErr):F3}");
+    Console.WriteLine($"position dans la fenetre  moyenne {offsets.Average():F1} ms sur 21");
 }
 Console.WriteLine($"indices de structure {chordChanges} changements d'accord · {novelties} ruptures");
 
