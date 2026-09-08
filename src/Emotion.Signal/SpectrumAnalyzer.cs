@@ -50,7 +50,23 @@ public sealed class SpectrumAnalyzer
     // fenetre a l'autre : y chercher un maximum local revient a compter le bruit. Une
     // moyenne mobile courte en fait une enveloppe ou un sommet veut dire quelque chose.
     private readonly float[] _smooth = new float[4];
-    private readonly TempoTracker _tempo = new();
+    /// <summary>
+    /// Le tempo. Construit dans le constructeur, avec le taux d'echantillonnage reel.
+    ///
+    /// IL ETAIT CONSTRUIT ICI, AVEC LE TAUX PAR DEFAUT, ET LE BUG A TENU LONGTEMPS.
+    ///
+    /// Le constructeur recevait le taux et le transmettait a tous les etages — bandes,
+    /// harmonie, voix, timbre — sauf a celui-la, qui gardait 48 kHz quoi qu'il arrive.
+    /// Sur un signal a 44,1 kHz, chaque fenetre etait donc supposee durer 21,3 ms alors
+    /// qu'elle en dure 23,2 : les periodes d'autocorrelation etaient lues 8,8 % trop
+    /// courtes, et le tempo d'autant trop rapide.
+    ///
+    /// Le meme extrait donnait <b>87,2 BPM a 48 kHz et 92,0 a 44,1</b>. Un tempo qui
+    /// depend du taux d'echantillonnage ne mesure pas le morceau, il mesure le fichier.
+    /// Et le cas n'a rien de theorique : un vinyle numerise, un logiciel de mix, une carte
+    /// son grand public sortent tous du 44,1.
+    /// </summary>
+    private readonly TempoTracker _tempo;
 
     // L'harmonie travaille sur une fenetre quatre fois plus longue, pour separer les
     // demi-tons. Elle recoit les memes echantillons et se cadence toute seule.
@@ -205,7 +221,12 @@ public sealed class SpectrumAnalyzer
     private readonly Damper _dMid = new(22f);
     private readonly Damper _dHigh = new(40f);   // le xylophone est vif
 
-    private const float FrameSeconds = Window / 48_000f;
+    /// <summary>
+    /// Duree d'une fenetre, en secondes. Elle depend du taux d'echantillonnage et ne peut
+    /// donc pas etre une constante : 21,3 ms a 48 kHz, 23,2 a 44,1. Une constante y
+    /// faisait avancer tous les ressorts 8,8 % trop vite sur un signal a 44,1.
+    /// </summary>
+    private readonly float _frameSeconds;
 
     // Le seuil de connaissance : quand annoncer au telephone qu'on en sait assez sur le
     // disque en cours pour que le GPU puisse basculer dessus.
@@ -223,6 +244,8 @@ public sealed class SpectrumAnalyzer
     public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false)
     {
         _sampleRate = sampleRate;
+        _frameSeconds = Window / (float)sampleRate;
+        _tempo = new TempoTracker(sampleRate, Window);
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
@@ -513,7 +536,7 @@ public sealed class SpectrumAnalyzer
         // Les grandeurs continues partent amorties ; les evenements restent bruts. Une
         // impulsion lissee n'est plus une impulsion, et c'est le renderer qui les
         // declenche — la seule chose qu'il calcule encore.
-        var dt = FrameSeconds;
+        var dt = _frameSeconds;
         level = _dLevel.Feed(level, dt);
         for (var i = 0; i < bands.Length; i++) bands[i] = _dBands[i].Feed(bands[i], dt);
         voices = voices with

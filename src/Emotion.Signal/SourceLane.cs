@@ -70,7 +70,11 @@ public readonly record struct LaneState(
 /// </summary>
 public sealed class RegisterLane : ISourceLane
 {
-    private const float FrameSeconds = 1024f / 48_000f;
+    /// <summary>
+    /// Duree d'une fenetre, en secondes. Elle vient du taux reel : une constante faisait
+    /// glisser le contour melodique 8,8 % trop vite sur un signal a 44,1 kHz.
+    /// </summary>
+    private readonly float _frameSeconds;
 
     private readonly int _lo;
     private readonly int _hi;
@@ -92,11 +96,12 @@ public sealed class RegisterLane : ISourceLane
     public int Rank { get; }
     public LaneState State { get; private set; } = LaneState.Silent;
 
-    public RegisterLane(int rank, int lo, int hi)
+    public RegisterLane(int rank, int lo, int hi, float frameSeconds)
     {
         Rank = rank;
         _lo = lo;
         _hi = hi;
+        _frameSeconds = frameSeconds;
 
         // Le contour glisse d'autant plus vite que le registre est haut : une note aigue
         // change plus souvent qu'une note grave.
@@ -170,7 +175,7 @@ public sealed class RegisterLane : ISourceLane
         // Puis un ressort, et non une seconde moyenne : une moyenne exponentielle arrive
         // toujours en retard et sans elan, ce qui fait qu'un mouvement parait mou. Un
         // ressort a une vitesse, donc de l'inertie.
-        var position = _pitch.Feed(_target, FrameSeconds);
+        var position = _pitch.Feed(_target, _frameSeconds);
 
         // La montee, et non le niveau : une note tenue ne doit pas declencher en
         // permanence, seule son attaque compte.

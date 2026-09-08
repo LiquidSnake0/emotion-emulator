@@ -96,8 +96,10 @@ public sealed class VoiceTracker
         for (var i = 1; i <= N; i++)
             if (edges[i] <= edges[i - 1]) edges[i] = edges[i - 1] + 1;
 
+        var frameSeconds = window / (float)sampleRate;
         var lanes = new ISourceLane[N];
-        for (var r = 0; r < N; r++) lanes[r] = new RegisterLane(r, edges[r], edges[r + 1]);
+        for (var r = 0; r < N; r++)
+            lanes[r] = new RegisterLane(r, edges[r], edges[r + 1], frameSeconds);
         _pipeline = new SourcePipeline(lanes);
     }
 
