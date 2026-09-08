@@ -98,6 +98,29 @@ public sealed class OnsetDetector
     /// <summary>Seuil qu'il faut depasser pour declencher. Diagnostic.</summary>
     public float Threshold => Baseline * Margin;
 
+    // UNE HYPOTHESE TESTEE ET REFUTEE : LE SEUIL GUIDE PAR LA GRILLE.
+    //
+    // L'idee etait tentante. Un morceau a un tempo ; quand la grille est accrochee, on sait
+    // ou le prochain temps doit tomber. Plutot que de juger chaque fenetre isolement avec le
+    // meme seuil partout, on l'abaissait pres du temps attendu et on le laissait haut
+    // ailleurs — une frappe etouffee au bon endroit passe, une bosse de meme amplitude entre
+    // deux temps ne passe pas. C'est ce que fait l'oreille.
+    //
+    // La mesure a dit non, et de deux facons a la fois. A dix et quinze pour cent de faveur,
+    // elle ne changeait <b>aucune decision</b> : mêmes 28 % d'intervalles justes, mêmes 20 %
+    // de frappes bien calees, meme ecart de phase. A trente pour cent, elle changeait des
+    // decisions et les degradait — les frappes bien calees tombaient a 16 %, le verrouillage
+    // de 83 a 80 %.
+    //
+    // LA RAISON EST INSTRUCTIVE. L'ecart de phase moyen entre les frappes et la grille est
+    // de 0,25 temps sur ce repertoire : la grille elle-meme est mal calee. Favoriser sa
+    // position revient donc a favoriser une position fausse, et l'on ne peut pas se servir
+    // de la grille pour ameliorer les frappes qui servent a la caler — pas tant qu'elle
+    // n'est pas deja juste.
+    //
+    // Ce qui a marche, lui, ne demandait rien a la grille : compter l'ecart minimal en
+    // temps plutot qu'en millisecondes. Voir <see cref="Suivre"/>.
+
     /// <summary>
     /// Nourrit le detecteur et dit si une attaque tombe <b>a l'instant juge</b>,
     /// c'est-a-dire il y a <see cref="Lookahead"/> fenetres.
