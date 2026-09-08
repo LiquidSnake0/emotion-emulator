@@ -232,7 +232,7 @@ export class Visual {
     // pendant huit mesures et dit ou va le morceau. Une rupture peut donc etre jouee
     // <i>sur</i> l'instant plutot qu'apres, et la latence de la chaine cesse de compter.
     const st = frame.structure ?? {};
-    this.tension.step(st.buildup ?? 0, dt);
+    this.tension.step(this.lerp.scalar(f => f.structure?.buildup ?? 0, now));
     if (st.drop) this.drop.fire();
     this.drop.step(beatMs, dtMs);
 
@@ -247,21 +247,37 @@ export class Visual {
                      this.bassHit, this.voiceHit, this.bellHit])
       p.step(beatMs, dtMs);
 
-    // ---- valeurs continues, amorties ----
-    this.bass.step(v.low ?? 0, dt);
-    this.voice.step(v.mid ?? 0, dt);
-    this.bells.step(v.high ?? 0, dt);
-    this.level.step(rms, dt);
+    // ---- valeurs continues : AMORTIES EN AMONT, INTERPOLEES ICI ----
+    //
+    // Ces deux operations sont distinctes et il faut les deux. L'amortissement, descendu
+    // dans l'analyse, donne au mouvement sa masse. L'interpolation comble les trous entre
+    // deux images d'analyse — et sans elle, une valeur reste figee une image de rendu sur
+    // cinq, ce qui se voit comme un tremblement.
+    //
+    // Le ressort cote rendu masquait ces paliers par accident : en le retirant, la
+    // saccade est apparue. Ce n'etait pas le lissage qui manquait, c'etait
+    // l'interpolation qui n'avait jamais ete branchee sur ces grandeurs-la.
+    //
+    // On n'extrapole jamais au-dela de la derniere mesure : inventer du mouvement absent
+    // du son se verrait au premier silence.
+    const lu = (pick, defaut) => {
+      const x = this.lerp.scalar(pick, now);
+      return Number.isFinite(x) ? x : defaut;
+    };
+
+    this.bass.step(lu(f => f.voices?.low ?? 0, 0));
+    this.voice.step(lu(f => f.voices?.mid ?? 0, 0));
+    this.bells.step(lu(f => f.voices?.high ?? 0, 0));
+    this.level.step(rms);
     this.tonal.step(frame.harmony?.tonality ?? 0, dt);
 
-    const tb = frame.timbre ?? {};
-    this.open.step(tb.openness ?? 1, dt);
-    this.bright.step(tb.centroid ?? 0.5, dt);
-    this.density.step(tb.density ?? 0.5, dt);
+    this.open.step(lu(f => f.timbre?.openness ?? 1, 1));
+    this.bright.step(lu(f => f.timbre?.centroid ?? 0.5, 0.5));
+    this.density.step(lu(f => f.timbre?.density ?? 0.5, 0.5));
 
-    this.lowPitch.step(v.lowPitch ?? 0.5, dt);
-    this.midPitch.step(v.midPitch ?? 0.5, dt);
-    this.highPitch.step(v.highPitch ?? 0.5, dt);
+    this.lowPitch.step(lu(f => f.voices?.lowPitch ?? 0.5, 0.5));
+    this.midPitch.step(lu(f => f.voices?.midPitch ?? 0.5, 0.5));
+    this.highPitch.step(lu(f => f.voices?.highPitch ?? 0.5, 0.5));
 
     this.spin += dt * (0.06 + this.level.value * 0.22 + this.tension.value * 0.55);
     if (this.sweep >= 0) {

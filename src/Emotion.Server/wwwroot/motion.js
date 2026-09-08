@@ -86,6 +86,12 @@ export class Pulse {
  *
  * Le renderer ne calcule donc plus qu'une chose : les impulsions. Elles, il les declenche
  * lui-meme, parce qu'une impulsion lissee en amont ne serait plus une impulsion.
+ *
+ * ATTENTION — ELLE NE REMPLACE PAS L'INTERPOLATION. Amortir et interpoler sont deux
+ * operations distinctes : la premiere donne sa masse au mouvement, la seconde comble les
+ * trous entre deux images d'analyse. Le ressort masquait les paliers de 21 ms par
+ * accident ; le retirer sans brancher `FrameLerp` a fait apparaitre une saccade que
+ * personne n'avait introduite — elle avait toujours ete la, cachee.
  */
 export class Lue {
   constructor(value = 0) { this.value = value; }

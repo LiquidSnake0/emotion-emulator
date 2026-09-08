@@ -598,6 +598,13 @@ de place, et **aucune latence n'est ajoutée** puisque le ressort existait déj�
 > **Les événements restent bruts.** Une impulsion lissée n'est plus une impulsion. C'est
 > la seule chose que le renderer calcule encore — il déclenche, il n'amortit plus.
 
+**Amortir et interpoler sont deux choses différentes, et il faut les deux.** L'amortissement
+donne sa masse au mouvement ; l'interpolation comble les trous entre deux images d'analyse.
+Le ressort côté rendu masquait les paliers de 21 ms *par accident* — le retirer sans
+brancher `FrameLerp` sur ces grandeurs a fait apparaître une saccade que personne n'avait
+introduite : elle avait toujours été là, cachée. `FrameLerp` n'était branché que sur le
+niveau et les douze bandes ; il l'est désormais sur tout ce qui est continu.
+
 Côté rendu, `Lue` remplace `Spring` partout où l'amortissement est descendu : elle porte la
 valeur sans la retoucher. Garder les deux amortirait deux fois et rendrait tout mou.
 
