@@ -270,6 +270,20 @@ public sealed class SpectrumAnalyzer
             voices = _voices.Feed(_hpss.Harmonic);
             _hpss.Percussive.CopyTo(spectrum);
         }
+        else
+        {
+            // LES REGISTRES TONALS NE DEPENDENT PAS DE LA SEPARATION.
+            //
+            // Ils n'etaient calcules que dans sa branche, si bien que la couper les a
+            // supprimes d'un coup — et avec eux le disque des graves, le polygone de la
+            // voix et les triangles des aigues, soit les deux tiers de ce qui se voit.
+            // Selim l'a dit en trois mots : « il manque plein de sons ».
+            //
+            // Sans separation, on leur donne le spectre entier. C'est moins net qu'une
+            // moitie harmonique — un coup de caisse claire fera bouger les trois
+            // registres a la fois — mais infiniment preferable au silence.
+            voices = _voices.Feed(full);
+        }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint
         // n'est pas une attaque.

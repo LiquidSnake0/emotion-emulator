@@ -42,6 +42,7 @@ var drops = new List<long>();
 var confidences = new List<float>();
 var buildups = new List<float>();
 int kicks = 0, claps = 0, hats = 0, novelties = 0, chordChanges = 0;
+int vLow = 0, vMid = 0, vHigh = 0;
 var beatHisto = new int[5];   // -1 puis 0..3
 var changes = new List<float>();
 var slopes = new List<float>();
@@ -82,6 +83,9 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     }
     if (f.Hits.Clap) claps++;
     if (f.Hits.Hat) hats++;
+    if (f.Voices.LowHit) vLow++;
+    if (f.Voices.MidHit) vMid++;
+    if (f.Voices.HighHit) vHigh++;
     if (f.NoveltyOnset) novelties++;
     if (f.Harmony.Change > 0.45f) chordChanges++;
     changes.Add(f.Harmony.Change);
@@ -207,6 +211,7 @@ Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F
                       $"  ·  dispersion {sd:F3}  ·  median {Median(syncErr):F3}");
     Console.WriteLine($"position dans la fenetre  moyenne {offsets.Average():F1} ms sur 21");
 }
+Console.WriteLine($"registres tonals    {vLow} voix graves · {vMid} medium · {vHigh} aigues");
 Console.WriteLine($"indices de structure {chordChanges} changements d'accord · {novelties} ruptures");
 
 Console.WriteLine($"\nconfiance du temps fort  finale {confidences[^1]:F2} · mediane {Median(confidences):F2}");
