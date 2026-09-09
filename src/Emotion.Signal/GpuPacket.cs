@@ -371,6 +371,35 @@ public struct GpuPacket
 
     [FieldOffset(EnvelopeOffset)] public EnvelopeBlock Envelopes;
 
+    /// <summary>
+    /// LE ROLE DE CHAQUE SOURCE DANS L'ORCHESTRE : trois octets, les derniers du paquet.
+    ///
+    ///   +0  role      0 inconnu · 1 metronome · 2 ponctuel · 3 continu
+    ///   +1  place     ou elle tombe dans le temps, 0 a 255 pour 0 a 1
+    ///   +2  retrait   depuis combien de temps elle s'est tue, en seiziemes de seconde ;
+    ///                 zero si elle joue
+    ///
+    /// Voir <see cref="SourceRoles"/>. Le retrait vient de <see cref="SourceEnvelope"/>.
+    ///
+    /// LES TROIS VONT ENSEMBLE, ET C'EST LEUR REUNION QUI SERT. Une source absente ne dit
+    /// rien ; une source absente DONT ON CONNAIT LA PLACE peut etre montree en creux la ou
+    /// elle reviendra. C'est ce que le DJ demande : savoir ou serait le kick pendant qu'il
+    /// n'est pas la.
+    /// </summary>
+    public const int RoleOffset = 232;
+
+    /// <summary>Trois octets par source. Huit sources : les vingt-quatre derniers octets.</summary>
+    public const int RoleStride = 3;
+
+    public const int RoleKind = 0;
+    public const int RolePlace = 1;
+    public const int RoleAway = 2;
+
+    /// <summary>Un seizieme de seconde par cran : quatre secondes tiennent dans un octet.</summary>
+    public const float RoleAwayStep = 1f / 16f;
+
+    [FieldOffset(RoleOffset)] public RoleBlock Roles;
+
     [FieldOffset(212)] public byte EventFamily;
 
     /// <summary>L'empreinte de cette frappe, un octet par axe.</summary>
@@ -464,6 +493,24 @@ public struct GpuPacket
         slot[EnvelopeTenue] = Byte255(tenue);
     }
 
+    /// <summary>Ecrit le role d'une source, sa place et son retrait.</summary>
+    public void WriteRole(int rank, byte role, float place, float retraitS)
+    {
+        if ((uint)rank >= SourceSlots) return;
+        var slot = RoleByte(rank);
+        slot[RoleKind] = role;
+        slot[RolePlace] = Byte255(place);
+        slot[RoleAway] = (byte)Math.Clamp(retraitS / RoleAwayStep, 0f, 255f);
+    }
+
+    /// <summary>Relit le role d'une source.</summary>
+    public (byte Kind, byte Place, byte Away) ReadRole(int rank)
+    {
+        if ((uint)rank >= SourceSlots) return (0, 0, 0);
+        var slot = RoleByte(rank);
+        return (slot[RoleKind], slot[RolePlace], slot[RoleAway]);
+    }
+
     /// <summary>Relit l'enveloppe d'une source, en octets bruts.</summary>
     public (byte Pique, byte Tenue) ReadEnvelope(int rank)
     {
@@ -482,6 +529,14 @@ public struct GpuPacket
             slot[SourceLevel], slot[SourcePitch], (slot[SourceFlags] & SourceHitBit) != 0,
             slot[SourceLabel], slot[SourceHeard], slot[SourceSharp],
             slot[SourceBrightness], slot[SourceShape]);
+    }
+
+    private Span<byte> RoleByte(int rank)
+    {
+        var all = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+            ref System.Runtime.CompilerServices.Unsafe.As<RoleBlock, byte>(ref Roles),
+            SourceSlots * RoleStride);
+        return all.Slice(rank * RoleStride, RoleStride);
     }
 
     private Span<byte> EnvelopeByte(int rank)
@@ -580,6 +635,7 @@ public struct GpuPacket
             var lane = f.Voices.LaneAt(i);
             p.WriteSource(i, lane, track.NameOf(i), track.ShapeOf(i));
             p.WriteEnvelope(i, lane.Pique, lane.Tenue);
+            p.WriteRole(i, lane.Role, lane.Place, lane.Retrait);
         }
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
@@ -611,6 +667,16 @@ public struct SourceBlock
 /// </summary>
 [System.Runtime.CompilerServices.InlineArray(GpuPacket.SourceSlots * GpuPacket.EnvelopeStride)]
 public struct EnvelopeBlock
+{
+    private byte _first;
+}
+
+/// <summary>
+/// Les huit roles, cote a cote. Trois octets chacun, et ils closent le paquet : 232 plus
+/// vingt-quatre font exactement deux cent cinquante-six.
+/// </summary>
+[System.Runtime.CompilerServices.InlineArray(GpuPacket.SourceSlots * GpuPacket.RoleStride)]
+public struct RoleBlock
 {
     private byte _first;
 }

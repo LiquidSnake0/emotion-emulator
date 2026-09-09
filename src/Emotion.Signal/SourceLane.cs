@@ -64,11 +64,24 @@ public interface ISourceLane
 /// pique fort et tenue moyenne pour un piano, c'est-a-dire « une frappe suivie d'une onde
 /// courte ou longue ».
 /// </param>
+/// <param name="Role">
+/// Ce que la source fait vis-a-vis de la grille : metronome, ponctuelle, ou continue.
+/// Voir <see cref="SourceRoles"/>.
+/// </param>
+/// <param name="Place">Ou elle tombe dans le temps, 0 a 1. C'est la qu'elle reviendra.</param>
+/// <param name="Retrait">
+/// Depuis combien de secondes elle s'est tue. Zero si elle joue.
+///
+/// AVEC <paramref name="Place"/>, C'EST CE QUI PERMET DE MONTRER UNE SOURCE ABSENTE. Une
+/// source qui se tait ne dit rien ; une source qui se tait et dont on connait la place peut
+/// etre dessinee en creux la ou elle reviendra.
+/// </param>
 public readonly record struct LaneState(
     float Level, float Position, bool Hit,
     float Heard = 0f, float Sharpness = 0f,
     float Brightness = 0.5f, float Texture = 0.5f,
-    float Pique = 0f, float Tenue = 0f)
+    float Pique = 0f, float Tenue = 0f,
+    byte Role = 0, float Place = 0f, float Retrait = 0f)
 {
     public static LaneState Silent => new(0f, 0.5f, false);
 

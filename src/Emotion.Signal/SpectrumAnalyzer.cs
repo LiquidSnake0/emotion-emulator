@@ -629,6 +629,8 @@ public sealed class SpectrumAnalyzer
     private readonly int[] _edges;
     private readonly PhaseFold _repli = new();
     private SourceEnvelope? _enveloppes;
+    private SourceRoles? _roles;
+    private readonly bool[] _frappesSources = new bool[SourceSeparator.Sources];
     private readonly float[] _prevMag = new float[Window / 2];
     private float _fluxMedium;
 
@@ -884,6 +886,7 @@ public sealed class SpectrumAnalyzer
                 // dont la bande d'octave est partagee aurait recu l'enveloppe de sa voisine.
                 _enveloppes ??= new SourceEnvelope(SourceSeparator.Sources, _frameSeconds);
                 _enveloppes.Feed(i, act[i]);
+                _frappesSources[i] = brut.Hit;
 
                 etats[i] = brut with
                 {
@@ -893,8 +896,28 @@ public sealed class SpectrumAnalyzer
                     Sharpness = _separation.StabiliteOrdonnee(i),
                     Pique = _enveloppes.Pique(i),
                     Tenue = _enveloppes.Tenue(i),
+                    Retrait = _enveloppes.Muet(i),
                 };
             }
+
+            // LE ROLE DE CHAQUE SOURCE DANS L'ORCHESTRE.
+            //
+            // Il se mesure en repliant les frappes de la source sur la periode du temps :
+            // celle qui marque presque chaque temps tient le metronome, celle qui marque
+            // toujours la meme position ponctue, celle qui ne se concentre nulle part est
+            // continue. Trois roles, et aucun devine — la concentration se compare a son
+            // niveau de hasard, qui se calcule.
+            //
+            // C'est ce qui permettra de savoir OU SERAIT une source pendant qu'elle se
+            // tait : une ponctuelle qui tombait sur le troisieme temps y retombera.
+            _roles ??= new SourceRoles(SourceSeparator.Sources);
+            _roles.Feed(tMs, _tempo.Bpm, _frappesSources);
+            for (var i = 0; i < SourceSeparator.Sources; i++)
+                etats[i] = etats[i] with
+                {
+                    Role = _roles.Role(i),
+                    Place = _roles.Place(i),
+                };
 
             voices = voices with { Levels = act, Pitches = haut, Lanes = etats };
         }

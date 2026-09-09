@@ -161,7 +161,17 @@ public sealed class MockAudioSource : IAudioSource
                                      Heard: ecoute, Sharpness: nette,
                                      Brightness: r / 5f,
                                      Texture: 0.3f + r * 0.1f,
-                                     Pique: pique, Tenue: tenue);
+                                     Pique: pique, Tenue: tenue,
+                                     // LE ROLE AUSSI, ET TROIS DIFFERENTS. Le mock a deja
+                                     // perdu le contrat deux fois en s'etendant ; et un
+                                     // mock qui donnerait le meme role aux six sources
+                                     // passerait le test tout en rendant la legende
+                                     // intestable a l'oeil.
+                                     Role: (byte)(1 + r % 3),
+                                     Place: r / 6f,
+                                     // Une source sur six se retire, pour que le rendu en
+                                     // creux se regle sans materiel.
+                                     Retrait: r == 4 ? 3f : 0f);
         }
 
         // Un nom se pose sur une source mure, et sur elle seule. Zero partout ailleurs :
