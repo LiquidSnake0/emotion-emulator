@@ -50,7 +50,36 @@ foreach (var a in args)
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var iv)) inertieT = iv;
 }
-var analyzer = new SpectrumAnalyzer(rate, separate, memoireT, inertieT);
+// « largeur=X » : largeur de la fenetre de preference du tempo, en octaves.
+var largeurPref = 0.25f;
+foreach (var a in args)
+    if (a.StartsWith("largeur=") && float.TryParse(a[8..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var lp)) largeurPref = lp;
+var analyzer = new SpectrumAnalyzer(rate, separate, memoireT, inertieT, 90f, largeurPref);
+
+// LES DEUX REGIMES, DANS LE MEME PROCESSUS.
+//
+// Un ecart tenace separait la sonde du direct : sur le meme fichier, la sonde trouve 87 BPM
+// d'un bout a l'autre et le serveur publie 113 pendant treize a quinze pour cent du temps.
+// Le son a ete disculpe (l'enregistrement de la capture redonne 87 dans la sonde), la
+// capture aussi (une source qui rejoue un fichier sans perte produit quand meme 113).
+//
+// Ne restaient que deux variables, et il fallait pouvoir les actionner separement :
+//
+//   « cadence »   attend entre deux fenetres, comme si le son arrivait en temps reel
+//   « murale »    date les fenetres a l'horloge, et non au compte d'echantillons
+//
+// Le direct a les deux, la sonde n'en avait aucune. Les activer une par une dit laquelle
+// porte le defaut — et si aucune ne le reproduit, c'est qu'il faut chercher ailleurs.
+var cadenceReelle = args.Contains("cadence");
+var horlogeMurale = args.Contains("murale");
+var departReel = DateTime.UtcNow;
+
+// « bpmtrace=<fichier> » : le tempo publie a chaque fenetre, pour comparer deux regimes
+// image par image plutot que de comparer deux moyennes.
+var bpmTrace = args.FirstOrDefault(a => a.StartsWith("bpmtrace="))?[9..];
+var traceBpm = bpmTrace is null ? null : new List<string>();
 
 // « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
 // avant. Sert a comparer les deux regimes sur le meme morceau.
@@ -198,6 +227,17 @@ if (deuxPassages)
 for (var i = 0; i + hop <= mono.Length; i += hop)
 {
     var tMs = (long)(i * 1000L / rate);
+
+    // La cadence : on attend que la fenetre soit « arrivee », comme le ferait la carte son.
+    if (cadenceReelle)
+    {
+        var retard = tMs - (DateTime.UtcNow - departReel).TotalMilliseconds;
+        if (retard > 1) Thread.Sleep((int)retard);
+    }
+
+    // L'horodatage : l'horloge murale plutot que le compte d'echantillons.
+    if (horlogeMurale) tMs = (long)(DateTime.UtcNow - departReel).TotalMilliseconds;
+
     chronoImage.Restart();
     var f = analyzer.Analyze(mono.AsSpan(i, hop), tMs);
     coutImage.Add(chronoImage.Elapsed.TotalMilliseconds);
@@ -266,6 +306,7 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     gridMs.Add(analyzer.GridBeatMs);
     if (f.Bpm is { } bq) tempoMs.Add(60_000f / bq);
     if (f.Bpm is { } bp) tempos.Add(bp);
+    traceBpm?.Add($"{i / rate} {(f.Bpm is { } bq2 ? bq2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) : "vide")}");
 
     if (exportTo is not null)
     {
@@ -612,6 +653,12 @@ void Motif(string nom, int[] cases, int total)
 // « instants=<prefixe> » : ecrit nos frappes et nos temps, pour les confronter a une
 // implementation de reference. Toutes nos autres mesures se notent contre notre propre
 // grille ; celle-ci est la seule qui puisse nous contredire.
+if (bpmTrace is not null && traceBpm is not null)
+{
+    File.WriteAllLines(bpmTrace, traceBpm);
+    Console.WriteLine($"\n{traceBpm.Count} tempos ecrits vers {bpmTrace}");
+}
+
 if (args.FirstOrDefault(a => a.StartsWith("instants="))?[9..] is { } prefixe)
 {
     File.WriteAllLines(prefixe + "-kicks.txt", kickAt.Select(t => (t / 1000.0).ToString("F3",

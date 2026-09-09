@@ -43,3 +43,28 @@ dotnet run -c Release --project tools/Emotion.Probe -- extrait.wav 0 90 instants
 
 Attention : `aubiotrack` (le suiveur de temps) rend 12 temps sur 90 s de métronome parfait,
 quel que soit son réglage. Il n'est pas utilisable comme référence de pouls.
+
+## `tempo_reference.py` et `comparer.py` — le contrôle extérieur
+
+Le moteur se jugeait contre lui-même : ses indicateurs comparent les frappes à une grille
+calée sur ces mêmes frappes, et sa sonde partage son code, donc ses erreurs. Ces deux
+fichiers apportent le point de vue du dehors — autre langage, autre bibliothèque, autre
+méthode, autre préférence de tempo.
+
+```
+python3 outils/tempo_reference.py morceau.wav rapport=reference/
+dotnet run -c Release --project tools/Emotion.Probe -- morceau.wav 0 300 bpmtrace=moteur.txt
+python3 outils/comparer.py reference/morceau.json moteur.txt
+```
+
+**Il passe ses étalons avant d'arbitrer.** Deux métronomes fabriqués à 87,85 BPM — l'un
+avec un kick seul, l'autre avec claps et charleys — doivent tous deux ressortir à 87,9.
+Six versions ont échoué avant celle-ci, et chaque échec est écrit dans le code : un peigne
+sans recherche de phase, une règle du plus long décalage trop lâche, un doublement sans
+condition d'arrêt, un estimateur « non biaisé » qui rendait des corrélations supérieures à
+un, un seuil de fondamental qui écartait les subdivisions réelles.
+
+**Sa préférence de tempo n'est pas celle du moteur.** Le moteur penche autour de 90 BPM,
+valeur tirée du crate ; celui-ci prend la résonance perceptive publiée par van Noorden et
+Moelants (1999), centrée sur 120 BPM. Lui emprunter sa préférence reviendrait à demander
+au moteur de se vérifier tout seul.

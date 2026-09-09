@@ -536,13 +536,15 @@ public sealed class SpectrumAnalyzer
     /// </param>
     public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false,
                             float memoireTempoS = TempoTracker.DefautMemoireS,
-                            float inertieTempo = TempoTracker.DefautInertie)
+                            float inertieTempo = TempoTracker.DefautInertie,
+                            float tempoPrefere = 90f, float largeurPreference = 0.25f)
     {
         _sampleRate = sampleRate;
         _frameSeconds = Window / (float)sampleRate;
         _binHz = sampleRate / (float)Window;
         _frameMs = _frameSeconds * 1000f;
-        _tempo = new TempoTracker(sampleRate, Window, memoireTempoS, inertieTempo);
+        _tempo = new TempoTracker(sampleRate, Window, memoireTempoS, inertieTempo,
+                                  tempoPrefere, largeurPreference);
         _accord = new GridAgreement(_evenements.Familles);
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);

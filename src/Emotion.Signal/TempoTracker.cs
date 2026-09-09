@@ -99,13 +99,13 @@ public sealed class TempoTracker
     /// C'est ce qui remplace le repli d'octave a la main — entre une periode et sa
     /// moitie, qui se ressemblent toutes deux fortement, c'est la preference qui tranche.
     /// </summary>
-    private const float PreferredBpm = 90f;
+    private readonly float _preferredBpm;
 
     /// <summary>
     /// Largeur de la preference, en octaves de tempo. Un quart d'octave separe 90 BPM de
     /// 107 d'un cote et de 76 de l'autre.
     /// </summary>
-    private const float PreferWidth = 0.25f;
+    private readonly float _preferWidth;
 
     /// <summary>
     /// Correlation valant certitude. Le bruit produit environ 0,05 sur huit secondes
@@ -177,10 +177,13 @@ public sealed class TempoTracker
     /// Inertie de la courbe de score. Elle fait la stabilite et coute la reactivite.
     /// </param>
     public TempoTracker(int sampleRate = 48_000, int window = SpectrumAnalyzer.Window,
-                        float memorySeconds = DefautMemoireS, float inertia = DefautInertie)
+                        float memorySeconds = DefautMemoireS, float inertia = DefautInertie,
+                        float preferredBpm = 90f, float preferWidth = 0.25f)
     {
         _memorySeconds = memorySeconds;
         _inertia = inertia;
+        _preferredBpm = preferredBpm;
+        _preferWidth = preferWidth;
         _frameMs = window * 1000f / sampleRate;
 
         _minLag = Math.Max(2, (int)MathF.Floor(60_000f / MaxBpm / _frameMs));
@@ -211,7 +214,7 @@ public sealed class TempoTracker
         for (var i = 0; i < _prefer.Length; i++)
         {
             var bpm = 60_000f / ((_minLag + i) * _frameMs);
-            var octaves = MathF.Log2(bpm / PreferredBpm) / PreferWidth;
+            var octaves = MathF.Log2(bpm / _preferredBpm) / _preferWidth;
             _prefer[i] = MathF.Exp(-octaves * octaves / 2f);
         }
     }
