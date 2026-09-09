@@ -91,6 +91,12 @@ public sealed class TempoTracker
     /// <inheritdoc cref="DefautMemoireS"/>
     public const float DefautInertie = 0.90f;
 
+    /// <summary>
+    /// Largeur de la preference une fois amorcee par une fiche, en octaves. Douze
+    /// centiemes couvrent la course du fader d'une platine. Voir <see cref="Preferer"/>.
+    /// </summary>
+    public const float LargeurAmorcee = 0.12f;
+
     private readonly float _memorySeconds;
 
     /// <summary>
@@ -118,7 +124,7 @@ public sealed class TempoTracker
     /// Largeur de la preference, en octaves de tempo. Un quart d'octave separe 90 BPM de
     /// 107 d'un cote et de 76 de l'autre.
     /// </summary>
-    private readonly float _preferWidth;
+    private float _preferWidth;
 
     /// <summary>
     /// Correlation valant certitude. Le bruit produit environ 0,05 sur huit secondes
@@ -224,7 +230,7 @@ public sealed class TempoTracker
         // A un quart d'octave d'ecart-type, le triolet d'un tempo prefere ne pese plus
         // qu'un huitieme de lui — assez pour le battre a correlation comparable, pas assez
         // pour interdire un tempo franchement hors zone de s'imposer avec un pic net.
-        Preferer(_preferredBpm);
+        RebatirPreference();
     }
 
     /// <summary>
@@ -269,8 +275,50 @@ public sealed class TempoTracker
         // La garde initiale rejetait ces fiches-la, et c'etait exactement les morceaux a
         // qui l'amorce devait servir : le plus lent de l'album voyait sa fiche ignoree en
         // silence. On ne borne donc que l'absurde.
-        if (bpm >= 20f && bpm <= 400f) _preferredBpm = bpm;
+        if (bpm >= 20f && bpm <= 400f)
+        {
+            _preferredBpm = bpm;
 
+            // LA LARGEUR SUIT CE QU'ON SAIT, ET C'EST TOUT LE GAIN.
+            //
+            // Un quart d'octave avait ete choisi quand la preference etait generique et
+            // devait couvrir le bac entier. Des qu'une fiche dit ou l'on est, cette largeur
+            // n'a plus de raison d'etre : elle laisse entrer les multiples du tempo cherche.
+            //
+            // On la resserre donc a ce que la MECANIQUE autorise. Un vinyle se joue a plus
+            // ou moins huit pour cent au fader, soit 0,111 octave : douze centiemes couvrent
+            // toute la course, et la borne extreme de seize pour cent tombe a moins de deux
+            // ecarts-types — penalisee, jamais interdite.
+            //
+            // Mesure sur l'album du crate, contre les tempos cales par le DJ :
+            //
+            //     largeur 0,25   83,3 %      largeur 0,12   98,7 %
+            //     largeur 0,18   94,5 %      largeur 0,08   99,4 %
+            //
+            // Huit centiemes font mieux d'un demi-point et sont pourtant refuses : ils
+            // valent plus ou moins 5,7 %, donc ils excluraient le disque au moment precis
+            // ou le DJ pousse le pitch — c'est-a-dire quand ne pas verrouiller compte le
+            // plus. Un reglage qui gagne un demi-point en trahissant son principe n'est pas
+            // un gain.
+            _preferWidth = LargeurAmorcee;
+        }
+
+        RebatirPreference();
+    }
+
+    /// <summary>
+    /// Recalcule la ponderation depuis le centre et la largeur en vigueur.
+    ///
+    /// SEPAREE DE <see cref="Preferer"/>, ET LE TEST A DIT POURQUOI. Le constructeur
+    /// appelait Preferer pour batir sa table ; quand Preferer s'est mis a resserrer la
+    /// largeur, tous les analyseurs ont demarre resserres, fiche ou pas. Un test de
+    /// precision existant l'a vu aussitot — un tempo de 82 mesure a 83,03 pour une
+    /// tolerance d'un BPM.
+    ///
+    /// Batir la table et decider ou pencher sont deux gestes distincts.
+    /// </summary>
+    private void RebatirPreference()
+    {
         for (var i = 0; i < _prefer.Length; i++)
         {
             var b = 60_000f / ((_minLag + i) * _frameMs);

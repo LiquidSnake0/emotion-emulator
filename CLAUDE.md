@@ -26,7 +26,12 @@ comme un interdit, alors que le crate est la *première* source d'information du
 c'est de là qu'on part. La fiche ne dit pas le tempo, elle dit le **voisinage** — et
 `SpectrumAnalyzer.Amorcer` recentre la préférence de l'autocorrélation dessus sans jamais
 la verrouiller. Mesuré contre les tempos que le DJ a lui-même calés, sur un album entier
-du bac : **43 % de justesse sans la fiche, 83 % avec**. Les deux morceaux entièrement faux
+du bac : **43 % de justesse sans la fiche, 99 % avec**.
+
+La largeur de la pondération suit ce qu'on sait : un quart d'octave sans fiche, **0,12
+octave avec** — soit ±8,7 %, la course exacte du fader d'une platine. Plus serré ferait
+mieux d'un demi-point (0,08 → 99,4 %) et trahirait le principe : à ±5,7 %, on exclurait le
+disque au moment précis où le DJ pousse le pitch. Les deux morceaux entièrement faux
 étaient les plus lents — 59,87 et 63,50 BPM — sous la borne d'une préférence centrée sur 90
 « parce que le bac vit entre 82 et 97 ». Cet album-là va de 59,87 à 90,92. À l'inverse, détecter une tonalité pendant un fondu est
 impossible — deux disques superposés produisent un accord qui n'existe dans aucun des
