@@ -56,6 +56,14 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
         "pulse" => new PulseAudioSource(cfg["Signal:Device"],
                                         separate: cfg.GetValue("Signal:Separate", false),
                                         log: Dire),
+        // « fichier » rejoue un enregistrement AU RYTHME REEL, dans toute la chaine. Ce
+        // n'est pas la sonde : celle-ci court-circuite le serveur et avale les fenetres
+        // aussi vite qu'elle peut. Ici tout est identique au direct — cadence, horodatage
+        // a l'horloge murale, hub, anneau — sauf qu'aucune fenetre ne peut manquer.
+        // C'est la seule facon de separer « le son arrive mal » de « le moteur le traite
+        // mal ».
+        "fichier" => new WavAudioSource(cfg["Signal:Device"] ?? "",
+                                        separate: cfg.GetValue("Signal:Separate", false)),
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 

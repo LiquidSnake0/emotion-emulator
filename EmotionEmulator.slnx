@@ -6,6 +6,7 @@
   <Folder Name="/tools/">
     <Project Path="tools/Emotion.Probe/Emotion.Probe.csproj" />
     <Project Path="tools/Emotion.Pulse/Emotion.Pulse.csproj" />
+    <Project Path="tools/Emotion.Ascii/Emotion.Ascii.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Emotion.Signal.Tests/Emotion.Signal.Tests.csproj" />
