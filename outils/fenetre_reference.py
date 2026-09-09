@@ -35,11 +35,14 @@ qui se trompe encore d'octave sur certains morceaux, et le dit.
 """
 
 import json
+import os
 import sys
+import urllib.request
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
+                               QListWidget, QVBoxLayout, QWidget)
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from fenetre import Anneau, GRIS_CADRE, GRIS_CLAIR, GRIS_FOND, GRIS_TEXTE, VERT, VERT_SOURD
@@ -76,15 +79,10 @@ def accord_tempo(vrai, publie):
 
 
 class Comparateur(QWidget):
-    def __init__(self, rapport, bpm_crate=None):
+    def __init__(self, rapport=None, bpm_crate=None):
         super().__init__()
-        self.rapport = rapport
-        self.bpm_crate = bpm_crate
-        self.secondes = rapport.get("secondes", [])
-        self.duree = max(1.0, rapport.get("duree", 1.0))
-
-        self.setWindowTitle(f"attendu — {rapport.get('fichier', '?')}")
-        self.resize(1180, 620)
+        self.charger(rapport, bpm_crate)
+        self.setMinimumWidth(760)
 
         self.anneau = Anneau()
         self.paquet = None
@@ -95,6 +93,18 @@ class Comparateur(QWidget):
         self.minuterie = QTimer(self)
         self.minuterie.timeout.connect(self.battre)
         self.minuterie.start(50)          # vingt images par seconde suffisent pour comparer
+
+    def charger(self, rapport, bpm_crate=None):
+        """Change de morceau sans rien redemarrer.
+
+        Le rapport peut manquer : on affiche alors ce que le moteur publie, sans rien a
+        confronter. Mieux vaut le dire que de laisser croire a un accord.
+        """
+        self.rapport = rapport or {}
+        self.bpm_crate = bpm_crate
+        self.secondes = self.rapport.get("secondes", [])
+        self.duree = max(1.0, self.rapport.get("duree", 1.0))
+        self.update()
 
     def battre(self):
         self.paquet = self.anneau.dernier()
@@ -273,17 +283,157 @@ class Comparateur(QWidget):
             self.close()
 
 
+class Selecteur(QWidget):
+    """La liste du crate, a gauche du comparateur.
+
+    LE CRATE EST LA PREMIERE SOURCE D'INFORMATION, ET IL COMMANDE DEPUIS ICI. Choisir une
+    face fait deux choses : elle envoie la fiche au moteur par l'API REST — le seul reseau
+    legitime de cette architecture — et elle charge le precalcul correspondant s'il existe.
+    Le moteur amorce alors son tempo sur cette fiche sans jamais s'y verrouiller.
+    """
+
+    def __init__(self, faces, dossier, comparateur):
+        super().__init__()
+        self.faces = faces
+        self.dossier = dossier
+        self.comparateur = comparateur
+
+        self.filtre = QLineEdit()
+        self.filtre.setPlaceholderText("filtrer par titre, album ou tempo")
+        self.filtre.textChanged.connect(self.remplir)
+
+        self.liste = QListWidget()
+        self.liste.currentRowChanged.connect(self.choisir)
+
+        self.etat = QLabel("")
+        self.etat.setWordWrap(True)
+
+        colonne = QVBoxLayout()
+        colonne.setContentsMargins(10, 10, 6, 10)
+        colonne.addWidget(self.filtre)
+        colonne.addWidget(self.liste, 1)
+        colonne.addWidget(self.etat)
+        gauche = QWidget()
+        gauche.setLayout(colonne)
+        gauche.setMaximumWidth(330)
+
+        rangee = QHBoxLayout(self)
+        rangee.setContentsMargins(0, 0, 0, 0)
+        rangee.addWidget(gauche)
+        rangee.addWidget(comparateur, 1)
+
+        self.setStyleSheet(
+            "QWidget { background: #0e0e0f; color: #c6cace; }"
+            "QLineEdit { background: #17181a; border: 1px solid #303234; padding: 4px; }"
+            "QListWidget { background: #131415; border: 1px solid #303234; }"
+            "QListWidget::item:selected { background: #1d3b2b; color: #40c47a; }"
+            "QLabel { color: #7a7e82; }")
+
+        self.visibles = []
+        self.remplir()
+
+    def remplir(self):
+        motif = self.filtre.text().strip().lower()
+        self.visibles = [f for f in self.faces
+                         if not motif or motif in f["cle"]]
+        self.liste.blockSignals(True)
+        self.liste.clear()
+        for f in self.visibles:
+            self.liste.addItem(f"{f['bpm']:6.2f}  {f['titre'][:26]}")
+        self.liste.blockSignals(False)
+
+    def choisir(self, rang):
+        if rang < 0 or rang >= len(self.visibles):
+            return
+        f = self.visibles[rang]
+        rapport = self.rapport_de(f)
+        self.comparateur.charger(rapport, f["bpm"])
+
+        envoye = poser_fiche(f)
+        dit = "fiche envoyee au moteur" if envoye else "moteur injoignable — fiche non posee"
+        trouve = "precalcul charge" if rapport else "aucun precalcul pour cette face"
+        self.etat.setText(f"{f['titre']}\n{f['album']}\n{dit}\n{trouve}")
+
+    def rapport_de(self, face):
+        """Le precalcul d'une face, s'il a ete produit.
+
+        La convention est celle du corpus : un rapport par numero de piste. Elle est
+        explicite ici plutot que devinee ailleurs.
+        """
+        if not self.dossier:
+            return None
+        for nom in (f"t{face['piste']:02d}.json", f"{face['piste']}.json"):
+            chemin = os.path.join(self.dossier, nom)
+            if os.path.exists(chemin):
+                with open(chemin, encoding="utf-8") as fh:
+                    return json.load(fh)
+        return None
+
+
+def poser_fiche(face, hote="http://localhost:5099"):
+    """Envoie la fiche au moteur par l'API REST.
+
+    C'EST LE SEUL RESEAU DE CETTE ARCHITECTURE, ET IL EST LEGITIME. Le crate parle au moteur
+    en HTTP ; le moteur parle au rendu par memoire partagee. L'un porte une intention, l'autre
+    un flux — ils n'ont pas les memes contraintes et n'ont jamais eu a passer par le meme
+    canal.
+
+    L'echec est silencieux et rapporte : le moteur peut ne pas tourner, et la fenetre de
+    mesure doit rester utilisable pour lire un precalcul sans lui.
+    """
+    corps = json.dumps({
+        "title": face["titre"], "disc": face["album"], "side": face.get("face") or "A",
+        "camelot": face.get("camelot") or "", "family": face.get("famille") or "M",
+        "colorHex": "#4a7c59", "coverUrl": None, "bpm": face["bpm"],
+    }).encode()
+    requete = urllib.request.Request(f"{hote}/deck/play", data=corps,
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(requete, timeout=1.5) as r:
+            return 200 <= r.status < 300
+    except Exception:                                  # noqa: BLE001
+        return False
+
+
+def lire_crate(chemin):
+    """Les faces du crate, prêtes à être listées."""
+    with open(chemin, encoding="utf-8") as fh:
+        brut = json.load(fh)
+    faces = []
+    for t in brut:
+        bpm = t.get("bpm") or 0
+        if not bpm:
+            continue
+        titre = t.get("title") or "sans titre"
+        album = t.get("album") or ""
+        faces.append({
+            "titre": titre, "album": album, "bpm": float(bpm),
+            "piste": int(t.get("trackNumber") or 0),
+            "camelot": t.get("key"), "famille": t.get("family"), "face": t.get("side"),
+            "cle": f"{titre} {album} {bpm}".lower(),
+        })
+    faces.sort(key=lambda f: (f["album"], f["piste"]))
+    return faces
+
+
+CRATE = os.path.expanduser("~/Documents/crate/src/data/seed.json")
+
+
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return 1
-    with open(sys.argv[1], encoding="utf-8") as fh:
-        rapport = json.load(fh)
-    bpm = float(sys.argv[2]) if len(sys.argv) > 2 else None
+    dossier = sys.argv[1] if len(sys.argv) > 1 else None
+    crate = sys.argv[2] if len(sys.argv) > 2 else CRATE
 
     app = QApplication(sys.argv[:1])
-    w = Comparateur(rapport, bpm)
-    w.show()
+    comparateur = Comparateur()
+    if os.path.exists(crate):
+        faces = lire_crate(crate)
+        fenetre = Selecteur(faces, dossier, comparateur)
+        fenetre.setWindowTitle(f"mesure — {len(faces)} faces du crate")
+    else:
+        fenetre = comparateur
+        fenetre.setWindowTitle("mesure — crate introuvable")
+    fenetre.resize(1180, 620)
+    fenetre.show()
     return app.exec()
 
 

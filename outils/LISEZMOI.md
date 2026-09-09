@@ -115,7 +115,33 @@ La contrôler demanderait de réécrire la factorisation, donc de vérifier le m
 moteur. Les registres grave, médium et aigu sont des tranches de spectre, pas des
 instruments.
 
+## Le sélecteur de faces
+
+La fenêtre de mesure liste les 245 faces du crate qui portent un tempo, avec un filtre par
+titre, album ou BPM. Choisir une face fait deux choses : elle **envoie la fiche au moteur**
+par l'API REST, et elle **charge le précalcul** de cette face s'il a été produit.
+
+```
+python3 outils/tempo_reference.py morceau.wav rapport=reference/
+./run.sh pulse                       # le moteur, qui ecrit l'anneau
+./outils/deux-fenetres.sh reference/ # le GPU simule + la mesure
+```
+
+Le moteur amorce alors son tempo sur la fiche sans jamais s'y verrouiller — un disque poussé
+au fader est suivi malgré elle.
+
 ## Le partage des rôles
+
+```
+crate  --HTTP REST-->  C#                     le seul reseau legitime
+C#     --/dev/shm-->   fenetre.py             le GPU simule : il recoit
+C#     --/dev/shm-->   fenetre_reference.py   la mesure : est-ce juste
+```
+
+`fenetre.py` n'est pas une interface : c'est le **mock du GPU**. Le jour où l'eGPU sera
+branché en PCIe ou USB-C, il lira exactement ces 256 octets, de la même façon. Le fichier se
+comporte donc comme lui — lecture seule, jamais bloquant, vidant l'anneau jusqu'au plus
+récent sans se plaindre de ce qu'il a manqué.
 
 **Python précalcule et vérifie. C# rend en temps réel.** Aucun des deux ne se vérifie
 lui-même, et c'est tout l'intérêt : les indicateurs internes du moteur comparent les frappes

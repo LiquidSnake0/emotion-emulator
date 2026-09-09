@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Ouvre les deux fenetres : le rendu en direct, et ce que l'analyse prealable attend.
+# Ouvre les deux fenetres : le GPU simule, et la mesure avec son selecteur de faces.
 #
-#   ./outils/deux-fenetres.sh reference/t08.json 63.5
+#   ./outils/deux-fenetres.sh [dossier-des-precalculs]
 #
-# Le serveur doit tourner a cote (./run.sh pulse). Rien ici ne passe par le reseau : les
-# deux fenetres lisent le meme anneau dans /dev/shm.
+# Le moteur doit tourner a cote — ./run.sh pulse — car c'est lui qui ecrit l'anneau. Les
+# deux fenetres ne font que lire /dev/shm ; seule la fiche remonte au moteur, en HTTP,
+# quand on choisit une face dans la liste.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-[ $# -ge 1 ] || { echo "usage: $0 <rapport.json> [bpm-du-crate]"; exit 1; }
 python3 outils/fenetre.py &
 python3 outils/fenetre_reference.py "$@" &
 wait
