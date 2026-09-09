@@ -351,6 +351,36 @@ class Mur(QWidget):
         self.avance_ms = float(os.environ.get("EMOTION_AVANCE_MS", "30"))
         self.horodatage = time.monotonic() * 1000.0
 
+        # LE DERNIER TEMPO CONNU, ET POURQUOI ON LE GARDE A L'ECRAN.
+        #
+        # Le moteur ne publie un tempo que lorsqu'il en est sûr — « ne rien dire plutôt que
+        # dire faux », et cette règle est juste : elle porte sur ce qu'il AFFIRME. Mais il
+        # n'en est sûr que sur quatre images sur cinq, et le chiffre disparaissait donc une
+        # image sur cinq. Un nombre qui clignote vingt fois par seconde ne se lit pas — le
+        # DJ l'a décrit comme du buffering, et c'était exactement ça.
+        #
+        # On garde donc la dernière valeur connue, EN GRIS. Ce n'est pas dire faux : c'est
+        # dire « voilà ce que c'était », et la couleur dit que ce n'est plus frais. Ce qui
+        # serait faux, ce serait de l'afficher en vert comme une mesure de l'instant.
+        self.dernier_bpm = 0.0
+        self.bpm_frais = False
+
+        # LE CURSEUR DE MESURE AVANCE SEUL ET SE CORRIGE, IL NE SAUTE JAMAIS.
+        #
+        # Il sautait de deux façons. `phase` vaut zéro tant que le « 1 » n'est pas
+        # identifié — un tiers du temps — donc le curseur retombait au début du bandeau à
+        # chaque fois que le vote lâchait. Et le rattraper par la phase du temps, qui elle
+        # est toujours remplie, ne faisait que déplacer le saut : il se produisait alors à
+        # chaque bascule entre les deux régimes, quarante fois par minute.
+        #
+        # Un repère qui saute est pire qu'un repère absent : l'œil suit le saut et perd la
+        # musique. On tient donc une position locale qui avance toujours à la cadence du
+        # temps, et qu'on TIRE vers la phase publiée quand celle-ci existe — la même règle
+        # que partout ailleurs dans ce projet : corriger une fraction, jamais recaler d'un
+        # coup.
+        self.mesure_pos = 0.0
+        self.phase_temps_prec = None
+
         self.mono = QFont("monospace", 10)
         self.mono.setStyleHint(QFont.StyleHint.Monospace)
 
@@ -415,6 +445,28 @@ class Mur(QWidget):
         if courant is not None:
             self.paquet = entre(self.entre_images.avant, courant,
                                 self.entre_images.alpha(maintenant))
+
+            # LE CURSEUR DE MESURE AVANCE DE CE DONT LE TEMPS A AVANCE, et se corrige
+            # doucement quand la mesure est connue. Il doit se calculer APRES la vue
+            # interpolee : nourri du paquet brut, il avancerait par paliers de 21 ms au
+            # lieu de suivre l'ecran, ce qui est exactement le hoquet qu'on cherche a
+            # supprimer.
+            pt = self.paquet.phase_temps
+            if self.phase_temps_prec is not None:
+                pas_temps = pt - self.phase_temps_prec
+                if pas_temps < -0.5:
+                    pas_temps += 1.0
+                if 0.0 <= pas_temps < 0.5:
+                    self.mesure_pos = (self.mesure_pos + pas_temps / 4.0) % 1.0
+            self.phase_temps_prec = pt
+
+            if self.paquet.beat < 4:
+                ecart = self.paquet.phase - self.mesure_pos
+                if ecart > 0.5:
+                    ecart -= 1.0
+                elif ecart < -0.5:
+                    ecart += 1.0
+                self.mesure_pos = (self.mesure_pos + ecart * 0.12) % 1.0
 
         dt = dt_ms / 1000.0
         self.tempo += dt
@@ -490,8 +542,13 @@ class Mur(QWidget):
     def bandeau(self, d, p, x, y, largeur):
         d.setPen(GRIS_CLAIR)
         d.drawText(x, y, "emotion")
-        d.setPen(VERT)
-        d.drawText(x + 90, y, f"{p.bpm:6.1f} BPM" if p.bpm > 0 else "     — BPM")
+        if p.bpm > 0:
+            self.dernier_bpm, self.bpm_frais = p.bpm, True
+        else:
+            self.bpm_frais = False
+        d.setPen(VERT if self.bpm_frais else GRIS_CADRE)
+        d.drawText(x + 90, y,
+                   f"{self.dernier_bpm:6.1f} BPM" if self.dernier_bpm > 0 else "     — BPM")
         d.setPen(GRIS_TEXTE)
         d.drawText(x + 220, y, f"paquet {p.sequence}     temps {p.temps / 1000:7.1f} s")
 
@@ -516,18 +573,39 @@ class Mur(QWidget):
         return y
 
     def mesure(self, d, p, x, y, largeur):
-        """La position dans la mesure de quatre temps, telle que le moteur la publie."""
+        """La position dans la mesure, et LE CURSEUR NE RECULE JAMAIS.
+
+        Il reculait, et c'est une bonne part de ce que le DJ prenait pour du buffering.
+        `phase` est la position dans la mesure de quatre temps, et elle vaut zéro tant que
+        le « 1 » n'est pas identifié — ce qui arrive quatre fois sur dix. Chaque fois que le
+        vote du temps fort lâchait, le curseur sautait donc au début du bandeau, y restait,
+        puis repartait d'un bond quand le vote revenait. Un repère qui saute est pire qu'un
+        repère absent : l'œil suit le saut et perd la musique.
+
+        `phase_temps`, elle, est toujours remplie — savoir où l'on en est du temps ne
+        demande pas de savoir quel temps c'est. Faute de mesure, on affiche donc le temps
+        seul : un quart du bandeau, parcouru sans interruption, et la teinte dit qu'on ne
+        sait pas dans quelle mesure on se trouve.
+        """
         cases = 32
         pas = largeur / cases
-        ou = int(min(max(p.phase, 0.0), 0.999) * cases)
+        sur_la_mesure = p.beat < 4
+        ou = int(min(max(self.mesure_pos, 0.0), 0.999) * cases)
+
         for i in range(cases):
             fort = i % 8 == 0
-            d.setPen(QPen(VERT if i == ou else (GRIS_CADRE if fort else QColor(34, 36, 38)), 1))
+            if i == ou:
+                teinte = VERT if sur_la_mesure else VERT_SOURD
+            else:
+                teinte = GRIS_CADRE if fort else QColor(34, 36, 38)
+            d.setPen(QPen(teinte, 1))
             hauteur = 14 if (fort or i == ou) else 7
             gx = int(x + i * pas)
             d.drawLine(gx, y, gx, y + hauteur)
-        d.setPen(GRIS_TEXTE)
-        d.drawText(x + largeur - 70, y + 12, f"temps {p.beat + 1}" if p.beat < 4 else "temps -")
+
+        d.setPen(GRIS_TEXTE if sur_la_mesure else GRIS_CADRE)
+        d.drawText(x + largeur - 70, y + 12,
+                   f"temps {p.beat + 1}" if sur_la_mesure else "mesure ?")
         return y + 16
 
     def registres(self, d, p, x, y, largeur):

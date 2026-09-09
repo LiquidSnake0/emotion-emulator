@@ -966,6 +966,37 @@ L'étiquette existe parce qu'un écran qui montre autre chose que ce qui décide
 qu'aucun écran : sans elle on voit un mouvement sans savoir s'il décrit un instrument qui
 frappe ou un qui souffle.
 
+## Le « buffering » n'en était pas un
+
+Le DJ décrit un hoquet. Mesuré, **rien ne hoquette dans le flux** : les paquets arrivent à
+46,9 par seconde, zéro perdu, pire intervalle 36,9 ms ; la fenêtre rend une image en 4,5 ms
+médians sur un budget de 16,7. Deux affichages sautaient, et c'est tout.
+
+**Le tempo clignotait** parce qu'il n'était publié que quatre images sur cinq — « ne rien
+dire plutôt que dire faux » porte sur ce que le moteur *affirme*, mais un nombre qui
+disparaît vingt fois par seconde ne se lit pas. La fenêtre garde donc la dernière valeur
+connue, **en gris** : ce n'est pas dire faux, c'est dire « voilà ce que c'était », et la
+couleur dit que ce n'est plus frais. (Depuis `PoidsMedium`, il n'y a plus de trou du tout
+sur macro : 0 % d'images sans tempo.)
+
+**Le curseur de mesure reculait**, et c'était le plus visible. `Phase` vaut zéro tant que le
+« 1 » n'est pas identifié — un tiers du temps — donc le curseur retombait au début du
+bandeau à chaque fois que le vote lâchait. Le rattraper par la phase du temps ne faisait que
+déplacer le saut : à chaque bascule entre les deux régimes, **quarante fois par minute**.
+
+> **Un repère qui saute est pire qu'un repère absent** : l'œil suit le saut et perd la
+> musique.
+
+La fenêtre tient donc une position locale qui avance **toujours** à la cadence du temps, et
+qu'elle *tire* vers la phase publiée quand celle-ci existe — la règle de partout ailleurs :
+corriger une fraction, jamais recaler d'un coup. Plus aucun retour à zéro ; le pire
+déplacement en une image vaut 3 % d'une mesure, quand le moteur change d'avis sur le temps
+fort.
+
+**Et il se calcule après l'interpolation**, pour la même raison que l'enveloppe : nourri du
+paquet brut il avancerait par paliers de 21 ms au lieu de suivre l'écran — c'est-à-dire
+qu'il produirait le hoquet qu'il est censé supprimer.
+
 **Le rendu est en caractères** parce qu'il doit rester léger — il n'y a pas de GPU sous la
 main, et un remplissage de texte coûte une fraction d'un dégradé. Ils donnent en prime une
 identité que des polygones translucides n'avaient pas : celle d'un terminal, ce qui va bien
