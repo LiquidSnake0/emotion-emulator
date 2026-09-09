@@ -778,6 +778,45 @@ if (bpmTrace is not null && traceBpm is not null)
     Console.WriteLine($"\n{traceBpm.Count} tempos ecrits vers {bpmTrace}");
 }
 
+// « profils=<fichier.json> » : les six profils spectraux appris, dans l'ordre du grave a
+// l'aigu.
+//
+// C'EST CE QUI PERMET D'ENTENDRE CE QU'UNE SOURCE ENTEND. Toutes nos mesures disent si une
+// source est REGULIERE ; aucune ne dit si elle contient ce qu'elle pretend contenir. Avec
+// les profils, `outils/extraire.py` reconstruit chaque source en son, et l'oreille tranche
+// en dix secondes ce qu'aucun chiffre n'a su dire.
+//
+// On exporte a la FIN de la passe : les profils s'apprennent, et ceux du debut ne decrivent
+// que du bruit.
+if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfils)
+{
+    var separation = analyzer.Separation;
+    var bins = separation.Bins;
+    var profil = new float[bins];
+    var lignes = new List<string>
+    {
+        "{",
+        $"  \"fichier\": \"{Path.GetFileName(path).Replace("\\", "/")}\",",
+        $"  \"taux\": {rate},",
+        $"  \"bins\": {bins},",
+        $"  \"fenetre\": {SpectrumAnalyzer.Window},",
+        $"  \"pret\": {(separation.Pret ? "true" : "false")},",
+        "  \"profils\": [",
+    };
+    for (var r = 0; r < SourceSeparator.Sources; r++)
+    {
+        separation.ProfilOrdonne(r, profil);
+        var vals = string.Join(",", profil.Select(v =>
+            v.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)));
+        lignes.Add($"    [{vals}]" + (r < SourceSeparator.Sources - 1 ? "," : ""));
+    }
+    lignes.Add("  ]");
+    lignes.Add("}");
+    File.WriteAllLines(fichierProfils, lignes);
+    Console.WriteLine($"\nsix profils ecrits vers {fichierProfils}"
+                      + (separation.Pret ? "" : "  — ATTENTION : rien n'a ete appris"));
+}
+
 if (args.FirstOrDefault(a => a.StartsWith("instants="))?[9..] is { } prefixe)
 {
     File.WriteAllLines(prefixe + "-kicks.txt", kickAt.Select(t => (t / 1000.0).ToString("F3",

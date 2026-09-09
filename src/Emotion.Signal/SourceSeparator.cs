@@ -83,6 +83,28 @@ public sealed class SourceSeparator
     /// <summary>A-t-on appris des profils, ou rend-on encore du bruit ?</summary>
     public bool Pret { get; private set; }
 
+    /// <summary>Nombre de bins d'un profil.</summary>
+    public int Bins => _bins;
+
+    /// <summary>
+    /// Le profil spectral d'une source, dans l'ordre du grave a l'aigu. Lecture seule.
+    ///
+    /// POURQUOI IL SORT D'ICI. Toutes les mesures de ce projet disent si une source est
+    /// REGULIERE ; aucune ne dit si elle contient ce qu'elle pretend contenir. Un profil
+    /// exporte permet de reconstruire ce que la source a retenu, en son, et de l'ECOUTER —
+    /// ce que l'oreille tranche en dix secondes et qu'aucun chiffre n'a su dire.
+    ///
+    /// Le profil est fréquentiel : il se transporte tel quel d'une grille temporelle a une
+    /// autre. C'est ce qui permet a la reconstruction de se faire sur sa propre transformee,
+    /// a recouvrement, sans rien changer ici.
+    /// </summary>
+    public void ProfilOrdonne(int rang, Span<float> sortie)
+    {
+        if ((uint)rang >= Sources || sortie.Length < _bins) return;
+        var s = _ordre[rang];
+        for (var b = 0; b < _bins; b++) sortie[b] = _w[b * Sources + s];
+    }
+
     /// <summary>
     /// Hauteur du timbre de chaque profil, sur une echelle d'octaves entre 0 et 1.
     ///
