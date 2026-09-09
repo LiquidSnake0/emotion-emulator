@@ -143,7 +143,8 @@ class Comparateur(QWidget):
                        att["brillance"] if att else 0.0, p.brillance)
         y = self.paire(d, x, y + 26, largeur, "densite",
                        min(1.0, att["attaques"] / 8.0) if att else 0.0, p.densite)
-        self.bandes(d, x, y + 32, largeur, att, p)
+        y = self.bandes(d, x, y + 32, largeur, att, p)
+        self.sources(d, x, y + 34, largeur, att, p)
 
     def entete(self, d, x, y, largeur, t):
         d.setPen(GRIS_CLAIR)
@@ -237,6 +238,35 @@ class Comparateur(QWidget):
             d.drawLine(gx + 4, y + haut, gx + 4, y + haut - int(m * haut))
         d.setPen(GRIS_CADRE)
         d.drawLine(x, y + haut, x + largeur, y + haut)
+        return y + haut
+
+    def sources(self, d, x, y, largeur, att, p):
+        """Les six sources du moteur, face aux six regions du spectre.
+
+        C'EST UN PROXY, ET IL EST ETIQUETE COMME TEL. Les sources viennent d'une
+        factorisation par timbre qu'on ne refait pas ici : une NMF s'initialise au hasard,
+        donc deux implementations correctes ne rendent pas les memes composantes ni dans le
+        meme ordre. Mais les sources sont ordonnees du grave a l'aigu, et les six regions
+        aussi. Ce qui se verifie : quand une region s'allume, la forme correspondante
+        s'allume-t-elle. Ce qui ne se verifie pas : si un instrument donne est bien separe.
+        """
+        d.setPen(GRIS_TEXTE)
+        d.drawText(x, y - 8, "six sources   clair = region du spectre (approche)   vert = moteur")
+        pas = largeur / 6
+        regions = att.get("regions", [0.0] * 6) if att else [0.0] * 6
+        for r in range(6):
+            gx = int(x + r * pas)
+            a = regions[r] if r < len(regions) else 0.0
+            m = p.sources[r]["niveau"]
+            d.setPen(QPen(QColor(26, 28, 30), 1))
+            d.drawLine(gx, y + 40, gx + int(pas) - 20, y + 40)
+            larg_barre = int(pas) - 24
+            d.setPen(QPen(GRIS_CLAIR, 6))
+            d.drawLine(gx, y + 32, gx + int(a * larg_barre), y + 32)
+            d.setPen(QPen(VERT, 6))
+            d.drawLine(gx, y + 44, gx + int(m * larg_barre), y + 44)
+            d.setPen(GRIS_TEXTE)
+            d.drawText(gx, y + 62, f"{r + 1}")
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key.Key_Q, Qt.Key.Key_Escape):

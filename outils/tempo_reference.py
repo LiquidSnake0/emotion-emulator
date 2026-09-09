@@ -281,8 +281,23 @@ def descripteurs(x, rate):
         tranche = bandes[a:b]
         pic = tranche.max(axis=0)
         # Normalisation sur la crete du morceau : ce sont des proportions, pas des volts.
+        # SIX REGIONS, POUR APPROCHER LES SIX SOURCES — ET C'EST UN PROXY, PAS UNE VERITE.
+        #
+        # Les six sources du moteur viennent d'une factorisation par timbre, qu'on ne refait
+        # pas ici : une NMF s'initialise au hasard, donc deux implementations correctes ne
+        # rendent pas les memes six composantes ni dans le meme ordre. Les comparer une a
+        # une n'aurait pas de sens.
+        #
+        # Mais les sources sont ORDONNEES DU GRAVE A L'AIGU, et cela, on peut le verifier :
+        # on regroupe les douze bandes deux par deux et l'on obtient six regions dans le
+        # meme ordre. Ce que cela repond : « quand cette region du spectre s'allume, la
+        # forme correspondante s'allume-t-elle ». Ce que cela ne repond pas : « ce saxophone
+        # est-il bien separe ».
+        regions = [float(max(pic[2 * k], pic[2 * k + 1])) for k in range(6)]
+
         sortie.append({
             "t": s,
+            "regions": regions,
             "rms": float(np.sqrt(np.mean(x[a * HOP:b * HOP] ** 2))) if b * HOP <= len(x) else 0.0,
             "bandes": pic.tolist(),
             "brillance": float(brillance[a:b].mean()),
@@ -293,6 +308,7 @@ def descripteurs(x, rate):
     plafond = max((max(p["bandes"]) for p in sortie), default=1.0) or 1.0
     for p in sortie:
         p["bandes"] = [round(v / plafond, 3) for v in p["bandes"]]
+        p["regions"] = [round(v / plafond, 3) for v in p["regions"]]
         p["rms"] = round(p["rms"], 4)
         p["brillance"] = round(p["brillance"], 3)
 
