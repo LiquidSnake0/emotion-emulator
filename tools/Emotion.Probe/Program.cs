@@ -115,6 +115,11 @@ foreach (var a2 in args)
 // « nosync » : les frappes ne tirent plus la grille ; seul le repli la place.
 if (args.Contains("repli=0")) analyzer.ReplierPhase = false;
 if (args.Contains("nosync")) analyzer.CalerSurFrappes = false;
+foreach (var a4 in args)
+    if (a4.StartsWith("demi=") && float.TryParse(a4[5..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var av))
+        analyzer.AvantageFrappe = av;
 foreach (var a3 in args)
     if (a3.StartsWith("memrepli=") && float.TryParse(a3[9..],
             System.Globalization.NumberStyles.Float,

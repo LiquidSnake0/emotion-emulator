@@ -382,6 +382,13 @@ public sealed class SpectrumAnalyzer
         set => _repli.Memoire = value;
     }
 
+    /// <summary>De combien les frappes doivent l'emporter pour renverser le sommet du medium.</summary>
+    public float AvantageFrappe
+    {
+        get => _repli.Avantage;
+        set => _repli.Avantage = value;
+    }
+
     /// <summary>Le repli lui-meme, pour la sonde.</summary>
     public PhaseFold Repli => _repli;
 
@@ -1080,7 +1087,7 @@ public sealed class SpectrumAnalyzer
             // qu'il ne faut pas pour trouver une periode — un motif regulier de meme
             // amplitude n'y produit presque rien, puisque le masque a appris a l'attendre.
             // Nourri du rapport, le repli tombait a 169 ms du vrai temps, soit le hasard.
-            _repli.Feed(tMs, _fluxMedium, _tempo.Bpm);
+            _repli.Feed(tMs, _fluxMedium, _tempo.Bpm, hits.Kick);
             _grid.Recaler(_repli.PhaseDuTemps, _repli.Relief);
         }
 

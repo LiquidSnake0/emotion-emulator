@@ -16,28 +16,57 @@ namespace Emotion.Signal;
 /// </summary>
 public static class SourceShape
 {
-    public const byte Anneau = 1;   // respire — une masse qui enfle et retombe
-    public const byte Onde = 2;     // ondule — un mouvement continu qui traverse
-    public const byte Levres = 3;   // s'ouvre — une bouche, pour ce qui chante
-    public const byte Losange = 4;  // pulse — des aretes droites, franches
+    public const byte Anneau = 1;   // respire — un cercle CREUX qui enfle et retombe
+    public const byte Onde = 2;     // ondule — UNE sinusoide lente qui traverse
+    public const byte Orbe = 3;     // enfle — un disque PLEIN qui grandit et rapetisse
+    public const byte Losange = 4;  // pulse — des aretes droites, le seul motif anguleux
     public const byte Etoile = 5;   // eclate — scintille sur l'attaque
     public const byte Grain = 6;    // scintille — un semis, pour ce qui n'a pas de contour
+    public const byte Vague = 7;    // deferle — des cretes serrees, remplies depuis le bas
 
-    public const byte Count = 6;
+    public const byte Count = 7;
+
+    /// <summary>
+    /// LES LEVRES ONT ETE RETIREES, ET C'EST LE DJ QUI L'A TRANCHE.
+    ///
+    /// Elles voulaient dire « ce qui chante » : un ovale de filets qui s'ouvrait avec le
+    /// niveau et se courbait avec le contour melodique. Personne ne les lisait comme une
+    /// bouche — « les levres, ca ressemble a rien ». Une masse qui enfle et retombe se lit
+    /// sans apprentissage, et c'est deja ce qui avait ete retenu de la case GRAVE. L'octet
+    /// 3 porte donc l'orbe ; une fiche ancienne qui demandait les levres obtient une forme
+    /// differente, ce qui est le comportement voulu.
+    /// </summary>
+    private const int Retire = 0;
+
+    /// <summary>
+    /// L'ordre par defaut, du grave a l'aigu, ET IL EXPOSE CHAQUE SOURCE AUTREMENT.
+    ///
+    /// Six motifs centres et radiaux se ressemblaient tous, parce qu'une case fait trois
+    /// fois et demie sa hauteur en largeur : un cercle, un losange et une etoile y
+    /// devenaient la meme barre horizontale. Ils sont desormais mesures en pixels, et
+    /// surtout composes differemment — en creux, en plein, en ligne qui traverse, en
+    /// remplissage par le bas, en semis.
+    ///
+    /// L'AIGU RECOIT LA VAGUE. Il n'a ni attaque nette ni hauteur stable, seulement une
+    /// agitation : un motif centre lui va mal, il lui faut quelque chose qui bouge partout
+    /// a la fois.
+    /// </summary>
+    private static readonly byte[] ParRang = [Anneau, Onde, Orbe, Losange, Vague, Grain];
 
     /// <summary>La forme d'un rang, faute d'indication dans la fiche.</summary>
     public static byte Default(int rank) =>
-        (byte)(rank >= 0 && rank < Count ? rank + 1 : Anneau);
+        (byte)(rank >= 0 && rank < ParRang.Length ? ParRang[rank] : Anneau);
 
     /// <summary>Le nom d'une forme, pour les ecrans de reglage. Jamais projete.</summary>
     public static string Nommer(byte shape) => shape switch
     {
         Anneau => "anneau",
         Onde => "onde",
-        Levres => "levres",
+        Orbe => "orbe",
         Losange => "losange",
         Etoile => "etoile",
         Grain => "grain",
+        Vague => "vague",
         _ => "?",
     };
 }

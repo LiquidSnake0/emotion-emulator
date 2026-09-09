@@ -700,12 +700,45 @@ cela fait un temps entier de dérive. Or le tempo du moteur est faux de 2 à 5 %
 plusieurs morceaux. Sept histogrammes tournent donc en parallèle à ±1,5 %, et l'on garde
 celui qui se concentre le mieux. Le coût est nul à côté de la FFT.
 
+### Le kick lève l'ambiguïté du demi-temps
+
+Le médium ne distingue pas le temps du contretemps : ce répertoire pose autant d'accords
+entre les temps que dessus, et l'histogramme a deux sommets qui se ressemblent. Trois
+morceaux se calaient donc **à un demi-temps**, et pire encore : sur `t04` la grille se
+verrouillait *avec confiance* à côté, ce qui vaut moins que de ne pas se verrouiller.
+
+Le kick, lui, tombe du bon côté — concentration 0,286 pour un hasard de 0,09. On lui
+demande donc de départager le sommet et son antipode, **et rien d'autre** : il ne place pas
+la grille, il choisit entre deux positions que le médium a déjà trouvées.
+
+| écart à la vérité, en fraction de temps | moyenne | bien calés |
+|---|---|---|
+| frappes seules | 0,252 | 2/10 |
+| repli seul | 0,187 | 2/10 |
+| **repli + kick** | **0,178** | **4/10** |
+
+**Le seuil de renversement n'est pas déterminé par la mesure**, et il faut le dire : 1,5
+donne 0,207, 2,0 donne 0,178, 3,0 redonne 0,207, 5,0 donne 0,184. Le paysage n'est pas
+monotone. Ce qui tient, c'est la présence du mécanisme, pas la valeur.
+
+**Et c'est le pire cas qui le justifie.** Verrouillage du temps fort sur dix morceaux :
+
+| | moyenne | pire cas |
+|---|---|---|
+| sans repli | 45,2 % | 14 % |
+| repli seul | 62,6 % | **4 %** |
+| repli + kick | 59,6 % | **17 %** |
+
+Le repli seul gagnait trois points de moyenne de plus et *effondrait* le pire cas. Pour un
+usage live c'est le pire cas qui compte — un passage où le système ne sait pas se voit,
+trois passages moyens non.
+
 ### Ce qui reste
 
-Trois morceaux sur dix restent calés à un demi-temps (t04, t09, t10). Le repli ne dit pas
-non plus **quel** temps est le « 1 » — c'est une autre question, et `DownbeatProfile` la
-traite. Et le plafond mesuré reste loin : une sélection parfaite sur le même flux atteint
-0,675 de concentration là où le détecteur fait 0,286.
+Deux morceaux régressent encore (t04, t08). Le repli ne dit pas non plus **quel** temps est
+le « 1 » — c'est une autre question, et `DownbeatProfile` la traite. Et le plafond mesuré
+reste loin : une sélection parfaite sur le même flux atteint 0,675 de concentration là où
+le détecteur fait 0,286.
 
 **Deux erreurs de mesure commises et corrigées en chemin**, toutes deux dans le sens
 flatteur : une tolérance relative à l'unité testée, qui rendait les croches *moins*
@@ -782,25 +815,47 @@ Une case ne peut pas mordre sur une autre puisqu'elles ne se touchent que par le
 et l'asymétrie donne à l'œil de quoi se repérer : on apprend « la voix est à droite » plus
 vite que « la voix est à trente-quatre centièmes de hauteur ».
 
-| Source | Rendu | Couleur |
+**Chaque case expose sa source à sa façon**, et ce n'est pas de la décoration : six motifs
+qui se ressemblent obligent à lire l'étiquette pour savoir ce qu'on regarde, et l'œil perd
+alors le temps qu'un visuel est censé lui faire gagner.
+
+| Forme | Ce qu'elle fait | Sa composition |
 |---|---|---|
-| basse | halo qui grandit et rétrécit, au centre | vert |
-| voix | **bouche en caractères** qui s'ouvre et se courbe | cyan |
-| piano | octogone en rotation lente | violet |
-| aiguës | colonne de blocs, pointe triangulaire au sommet | jaune |
-| charleys | grain de caractères qui scintillent | gris |
-| kick | traits qui filent du centre vers les bords | **blanc** |
-| claps | les deux extrémités de la bande s'allument | violet |
+| `anneau` | respire | un cercle **creux**, centré |
+| `onde` | ondule | **une** sinusoïde lente, de bord à bord |
+| `orbe` | enfle et retombe | un disque **plein**, centré |
+| `losange` | pulse | le seul motif **anguleux** |
+| `etoile` | éclate sur l'attaque | centré, **ponctuel** |
+| `grain` | scintille | **réparti** partout |
+| `vague` | déferle | des crêtes serrées, **remplies depuis le bas** |
+
+Ordre par défaut, du grave à l'aigu : anneau, onde, orbe, losange, **vague**, grain.
+
+**TOUTE FORME RONDE SE MESURE EN PIXELS, ET C'EST LA CORRECTION QUI LES A DÉSEMBROUILLÉES.**
+Une case fait trois fois et demie sa hauteur en largeur ; un cercle calculé en cellules y
+devient une bande horizontale. C'est pour cela que l'anneau, le losange et l'étoile se
+ressemblaient tous — trois motifs différents, écrasés en la même barre. La case GRAVE, elle,
+mesurait déjà en pixels, et c'est la seule forme que le DJ ait dite bonne : on a généralisé
+ce qui marchait.
+
+**Les lèvres ont été retirées.** Elles voulaient dire « ce qui chante » et ne disaient rien
+— « les lèvres, ça ressemble à rien ». Une masse qui enfle et retombe se lit sans
+apprentissage. L'octet 3 porte donc l'orbe.
+
+**L'aigu reçoit la vague.** Il n'a ni attaque nette ni hauteur stable, seulement une
+agitation : un motif centré lui va mal, il lui faut quelque chose qui bouge partout à la
+fois.
 
 **Le rendu est en caractères** parce qu'il doit rester léger — il n'y a pas de GPU sous la
 main, et un remplissage de texte coûte une fraction d'un dégradé. Ils donnent en prime une
 identité que des polygones translucides n'avaient pas : celle d'un terminal, ce qui va bien
 à un projet qui passe son temps à mesurer.
 
-**Une voix ne se déplace pas, elle s'ouvre.** La bande qui montait et descendait
-« rebondissait comme une balle de basket ». Le contour mélodique commande donc la
-**courbure** des lèvres — relevées dans l'aigu, retombantes dans le grave — et non plus une
-position.
+**Une voix ne se déplace pas, elle enfle.** La bande qui montait et descendait
+« rebondissait comme une balle de basket ». Les lèvres qui l'ont remplacée ne se lisaient
+pas davantage. Le contour mélodique déplace donc l'orbe dans **ce qui reste de place une
+fois son rayon posé** — jamais librement, sinon la forme sort de sa case dès que les deux
+se cumulent, et une forme coupée ne se reconnaît plus.
 
 La palette des sources est fixe d'un disque à l'autre ; la couleur du disque teinte les
 **cadres** de la matrice. Aucun rouge.

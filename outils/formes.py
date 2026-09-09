@@ -29,20 +29,12 @@ import math
 
 from PySide6.QtGui import QFontMetricsF
 
-NOMS = {1: "anneau", 2: "onde", 3: "levres", 4: "losange", 5: "etoile", 6: "grain"}
-
-# Ce que chaque forme occupe verticalement, en fraction de la demi-hauteur. Sert à lui
-# réserver sa place AVANT de la déplacer : couper un motif qui déborde le mutile, lui
-# laisser sa place le garde entier.
-ENCOMBREMENT = {
-    "anneau": 1.7, "onde": 1.3, "levres": 0.4,
-    "losange": 0.9, "etoile": 0.6, "grain": 0.0,
-}
+NOMS = {1: "anneau", 2: "onde", 3: "orbe", 4: "losange",
+        5: "etoile", 6: "grain", 7: "vague"}
 
 # Tous les caractères employés. Ils doivent tous avoir la même chasse, sans quoi une ligne
 # entière dérive — le renderer web s'y est fait prendre : ◆ avançait de 18 px sur une
 # grille réglée à 9, et la case débordait de 213 px chez sa voisine.
-# █ ▪ ▔ ▬ viennent des trois cases du bas, portees apres les six formes.
 PALETTE = "·˙~≈─│╭╮╯╰●⬥⬦⁕⁎█▪▔▬ "
 
 
@@ -83,108 +75,222 @@ class Grille:
         self.y0 = y + titre
 
 
+def _repere(g):
+    """Le repère d'une case : centre, et unité de longueur EN PIXELS.
+
+    TOUTE FORME RONDE DOIT SE MESURER EN PIXELS, ET C'EST LA CORRECTION QUI LES A
+    DÉSEMBROUILLÉES. Une case fait trois fois et demie sa hauteur en largeur ; un cercle
+    calculé en cellules y devient une bande horizontale. C'est pour ça que l'anneau, le
+    losange et l'étoile se ressemblaient tous — trois motifs différents, écrasés en la même
+    barre. La case GRAVE, elle, mesurait déjà en pixels, et c'est la seule forme que le DJ
+    ait dite bonne. On généralise ce qui marchait.
+    """
+    cx = (g.cols - 1) / 2
+    cy = (g.lignes - 1) / 2
+    unite = max(1.0, min(cx * g.cw, cy * g.ch))
+    return cx, cy, unite
+
+
 def rendu(nom, g, niveau, contour, frappe, tempo):
     """Rend la forme comme une liste de lignes de caractères.
 
-    TOUT EST EN COORDONNÉES NORMALISÉES. Chaque forme travaille dans un carré de -1 à 1,
-    quelles que soient les dimensions réelles de la grille : une forme de rayon r y tient
-    par construction, et le contour ne déplace le centre que de ce qui reste libre. Les
-    débordements répétés des cases 4, 5 et 6 venaient tous de dessins calculés en cellules,
-    où une même constante tenait dans une case et débordait dans une autre.
+    CHAQUE CASE EXPOSE SA SOURCE À SA FAÇON, et ce n'est pas de la décoration : six motifs
+    qui se ressemblent obligent à lire l'étiquette pour savoir ce qu'on regarde, et l'œil
+    perd alors le temps qu'un visuel est censé lui faire gagner.
+
+      anneau   un cercle creux qui respire            centré, en creux
+      onde     une sinusoïde lente qui traverse       une ligne, de bord à bord
+      orbe     un disque plein qui enfle et retombe   centré, plein
+      losange  des arêtes droites qui pulsent         centré, anguleux
+      etoile   un éclat qui scintille sur l'attaque   centré, ponctuel
+      grain    un semis                               réparti partout
+      vague    des crêtes serrées qui déferlent       rempli depuis le bas
     """
-    cxg = (g.cols - 1) / 2
-    cyg = (g.lignes - 1) / 2
-    ratio = cyg / max(1.0, cxg)
     force = min(1.0, niveau + frappe * 0.6)
+    fonction = _FORMES.get(nom, orbe)
+    return fonction(g, force, contour, frappe, tempo), force
 
-    rmax = min(cxg * ratio, cyg) * 0.55
-    marge = ENCOMBREMENT.get(nom, 0.0)
-    if nom == "anneau":
-        rayon = (0.25 + force * 0.75) * rmax + marge
-    elif nom == "onde":
-        rayon = rmax * (0.20 + force * 0.80) + marge
-    elif nom == "levres":
-        rayon = max(0.35, (0.10 + force * 0.95) * rmax) * 1.20 + marge
-    elif nom in ("losange", "etoile"):
-        rayon = (0.30 + force * 0.70) * rmax + marge
-    else:
-        rayon = rmax
 
-    libre = max(0.0, cyg - rayon)
-    cy = cyg + (0.5 - contour) * 2 * libre
+def anneau(g, force, contour, frappe, tempo):
+    """Un cercle creux qui respire. Il enfle avec le niveau, s'épaissit sur la frappe."""
+    cx, cy, unite = _repere(g)
+    r = 0.22 + force * 0.72
+    ep = 0.08 + frappe * 0.10
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            d = math.hypot((c - cx) * g.cw / unite, (l - cy) * g.ch / unite)
+            e = abs(d - r)
+            ligne.append("●" if e < ep else ("·" if e < ep + 0.14 else " "))
+        lignes.append("".join(ligne))
+    return lignes
+
+
+def onde(g, force, contour, frappe, tempo):
+    """UNE seule sinusoïde lente qui traverse la case de bord à bord.
+
+    Elle se distingue de la vague par sa longueur d'onde : ici deux crêtes au plus sur
+    toute la largeur, là une dizaine. Le contour la fait monter et descendre, le niveau
+    lui donne son amplitude.
+    """
+    cy = (g.lignes - 1) / 2
+    marge = (g.lignes - 1) / 2 * 0.85
+    centre = cy + (0.5 - contour) * 2 * marge * 0.6
+    amp = marge * (0.15 + force * 0.85)
+    k = 2 * math.pi * 1.5 / max(1, g.cols - 1)
 
     lignes = []
     for l in range(g.lignes):
         ligne = []
         for c in range(g.cols):
-            dx = (c - cxg) * ratio
-            dy = l - cy
-            ligne.append(_cellule(nom, dx, dy, l, c, cy, cxg, ratio,
-                                  rmax, force, frappe, contour, tempo, g, rayon))
+            y = centre + math.sin(c * k - tempo * 2.0) * amp
+            d = abs(l - y)
+            ligne.append("≈" if d < 0.55 else ("~" if d < 1.25 else " "))
         lignes.append("".join(ligne))
-    return lignes, force
+    return lignes
 
 
-def _cellule(nom, dx, dy, l, c, cy, cxg, ratio, rmax, force, frappe, contour, tempo, g, rayon):
-    if nom == "anneau":
-        d = math.hypot(dx, dy)
-        r = (0.25 + force * 0.75) * rmax
-        ep = 0.8 + frappe * 1.4
-        e = abs(d - r)
-        return "●" if e < ep else ("·" if e < ep + 0.9 else " ")
+def orbe(g, force, contour, frappe, tempo):
+    """Un disque PLEIN qui grandit et rapetisse. Il a remplacé les lèvres.
 
-    if nom == "onde":
-        y = cy + math.sin(c * 0.62 - tempo * 2.4) * rmax * (0.20 + force * 0.80)
-        d = abs(l - y)
-        return "≈" if d < 0.55 else ("~" if d < 1.3 else " ")
+    La bouche voulait dire « ce qui chante » et ne disait rien : deux rangées de filets
+    qu'aucun œil ne lisait comme une bouche. Une masse qui enfle et retombe se lit sans
+    apprentissage, et c'est déjà ce que le DJ avait retenu de la case GRAVE.
 
-    if nom == "levres":
-        # Une bouche est un contour fermé dont la hauteur varie et dont les coins se
-        # rejoignent. Deux rangées de blocs alignés ne font pas une bouche : elles font
-        # deux rangées de blocs.
-        a = (0.55 + contour * 0.45) * cxg * ratio
-        bb = max(0.35, (0.10 + force * 0.95) * rmax)
-        q = (dx * dx) / (a * a) + (dy * dy) / (bb * bb)
-        if q > 1.35:
-            return " "
-        if abs(math.sqrt(q) - 1) >= 0.28:
-            return "·" if q < 1 and force > 0.55 else " "
-        if abs(dx) / a > 0.45 and abs(dy) / bb > 0.45:
-            if (dx < 0) == (dy < 0):
-                return "╭" if dy < 0 else "╰"
-            return "╮" if dy < 0 else "╯"
-        return "│" if abs(dx) / max(0.001, a) > 0.72 else "─"
+    Plein et non creux : c'est ce qui le distingue de l'anneau au premier coup d'œil, et
+    les deux peuvent alors cohabiter dans la même matrice.
+    """
+    cx, cy, unite = _repere(g)
+    marge = (g.lignes - 1) / 2 * g.ch / unite
+    r = 0.18 + force * 0.78
+    libre = max(0.0, marge - r)
+    centre = cy + (0.5 - contour) * 2 * libre * unite / g.ch
 
-    if nom == "losange":
-        d = abs(dx) + abs(dy)
-        r = (0.30 + force * 0.70) * rmax
-        if abs(d - r) < 0.9:
-            return "⬥"
-        return "⬦" if d < r and frappe > 0.25 else " "
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            d = math.hypot((c - cx) * g.cw / unite, (l - centre) * g.ch / unite)
+            # LE DÉGRADÉ ARRONDIT LA SILHOUETTE. Un remplissage franc de blocs pleins rend
+            # un rectangle : chaque cellule est un pavé, et l'œil ne voit que leur contour
+            # commun. Trois densités décroissantes vers le bord dessinent la courbe que la
+            # grille de caractères ne peut pas tracer.
+            if d < r * 0.52:
+                ligne.append("█")
+            elif d < r * 0.78:
+                ligne.append("▪")
+            elif d < r:
+                ligne.append("●")
+            elif d < r + 0.18:
+                ligne.append("·")
+            else:
+                ligne.append(" ")
+        lignes.append("".join(ligne))
+    return lignes
 
-    if nom == "etoile":
-        d = math.hypot(dx, dy)
-        r = (0.30 + force * 0.70) * rmax
-        if d > r + 0.6:
-            return " "
-        ang = math.atan2(dy, dx) + contour * 3.14
-        branche = abs(math.cos(ang * 3))
-        if branche > 0.88 or d < 0.9:
-            return "⁕" if d < 0.9 else "⁎"
-        return " "
 
-    if nom == "grain":
-        i = l * g.cols + c
-        phase = (i * 0.618) % 1
-        pres = max(0.0, 1 - abs(l - cy) / max(1.0, rayon))
-        eclat = max(0.0, 1 - abs(((force + phase) % 1) - 0.5) * 2.6) * pres
-        if eclat > 0.55:
-            return "⁕"
-        if eclat > 0.34:
-            return "·"
-        return "˙" if eclat > 0.18 else " "
+def losange(g, force, contour, frappe, tempo):
+    """Des arêtes droites qui pulsent. Le seul motif anguleux de la matrice."""
+    cx, cy, unite = _repere(g)
+    r = 0.25 + force * 0.75
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            d = abs((c - cx) * g.cw / unite) + abs((l - cy) * g.ch / unite)
+            if abs(d - r) < 0.11:
+                ligne.append("⬥")
+            elif d < r and frappe > 0.25:
+                ligne.append("⬦")
+            else:
+                ligne.append(" ")
+        lignes.append("".join(ligne))
+    return lignes
 
-    return " "
+
+def etoile(g, force, contour, frappe, tempo):
+    """Un éclat qui scintille sur l'attaque ; ses branches tournent avec le contour."""
+    cx, cy, unite = _repere(g)
+    r = 0.25 + force * 0.75
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            dx = (c - cx) * g.cw / unite
+            dy = (l - cy) * g.ch / unite
+            d = math.hypot(dx, dy)
+            if d > r + 0.08:
+                ligne.append(" ")
+                continue
+            ang = math.atan2(dy, dx) + contour * 3.14
+            branche = abs(math.cos(ang * 3))
+            if d < 0.12:
+                ligne.append("⁕")
+            elif branche > 0.86:
+                ligne.append("⁎")
+            else:
+                ligne.append(" ")
+        lignes.append("".join(ligne))
+    return lignes
+
+
+def vague(g, force, contour, frappe, tempo):
+    """Des crêtes serrées qui déferlent, remplies depuis le bas. Pour les registres aigus.
+
+    L'aigu n'a pas de contour franc : ni attaque nette ni hauteur stable, seulement une
+    agitation. Un motif centré lui va mal — il lui faut quelque chose qui bouge partout à
+    la fois. D'où le train de vagues : une dizaine de crêtes, deux fréquences qui se
+    battent pour que le motif ne se répète jamais à l'identique, et un remplissage par le
+    bas qui donne le niveau d'un coup d'œil.
+    """
+    haut = g.lignes - 1
+    base = haut * (1.0 - (0.12 + force * 0.80))
+    k1 = 2 * math.pi * 5.0 / max(1, g.cols - 1)
+    k2 = 2 * math.pi * 8.0 / max(1, g.cols - 1)
+    amp = haut * (0.06 + force * 0.22)
+
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            crete = (base
+                     + math.sin(c * k1 - tempo * 3.2) * amp
+                     + math.sin(c * k2 + tempo * 1.7) * amp * 0.45)
+            if l < crete - 0.6:
+                ligne.append(" ")
+            elif l < crete + 0.5:
+                ligne.append("≈")
+            elif l < crete + 1.6:
+                ligne.append("~")
+            else:
+                ligne.append("·" if (l + c) % 2 == 0 else " ")
+        lignes.append("".join(ligne))
+    return lignes
+
+
+def grain_source(g, force, contour, frappe, tempo):
+    """Un semis qui scintille, concentré à la hauteur du contour."""
+    haut = g.lignes - 1
+    centre = haut * (1.0 - contour)
+    portee = max(1.0, haut * (0.25 + force * 0.75))
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            phase = ((l * g.cols + c) * 0.618) % 1
+            pres = max(0.0, 1 - abs(l - centre) / portee)
+            eclat = max(0.0, 1 - abs(((force + phase) % 1) - 0.5) * 2.6) * pres
+            ligne.append("⁕" if eclat > 0.55 else
+                         ("·" if eclat > 0.34 else ("˙" if eclat > 0.18 else " ")))
+        lignes.append("".join(ligne))
+    return lignes
+
+
+_FORMES = {
+    "anneau": anneau, "onde": onde, "orbe": orbe, "losange": losange,
+    "etoile": etoile, "grain": grain_source, "vague": vague,
+}
 
 
 # ---------------------------------------------------------------- les trois cases du bas

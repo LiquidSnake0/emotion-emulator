@@ -93,7 +93,38 @@ public sealed class PhaseFold
     /// </summary>
     public const float PasCandidat = 0.005f;
 
+    /// <summary>
+    /// De combien les frappes doivent l'emporter pour renverser le sommet du medium.
+    ///
+    /// Elles n'ont pas voix egale : leur concentration vaut 0,286 contre un hasard de 0,09,
+    /// ce qui est net mais loin d'etre sur. Exiger le double les empeche de renverser un
+    /// sommet franc sur un accident, tout en les laissant trancher quand le medium hesite —
+    /// ce qu'il fait exactement une fois sur deux, puisque temps et contretemps se
+    /// ressemblent dans son histogramme.
+    ///
+    /// Mesure sur dix morceaux, ecart de la grille a la verite terrain, en fraction de
+    /// temps (0,25 est le hasard) :
+    ///
+    ///     seuil        1,5     2,0     3,0     5,0     sans les frappes
+    ///     moyenne     0,207   0,178   0,207   0,184        0,187
+    ///     bien cales   3/10    4/10    3/10    3/10         2/10
+    ///
+    /// <b>LE PAYSAGE N'EST PAS MONOTONE, ET IL FAUT LE DIRE.</b> Deux est le meilleur
+    /// mesure, mais un et demi et trois donnent la meme chose : la valeur exacte n'est pas
+    /// determinee par cette mesure, seule sa presence l'est. Ce qui tient, c'est le nombre
+    /// de morceaux bien cales — quatre au lieu de deux — et le fait que le pire cas ne se
+    /// degrade pas.
+    /// </summary>
+    public const float AvantageFrappe = 2.0f;
+
+    /// <summary>Reglable, pour le banc.</summary>
+    public float Avantage { get; set; } = AvantageFrappe;
+
+    /// <summary>Largeur de la fenetre ou l'on compte les frappes, en cases de part et d'autre.</summary>
+    private const int Voisinage = Cases / 12;      // un douzieme de temps, 58 ms a 87 BPM
+
     private readonly float[][] _cases = Creer();
+    private readonly float[][] _frappes = Creer();
     private readonly double[] _phases = new double[Candidats];
     private float _memoire = DefautMemoire;
     private long _lastMs = -1;
@@ -110,6 +141,15 @@ public sealed class PhaseFold
     public float Facteur { get; private set; } = 1f;
 
     private static float FacteurDe(int i) => 1f + (i - (Candidats - 1) / 2) * PasCandidat;
+
+    /// <summary>Ce que les frappes ont depose autour d'une case, bords replies.</summary>
+    private static float Autour(float[] table, int centre)
+    {
+        var somme = 0f;
+        for (var d = -Voisinage; d <= Voisinage; d++)
+            somme += table[(centre + d + Cases) % Cases];
+        return somme;
+    }
 
     /// <summary>Memoire de l'accumulation, en temps.</summary>
     public float Memoire
@@ -160,7 +200,8 @@ public sealed class PhaseFold
     /// <param name="tMs">Instant de la fenetre.</param>
     /// <param name="energie">Ce qui monte dans le medium sur cette fenetre.</param>
     /// <param name="bpm">Tempo mesure, ou nul tant qu'il n'y en a pas.</param>
-    public void Feed(long tMs, float energie, float? bpm)
+    /// <param name="frappe">Un kick vient d'etre detecte sur cette fenetre.</param>
+    public void Feed(long tMs, float energie, float? bpm, bool frappe = false)
     {
         if (bpm is { } b && b > 20f && b < 400f)
         {
@@ -196,6 +237,7 @@ public sealed class PhaseFold
             if (c == _retenu) Temps += (float)tours;
 
             var cases = _cases[c];
+            var frappes = _frappes[c];
             var mien = (int)(_phases[c] * Cases) % Cases;
             var somme = 0f;
             var sommet = 0f;
@@ -203,12 +245,33 @@ public sealed class PhaseFold
             for (var i = 0; i < Cases; i++)
             {
                 cases[i] *= oubli;
-                if (i == mien) cases[i] += apport;
+                frappes[i] *= oubli;
+                if (i == mien)
+                {
+                    cases[i] += apport;
+                    if (frappe) frappes[i] += 1f;
+                }
                 somme += cases[i];
                 if (cases[i] > sommet) { sommet = cases[i]; rang = i; }
             }
 
             if (somme <= 0f) continue;
+
+            // LE MEDIUM NE DISTINGUE PAS LE TEMPS DU CONTRETEMPS, ET LE KICK SI.
+            //
+            // Replie sur un temps, l'histogramme du medium a deux sommets qui se
+            // ressemblent : ce repertoire pose autant d'accords entre les temps que dessus.
+            // Rien dans l'energie ne dit lequel est le « 1 », et se tromper coute un demi-
+            // temps — mesure sur trois morceaux du bac, ou la grille se verrouillait avec
+            // confiance a cote, ce qui est pire que de ne pas se verrouiller.
+            //
+            // Le kick, lui, tombe du bon cote : sa concentration vaut 0,286 pour un hasard
+            // de 0,09. On lui demande donc de departager le sommet et son antipode, et
+            // rien d'autre — il ne place pas la grille, il choisit entre deux positions
+            // que le medium a deja trouvees.
+            var antipode = (rang + Cases / 2) % Cases;
+            if (Autour(frappes, antipode) > Autour(frappes, rang) * Avantage)
+                rang = antipode;
             var relief = sommet / (somme / Cases);
             if (relief > meilleurRelief)
             {
@@ -241,6 +304,7 @@ public sealed class PhaseFold
     public void Reset()
     {
         foreach (var c in _cases) Array.Clear(c);
+        foreach (var c in _frappes) Array.Clear(c);
         Array.Clear(_phases);
         _lastMs = -1;
         Temps = 0f;

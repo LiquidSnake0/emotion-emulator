@@ -500,14 +500,14 @@ public class FormeDeLaFicheTests
     ///
     /// Sur un morceau feutre, le DJ veut voir la voix respirer ; sur un morceau dense,
     /// c'est la frappe. L'analyse sait separer six sources et dire ce qu'elle sait de
-    /// chacune — elle ne sait pas, et n'a pas a savoir, laquelle merite une bouche.
+    /// chacune — elle ne sait pas, et n'a pas a savoir, laquelle merite une orbe.
     /// </summary>
     [Fact]
     public void La_fiche_impose_la_forme_de_chaque_source()
     {
-        var fiche = Fiche(formes: [SourceShape.Levres, SourceShape.Anneau, 0, 0, 0, 0]);
+        var fiche = Fiche(formes: [SourceShape.Orbe, SourceShape.Anneau, 0, 0, 0, 0]);
 
-        Assert.Equal(SourceShape.Levres, fiche.ShapeOf(0));
+        Assert.Equal(SourceShape.Orbe, fiche.ShapeOf(0));
         Assert.Equal(SourceShape.Anneau, fiche.ShapeOf(1));
 
         // Un zero laisse la forme par defaut du rang : la fiche n'a rien dit de celle-la.
@@ -540,10 +540,10 @@ public class FormeDeLaFicheTests
     {
         var p = new GpuPacket();
         p.WriteSource(0, new LaneState(0.5f, 0.5f, false), label: 0,
-                      shape: SourceShape.Levres);
+                      shape: SourceShape.Orbe);
 
         var s = p.ReadSource(0);
-        Assert.Equal(SourceShape.Levres, s.Shape);
+        Assert.Equal(SourceShape.Orbe, s.Shape);
         Assert.Equal((byte)0, s.Heard);
         Assert.Equal((byte)0, s.Label);
     }
