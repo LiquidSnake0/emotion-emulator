@@ -91,11 +91,13 @@ SOURCE_PAS = 8
 P_ENVELOPPES = 216
 ENVELOPPE_PAS = 2
 
-# Le role de chaque source dans l'orchestre : trois octets, les derniers du paquet.
-#   +0 role  ·  +1 place dans le temps  ·  +2 retrait, en seiziemes de seconde
-P_ROLES = 232
-ROLE_PAS = 3
-ROLES = {1: "métronome", 2: "ponctuel", 3: "continu"}
+# Depuis combien de temps chaque source s'est tue, en seiziemes de seconde. Zero si elle
+# joue. Il y a eu deux octets de plus ici — le role de la source dans l'orchestre et sa
+# place dans le temps — et ils ont ete retires : mesures sur six morceaux du bac, les
+# montees des sources separees ne sont pas calees sur le temps, R valant 0,05 a 0,17 pour
+# un hasard de 0,13 a 0,25. Le classement rendait « continu » trente-six fois sur
+# trente-six.
+P_RETRAITS = 232
 S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2, 3, 4, 5, 7
 
 GRIS_FOND = QColor(14, 14, 15)
@@ -212,14 +214,9 @@ class Paquet:
                 # jamais. Les deux donnaient le meme niveau moyen et la meme hauteur.
                 "pique": mm[base + P_ENVELOPPES + r * ENVELOPPE_PAS] / 255.0,
                 "tenue": mm[base + P_ENVELOPPES + r * ENVELOPPE_PAS + 1] / 255.0,
-                # LE ROLE, SA PLACE, ET DEPUIS COMBIEN DE TEMPS ELLE S'EST TUE.
-                #
-                # Les trois vont ensemble et c'est leur reunion qui sert : une source
-                # absente ne dit rien, une source absente DONT ON CONNAIT LA PLACE peut
-                # etre montree en creux la ou elle reviendra.
-                "role": mm[base + P_ROLES + r * ROLE_PAS],
-                "place": mm[base + P_ROLES + r * ROLE_PAS + 1] / 255.0,
-                "retrait": mm[base + P_ROLES + r * ROLE_PAS + 2] / 16.0,
+                # DEPUIS COMBIEN DE TEMPS ELLE S'EST TUE.
+                # « Quand le kick est en retrait pendant un moment, on est censé le savoir. »
+                "retrait": mm[base + P_RETRAITS + r] / 16.0,
             })
 
 
@@ -281,9 +278,6 @@ def entre(avant, courant, a):
          "nettete": m(x["nettete"], c["nettete"]),
          "pique": m(x["pique"], c["pique"]),
          "tenue": m(x["tenue"], c["tenue"]),
-         # La place se mêle comme le reste — c'est un descripteur. Le rôle, lui, est un
-         # verdict : il saute d'une valeur à l'autre et n'a pas de milieu.
-         "place": m(x["place"], c["place"]),
          "retrait": m(x["retrait"], c["retrait"])}
         for x, c in zip(avant.sources, courant.sources)
     ]
@@ -399,15 +393,15 @@ class Mur(QWidget):
         self.mesure_pos = 0.0
         self.phase_temps_prec = None
 
-        # LE CREUX DE CHAQUE SOURCE ABSENTE.
+        # UNE SOURCE ABSENTE NE DISPARAIT PAS DE L'ECRAN, ELLE S'Y MONTRE ETEINTE.
         #
-        # Une source qui se retire garde une place — le rôle la mesure — et cette place
-        # continue d'exister pendant qu'elle se tait. On la marque donc à chaque tour, en
-        # creux : ce n'est pas inventer un événement, c'est dire « c'est ici qu'elle
-        # reviendra ». La différence tient dans la teinte, qui n'est jamais celle du son
-        # présent.
-        self.creux = [Pulse(3.0) for _ in range(6)]
-        self.creux_prec = [None] * 6
+        # « Quand le kick est en retrait pendant un moment, on est censé le savoir. » Une
+        # case vide et une case dont la source s'est tue se ressemblent trop ; la seconde
+        # garde donc son motif, en gris, et dit depuis combien de temps.
+        #
+        # Il y a eu ici un battement fantôme qui marquait la PLACE de la source absente,
+        # tour après tour. Il dépendait du rôle, et le rôle a été retiré faute de se
+        # mesurer sur cette matière.
 
         self.mono = QFont("monospace", 10)
         self.mono.setStyleHint(QFont.StyleHint.Monospace)
@@ -474,16 +468,6 @@ class Mur(QWidget):
             self.paquet = entre(self.entre_images.avant, courant,
                                 self.entre_images.alpha(maintenant))
 
-            # Le passage de chaque source absente à sa place, tour après tour.
-            for r, src in enumerate(self.paquet.sources):
-                if src["retrait"] <= 0.4 or src["role"] not in (1, 2):
-                    self.creux_prec[r] = None
-                    continue
-                d = (self.paquet.phase_temps - src["place"]) % 1.0
-                if self.creux_prec[r] is not None and d < self.creux_prec[r] - 0.5:
-                    self.creux[r].tirer(1.0)
-                self.creux_prec[r] = d
-
             # LE CURSEUR DE MESURE AVANCE DE CE DONT LE TEMPS A AVANCE, et se corrige
             # doucement quand la mesure est connue. Il doit se calculer APRES la vue
             # interpolee : nourri du paquet brut, il avancerait par paliers de 21 ms au
@@ -524,8 +508,6 @@ class Mur(QWidget):
         for r, imp in enumerate(self.coups):
             tenue = src[r]["tenue"] if src else 0.0
             imp.pas(dt, chute=0.7 + 8.0 * (1.0 - tenue))
-        for imp in self.creux:
-            imp.pas(dt)
         self.update()
 
     # ------------------------------------------------------------------ dessin
@@ -674,14 +656,8 @@ class Mur(QWidget):
                       "frappé" if s["pique"] > 0.5 else
                       "tenu" if s["tenue"] > 0.6 else
                       "")
-            # LA LEGENDE DIT LE ROLE AVANT LA FORME, PARCE QUE C'EST LUI QUI IDENTIFIE.
-            #
-            # Le nom de la forme est redondant avec le dessin — on le voit. Le rôle, non :
-            # rien dans le mouvement ne dit si cette source tient le métronome ou si elle
-            # ponctue, et c'est pourtant ce qui permet de reconnaître l'instrument.
-            role = ROLES.get(s["role"], "")
             gauche = f"{r + 1}·{s['nom']}" if s["nom"] else f"{r + 1}"
-            titre = "  ".join(x for x in (gauche, role, nature) if x)
+            titre = "  ".join(x for x in (gauche, nom, nature) if x)
 
             # UNE SOURCE RETIREE SE DIT, ELLE NE DISPARAIT PAS.
             # « Quand le kick est en retrait pendant un moment, on est censé le savoir. »
@@ -728,7 +704,7 @@ class Mur(QWidget):
             # tombait et où elle retombera. On lui prête donc le battement de sa propre
             # place, et une teinte qui ne peut pas être confondue avec du son présent.
             if absente:
-                niveau, frappe = 0.20 + 0.30 * self.creux[r].valeur, self.creux[r].valeur
+                niveau, frappe = 0.30, 0.0
             else:
                 niveau, frappe = s["niveau"], self.coups[r].valeur
 

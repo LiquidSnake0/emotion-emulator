@@ -997,6 +997,48 @@ fort.
 paquet brut il avancerait par paliers de 21 ms au lieu de suivre l'écran — c'est-à-dire
 qu'il produirait le hoquet qu'il est censé supprimer.
 
+## Le rôle des sources dans l'orchestre : essayé, mesuré, abandonné
+
+L'idée était bonne et l'image du DJ juste : « le mec qui fait le tambour joue le métronome
+pour les autres, celui au saxophone est chargé de jouer les mêmes notes mais à des instants
+précis ». Trois rôles se mesurent en repliant une source sur la période du temps —
+**métronome**, **ponctuel**, **continu** — et ils auraient dit à la grille quelles sources
+peuvent témoigner à la place du kick quand il se retire.
+
+**Elle a échoué deux fois, et la seconde ferme la question.**
+
+| nourrie de | résultat sur six morceaux du bac |
+|---|---|
+| les **frappes détectées** de chaque registre | 34 « continu » sur 36 |
+| les **montées de niveau** de chaque source | **36 sur 36** |
+
+La substitution détections → énergie continue, qui a payé trois fois ailleurs dans ce
+projet, ne paie pas ici. Et le diagnostic dit pourquoi :
+
+```
+tours contributifs   12 à 53        assez de matière
+concentration R      0,05 à 0,17    pour un hasard de 0,13 à 0,25
+```
+
+**Ce n'est pas un problème de seuil, c'est un problème de signal.** Les montées de niveau
+des six sources séparées ne sont pas calées sur le temps — leur concentration est au niveau
+du hasard. La séparation produit des activations qui varient doucement et ne conservent pas
+la structure rythmique. On ne peut pas mesurer la régularité d'une source à partir d'une
+grandeur qui n'est pas régulière.
+
+**Le critère d'abandon avait été fixé avant la mesure** — plus de 24 « continu » sur 36 —
+et il n'y a pas eu de second essai. Les deux octets du rôle et de la place sont rendus au
+paquet ; seul le **retrait** subsiste, qui ne dépend d'aucun classement.
+
+> **Deux erreurs de méthode attrapées par les tests avant la mesure réelle**, et elles
+> valent d'être notées. Le niveau de hasard était d'abord tiré de la répartition de
+> l'énergie entre les cases — donc plus une source était concentrée, plus le seuil montait :
+> une source parfaitement régulière rendait R = 1 pour un seuil de 1,25 et se voyait classée
+> « continue ». Puis un niveau constant, qui ne monte qu'une fois en entrant, remplissait une
+> case et paraissait parfaitement concentré. **Un test unitaire ne prouve pas qu'une idée
+> marche, mais il coûte mille fois moins cher qu'une mesure pour prouver qu'elle est mal
+> écrite.**
+
 ## Une absence n'est pas un changement
 
 > « Le seul changement qui justifierait de recheck le beat est un changement, pas un mute

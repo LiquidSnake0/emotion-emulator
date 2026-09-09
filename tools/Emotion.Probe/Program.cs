@@ -440,30 +440,6 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     beatHisto[s.Beat + 1]++;
 }
 
-// LES ROLES, POUR POUVOIR LES JUGER SUR LA MATIERE REELLE.
-//
-// Ils ont ete construits sur des motifs fabriques, et un test unitaire vert ne remplace pas
-// une mesure sur du signal reel — le projet l'a deja paye une fois.
-{
-    var derniere = analyzer.Derniere;
-    {
-        Console.Write("roles des sources  ");
-        for (var i = 0; i < Voices.Registers; i++)
-        {
-            var l = derniere.Voices.LaneAt(i);
-            var nom = l.Role switch
-            {
-                SourceRoles.Metronome => "metronome",
-                SourceRoles.Ponctuel => "ponctuel ",
-                SourceRoles.Continu => "continu  ",
-                _ => "inconnu  ",
-            };
-            Console.Write($"{i + 1}:{nom}({l.Place:F2}) ");
-        }
-        Console.WriteLine();
-    }
-}
-
 Console.WriteLine($"\nlatence d'analyse   {analyzer.LatencyMs:F0} ms");
 Console.WriteLine($"tempo detecte sur   {tempos.Count * 100 / Math.Max(1, changes.Count)} % des fenetres" +
                   (tempos.Count > 0 ? $" · median {Median(tempos):F1} BPM" : ""));
