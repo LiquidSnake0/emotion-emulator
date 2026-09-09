@@ -31,6 +31,19 @@ namespace Emotion.Signal;
 /// </summary>
 public sealed class TempoTracker
 {
+    /// <summary>
+    /// Tempo le plus lent que l'autocorrelation explore.
+    ///
+    /// CINQUANTE A ETE ESSAYE, ET IL COUTE PLUS QU'IL NE RAPPORTE. Le crate fiche « Lost
+    /// Cultures » a 59,87 BPM, sous cette borne : le moteur ne peut donc pas le publier.
+    /// Descendre a 50 le rend trouvable — 0 a 47 % de justesse sur ce morceau — mais fait
+    /// entrer des sous-multiples qui volent des voix ailleurs : un morceau a 73,50 tombe de
+    /// 97 a 58 %, un autre a 63,50 de 100 a 82. Sur l'album entier, 82 % de justesse
+    /// deviennent 78.
+    ///
+    /// On garde donc soixante, et l'on traite le cas autrement : la fiche oriente la
+    /// preference meme quand elle sort de la plage de recherche. Voir <see cref="Preferer"/>.
+    /// </summary>
     public const float MinBpm = 60f;
     public const float MaxBpm = 200f;
 
@@ -99,7 +112,7 @@ public sealed class TempoTracker
     /// C'est ce qui remplace le repli d'octave a la main — entre une periode et sa
     /// moitie, qui se ressemblent toutes deux fortement, c'est la preference qui tranche.
     /// </summary>
-    private readonly float _preferredBpm;
+    private float _preferredBpm;
 
     /// <summary>
     /// Largeur de la preference, en octaves de tempo. Un quart d'octave separe 90 BPM de
@@ -211,10 +224,57 @@ public sealed class TempoTracker
         // A un quart d'octave d'ecart-type, le triolet d'un tempo prefere ne pese plus
         // qu'un huitieme de lui — assez pour le battre a correlation comparable, pas assez
         // pour interdire un tempo franchement hors zone de s'imposer avec un pic net.
+        Preferer(_preferredBpm);
+    }
+
+    /// <summary>
+    /// Recentre la preference de tempo. C'est par ici que la fiche du crate entre dans
+    /// l'analyse.
+    ///
+    /// ELLE DIT OU CHERCHER, ELLE NE DIT PAS QUOI TROUVER — et la distinction porte tout.
+    ///
+    /// La regle du projet est qu'un BPM stocke est faux des la premiere seconde : un vinyle
+    /// se joue a plus ou moins huit pour cent au fader, jusqu'a seize. Elle interdit donc de
+    /// <b>verrouiller</b> sur la fiche. Elle n'interdit pas de s'en servir pour savoir dans
+    /// quel voisinage regarder, ce qui est une tout autre chose — la ponderation reste une
+    /// gaussienne large, et un pic franc hors zone l'emporte toujours.
+    ///
+    /// CE QUE CELA CHANGE, MESURE SUR UN ALBUM ENTIER DU CRATE. La preference etait centree
+    /// sur 90 BPM parce que « le bac vit entre 82 et 97 ». Cet album-la va de 59,87 a 90,92,
+    /// donc cinq morceaux sur onze tombaient sous sa borne basse. Confronte aux tempos que
+    /// le DJ a lui-meme cales, le moteur publiait la bonne valeur 43 % du temps ; recentre
+    /// sur la fiche, 83 %.
+    ///
+    /// <code>
+    ///   piste   fiche    sans      avec
+    ///     t08   63,50     0 %     100 %
+    ///     t10   77,00    16 %      93 %
+    ///     t07   77,98    26 %      67 %
+    ///     t03   82,50    21 %      64 %
+    ///     t04   73,50    72 %      97 %
+    /// </code>
+    ///
+    /// Les deux morceaux entierement faux etaient les plus lents, et c'est exactement ce
+    /// que predit une fenetre trop haute.
+    /// </summary>
+    public void Preferer(float bpm)
+    {
+        // LA PLAGE DE RECHERCHE ET LA PREFERENCE SONT DEUX CHOSES DIFFERENTES.
+        //
+        // La premiere borne ce que l'autocorrelation explore ; la seconde dit seulement ou
+        // pencher a l'interieur. Une fiche a 59,87 — sous la borne basse — reste donc une
+        // information utile : elle fait pencher la gaussienne vers le bas de la plage, ce
+        // qui suffit a departager un tempo lent de ses multiples.
+        //
+        // La garde initiale rejetait ces fiches-la, et c'etait exactement les morceaux a
+        // qui l'amorce devait servir : le plus lent de l'album voyait sa fiche ignoree en
+        // silence. On ne borne donc que l'absurde.
+        if (bpm >= 20f && bpm <= 400f) _preferredBpm = bpm;
+
         for (var i = 0; i < _prefer.Length; i++)
         {
-            var bpm = 60_000f / ((_minLag + i) * _frameMs);
-            var octaves = MathF.Log2(bpm / _preferredBpm) / _preferWidth;
+            var b = 60_000f / ((_minLag + i) * _frameMs);
+            var octaves = MathF.Log2(b / _preferredBpm) / _preferWidth;
             _prefer[i] = MathF.Exp(-octaves * octaves / 2f);
         }
     }

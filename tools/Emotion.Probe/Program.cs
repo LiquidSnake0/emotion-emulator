@@ -56,7 +56,14 @@ foreach (var a in args)
     if (a.StartsWith("largeur=") && float.TryParse(a[8..],
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var lp)) largeurPref = lp;
-var analyzer = new SpectrumAnalyzer(rate, separate, memoireT, inertieT, 90f, largeurPref);
+// « prefere=X » : centre de la preference de tempo. C'est par la que la fiche du crate
+// entre dans l'analyse — non pour imposer une valeur, mais pour dire ou chercher.
+var centrePref = 90f;
+foreach (var a in args)
+    if (a.StartsWith("prefere=") && float.TryParse(a[8..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var cp)) centrePref = cp;
+var analyzer = new SpectrumAnalyzer(rate, separate, memoireT, inertieT, centrePref, largeurPref);
 
 // LES DEUX REGIMES, DANS LE MEME PROCESSUS.
 //
@@ -93,6 +100,15 @@ if (args.Contains("complexe")) analyzer.FluxComplexeActif = true;
 // « lisse » : remet la moyenne sur deux fenetres avant de juger le kick, comme avant.
 // Sert a refaire la comparaison sur une autre matiere. Voir SpectrumAnalyzer.LissageKick.
 if (args.Contains("lisse")) analyzer.LissageKick = true;
+
+// « fiche=X » : le tempo annonce par le crate, par le chemin reel — celui qu'emprunte
+// SpectrumAnalyzer.Reprendre quand la memoire de piste rend ce qu'elle savait du disque.
+// C'est une amorce, jamais un verrou : l'autocorrelation continue de chercher.
+foreach (var a2 in args)
+    if (a2.StartsWith("fiche=") && float.TryParse(a2[6..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var fb))
+        analyzer.Amorcer(fb);
 
 // « brutmed » : retire aussi le lissage du clap et du charley. Mesure sur macro : nuisible.
 if (args.Contains("brutmed")) analyzer.LissageAttaques = false;

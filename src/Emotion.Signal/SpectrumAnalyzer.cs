@@ -397,7 +397,23 @@ public sealed class SpectrumAnalyzer
     public void Reprendre(in TrackKnowledge connaissance)
     {
         _voices.Reprendre(connaissance);
-        if (connaissance.Bpm > 0f) Reference.Expected = connaissance.Bpm;
+        if (connaissance.Bpm > 0f) Amorcer(connaissance.Bpm);
+    }
+
+    /// <summary>
+    /// Ce que la fiche du crate annonce pour le disque qui arrive.
+    ///
+    /// La fiche est la premiere source d'information du systeme : c'est de la qu'on part.
+    /// Elle ne remplace jamais la mesure — un vinyle se joue au fader et un BPM stocke est
+    /// faux des la premiere seconde — mais elle dit dans quel voisinage chercher, et cela
+    /// change tout. Sur un album du crate, le tempo publie passe de 43 a 83 % de justesse.
+    /// Voir <see cref="TempoTracker.Preferer"/>.
+    /// </summary>
+    public void Amorcer(float bpm)
+    {
+        if (bpm <= 0f) return;
+        Reference.Expected = bpm;
+        _tempo.Preferer(bpm);
     }
 
     /// <summary>Ce qu'on sait a cet instant, pret a etre range pour la prochaine ecoute.</summary>

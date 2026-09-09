@@ -15,11 +15,20 @@ Tout est donc construit pour être réglé sans matériel et branché sans réé
 | Donnée | Source | Ne jamais faire |
 |---|---|---|
 | Attaques, énergie, bandes | le signal | — |
-| Tempo, hauteurs | le signal, dérivés | **jamais** lire un BPM depuis une fiche |
+| Tempo, hauteurs | le signal, dérivés | **jamais verrouiller** sur le BPM d'une fiche — mais s'en servir pour savoir où chercher |
 | Famille, Camelot, pochette | la base | jamais tenter de les détecter |
 
 Un vinyle se joue à vitesse variable : ±8 % au fader, jusqu'à ±16 %. Un BPM stocké est
-faux dès la première seconde. À l'inverse, détecter une tonalité pendant un fondu est
+faux dès la première seconde.
+
+**Mais faux n'est pas inutile, et cette nuance a coûté cher.** La règle a longtemps été lue
+comme un interdit, alors que le crate est la *première* source d'information du système :
+c'est de là qu'on part. La fiche ne dit pas le tempo, elle dit le **voisinage** — et
+`SpectrumAnalyzer.Amorcer` recentre la préférence de l'autocorrélation dessus sans jamais
+la verrouiller. Mesuré contre les tempos que le DJ a lui-même calés, sur un album entier
+du bac : **43 % de justesse sans la fiche, 83 % avec**. Les deux morceaux entièrement faux
+étaient les plus lents — 59,87 et 63,50 BPM — sous la borne d'une préférence centrée sur 90
+« parce que le bac vit entre 82 et 97 ». Cet album-là va de 59,87 à 90,92. À l'inverse, détecter une tonalité pendant un fondu est
 impossible — deux disques superposés produisent un accord qui n'existe dans aucun des
 deux.
 
