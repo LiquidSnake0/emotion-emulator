@@ -874,13 +874,22 @@ alors le temps qu'un visuel est censé lui faire gagner.
 |---|---|---|
 | `barres` | monte | des colonnes **espacées**, depuis le bas |
 | `onde` | ondule | **une** sinusoïde lente, de bord à bord |
-| `orbe` | enfle et retombe | un disque **plein**, centré, grand même au repos |
-| `comete` | glisse | une masse qui **se déplace** horizontalement, avec sa traînée |
+| `masse` | enfle et retombe | pleine, centrée, **à arêtes droites** |
+| `chute` | tombe | le seul mouvement **vertical** |
 | `etoile` | éclate sur l'attaque | centré, **minuscule** |
 | `grain` | scintille | **réparti** partout |
 | `vague` | déferle | des crêtes serrées, front **continu** depuis le bas |
+| *(GRAVE)* | respire | l'**anneau**, et il reste unique |
 
-Ordre par défaut, du grave à l'aigu : barres, onde, orbe, comete, **vague**, grain.
+Ordre par défaut, du grave à l'aigu : barres, onde, masse, chute, **vague**, grain.
+
+**Deux formes ont encore cédé, et c'est le DJ qui a regardé.** L'orbe enflait et retombait
+comme demandé, mais ronde elle se confondait avec l'anneau de GRAVE — « la source 3 et la 7,
+c'est des orbes, ça se ressemble, c'est moche ». L'anneau est la seule forme jamais dite
+bonne : c'est donc à l'autre de céder. **Le geste ne change pas, la géométrie si.** Et la
+comète « ressemblait à rien » : sur neuf lignes et cinquante colonnes, un déplacement
+horizontal se confond avec l'onde qui traverse. Il manquait un mouvement que rien d'autre ne
+fait — la verticale.
 
 **CE QUI DISTINGUE DEUX MOTIFS N'EST PAS LEUR TRACÉ, C'EST LEUR COMPOSITION.** Anneau,
 losange et étoile étaient trois dessins différents — et tous centrés, tous en contour, tous
@@ -889,8 +898,13 @@ lumineux qui clignotent, et ça n'aide pas. » Ce qui les sépare désormais est
 se trouve dans la case et *comment elle bouge* : par le bas, de bord à bord, au centre, en
 déplacement, partout.
 
-**Aucun anneau parmi les sources.** La case GRAVE en porte un, et c'est la seule forme que
-le DJ ait dite bonne — la garder unique est ce qui la rend lisible.
+**Aucun anneau, et plus aucun rond, parmi les sources.** La case GRAVE en porte un, et c'est
+la seule forme que le DJ ait dite bonne — la garder unique est ce qui la rend lisible.
+
+**Six sources, et ce n'est pas arbitraire.** La stabilité des profils vaut 0,87–0,99 à six,
+0,85–0,92 à neuf, 0,76–0,92 à douze : au-delà, la factorisation n'a plus d'objets à trouver
+et découpe des instruments en morceaux qui ne se retrouvent pas d'un apprentissage à l'autre.
+Le coût, lui, double — 167 ms contre 355. Le paquet réserve **huit** emplacements pour six.
 
 **Et aucune information deux fois.** La case GRAIN du bas montrait un semis nourri des
 registres aigus, c'est-à-dire exactement ce que la source 6 montre déjà, avec le même

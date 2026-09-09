@@ -120,7 +120,8 @@ public readonly record struct VisualFrame(
     /// Les familles se forment sur le timbre, sans jamais consulter la grille : leur accord
     /// avec elle est donc une verification independante, la seule dont le projet dispose.
     /// </summary>
-    float GridAgreement = 0f)
+    float GridAgreement = 0f,
+    int MotifPeriode = 0, float MotifCertitude = 0f, int MotifBande = 0)
 {
     /// <summary>Nombre de bandes emises. Fixe : le shader dimensionne ses uniformes dessus.</summary>
     public const int BandCount = 12;

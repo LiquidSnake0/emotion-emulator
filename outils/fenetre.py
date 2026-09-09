@@ -98,6 +98,10 @@ ENVELOPPE_PAS = 2
 # un hasard de 0,13 a 0,25. Le classement rendait « continu » trente-six fois sur
 # trente-six.
 P_RETRAITS = 232
+
+# Ce qui se repete, et tous les combien. Trois octets : periode en mesures, certitude,
+# bande. Une periode nulle veut dire « on ne sait pas », et c'est une reponse.
+P_MOTIF = 240
 S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2, 3, 4, 5, 7
 
 GRIS_FOND = QColor(14, 14, 15)
@@ -192,6 +196,9 @@ class Paquet:
         self.nouveaute = mm[base + P_NOUVEAUTE] / 255.0
         self.montee = mm[base + P_MONTEE] / 255.0
         self.rupture = bool(mm[base + P_STRUCTURE] & 1)
+        self.motif = mm[base + P_MOTIF]
+        self.motif_sur = mm[base + P_MOTIF + 1] / 255.0
+        self.motif_bande = mm[base + P_MOTIF + 2]
         self.derive_vue = mm[base + P_DERIVE_VUE] / 255.0
         self.bpm_annonce = struct.unpack_from("<f", mm, base + P_BPM_ANNONCE)[0]
         self.annonce = bool(mm[base + P_ANNONCE])
@@ -241,6 +248,8 @@ def entre(avant, courant, a):
     v.montee = m(avant.montee, courant.montee)
     v.derive_vue = m(avant.derive_vue, courant.derive_vue)
     v.grille_sure = m(avant.grille_sure, courant.grille_sure)
+    # La certitude se mêle comme une grandeur ; la période est un verdict, elle saute.
+    v.motif_sur = m(avant.motif_sur, courant.motif_sur)
     v.accord = m(avant.accord, courant.accord)
     v.voix = tuple(m(x, y) for x, y in zip(avant.voix, courant.voix))
     v.bandes = [m(x, y) for x, y in zip(avant.bandes, courant.bandes)]
@@ -572,12 +581,27 @@ class Mur(QWidget):
         d.drawText(x + 90, y,
                    f"{self.dernier_bpm:6.1f} BPM" if self.dernier_bpm > 0 else "     — BPM")
         d.setPen(GRIS_TEXTE)
-        d.drawText(x + 220, y, f"paquet {p.sequence}     temps {p.temps / 1000:7.1f} s")
+        # LA POSITION SE MESURE. Un décalage fixe a déjà fait déborder la mention du temps
+        # fort hors du cadre ; ici il faisait chevaucher le motif sur l'horodatage.
+        gauche = f"paquet {p.sequence}     temps {p.temps / 1000:7.1f} s"
+        d.drawText(x + 220, y, gauche)
+        apres = x + 220 + QFontMetricsF(self.mono).horizontalAdvance(gauche + "    ")
 
         # L'ETAT DE L'HORLOGE, PARCE QU'ELLE DECIDE DU KICK. Tant qu'elle n'est pas
         # verrouillee, le kick vient de la detection et arrive donc en retard de toute la
         # chaine ; verrouillee, il est predit. Ne pas le montrer rendrait indiscernables
         # deux comportements tres differents.
+        # CE QUI SE REPETE, ET DEPUIS QUAND ON LE SAIT.
+        #
+        # « Dès la première écoute on a cet indice, puis quand on l'entend une deuxième fois
+        # on sait que c'est un refrain. » La première fois, l'information n'existe pas
+        # encore — le moteur rend zéro, et l'écran ne montre rien plutôt que d'inventer.
+        if p.motif > 0:
+            c = QColor(VERT)
+            c.setAlphaF(min(1.0, 0.35 + p.motif_sur * 0.6))
+            d.setPen(c)
+            d.drawText(int(apres), y, f"motif {p.motif} mesures · bande {p.motif_bande}")
+
         etat = f"avance {self.avance_ms:3.0f} ms"
         if self.horloge.verrouille:
             etat += f"   horloge ● {self.horloge.ecart_ms:+5.1f} ms"

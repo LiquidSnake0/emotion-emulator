@@ -29,7 +29,7 @@ import math
 
 from PySide6.QtGui import QFontMetricsF
 
-NOMS = {1: "barres", 2: "onde", 3: "orbe", 4: "comete",
+NOMS = {1: "barres", 2: "onde", 3: "masse", 4: "chute",
         5: "etoile", 6: "grain", 7: "vague"}
 
 # Tous les caractères employés. Ils doivent tous avoir la même chasse, sans quoi une ligne
@@ -125,7 +125,7 @@ def rendu(nom, g, niveau, contour, frappe, tempo, pique=0.0, tenue=0.0):
     # la touche pas et le mouvement ne vient que du niveau — ce qui est exactement ce que
     # fait un instrument a vent, qui ne frappe jamais.
     force = min(1.0, niveau + frappe * (0.15 + 0.75 * pique))
-    return _FORMES.get(nom, orbe)(g, force, contour, frappe, tempo, pique, tenue), force
+    return _FORMES.get(nom, masse)(g, force, contour, frappe, tempo, pique, tenue), force
 
 
 def barres(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
@@ -189,21 +189,20 @@ def onde(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     return lignes
 
 
-def orbe(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
-    """Un disque PLEIN qui grandit et rapetisse. Il a remplacé les lèvres.
+def masse(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
+    """Une masse PLEINE et ANGULEUSE qui enfle et retombe.
 
-    La bouche voulait dire « ce qui chante » et ne disait rien : deux rangées de filets
-    qu'aucun œil ne lisait comme une bouche. Une masse qui enfle et retombe se lit sans
-    apprentissage.
+    LE GESTE EST CELUI QU'ON VOULAIT, LA GEOMETRIE A CHANGE. Le DJ demandait « une orbe qui
+    grandit et rapetisse » à la place des lèvres, et il l'a eue — puis il a constaté que la
+    case ronde et l'anneau de GRAVE se ressemblaient trop. Or l'anneau est la seule forme
+    qu'il ait jamais dite bonne : c'est donc à l'autre de céder.
 
-    IL EST GRAND MEME AU REPOS, et c'est délibéré. Un disque qui ne se remplit qu'aux
-    niveaux forts passe la plupart du temps à ressembler à un petit point centré — c'est-à-
-    dire à tous les autres petits motifs centrés. Sa masse minimale est donc la moitié de
-    la case : ce qui varie est son enflure, pas son existence.
+    Elle enfle et retombe exactement pareil ; ses arêtes sont droites. Deux masses rondes
+    dans la même matrice se confondent à un mètre, une ronde et une anguleuse jamais.
     """
     cx, cy, unite = _repere(g)
     marge = (g.lignes - 1) / 2 * g.ch / unite
-    r = 0.50 + force * 0.55
+    r = 0.55 + force * 0.60
     libre = max(0.0, marge - r)
     centre = cy + (0.5 - contour) * 2 * libre * unite / g.ch
 
@@ -211,18 +210,16 @@ def orbe(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     for l in range(g.lignes):
         ligne = []
         for c in range(g.cols):
-            d = math.hypot((c - cx) * g.cw / unite, (l - centre) * g.ch / unite)
-            # LE DÉGRADÉ ARRONDIT LA SILHOUETTE. Un remplissage franc de blocs pleins rend
-            # un rectangle : chaque cellule est un pavé, et l'œil ne voit que leur contour
-            # commun. Trois densités décroissantes vers le bord dessinent la courbe que la
-            # grille de caractères ne peut pas tracer.
+            # La distance de Manhattan donne un losange la ou la distance euclidienne
+            # donnait un disque : c'est tout ce qui change, et c'est ce qui suffit.
+            d = (abs((c - cx) * g.cw / unite) + abs((l - centre) * g.ch / unite))
             if d < r * 0.55:
                 ligne.append("█")
-            elif d < r * 0.80:
+            elif d < r * 0.82:
                 ligne.append("▪")
             elif d < r:
-                ligne.append("●")
-            elif d < r + 0.20:
+                ligne.append("⬥")
+            elif d < r + 0.18:
                 ligne.append("·")
             else:
                 ligne.append(" ")
@@ -230,38 +227,42 @@ def orbe(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     return lignes
 
 
-def comete(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
-    """Une masse qui GLISSE horizontalement, avec une traînée derrière elle.
+def chute(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
+    """Des traits qui TOMBENT. Le seul mouvement vertical de la matrice.
 
-    Le seul motif de la matrice qui se déplace de gauche à droite : c'est ce déplacement
-    qui le rend reconnaissable du coin de l'œil, bien avant son dessin. Le contour dit où
-    elle se tient, le niveau la grossit, la frappe rallonge la traînée.
+    La comète qu'elle remplace glissait horizontalement avec une traînée, et le DJ l'a
+    jugée sans forme : sur neuf lignes et cinquante colonnes, un déplacement horizontal se
+    confond avec l'onde qui traverse et avec la traînée du grain. Il manquait au vocabulaire
+    un mouvement que rien d'autre ne fait — la verticale.
+
+    Chaque colonne tombe à sa propre vitesse, plus vite quand la source est brève. Le
+    contour décide d'où elles partent : haut dans l'aigu, bas dans le grave.
     """
-    cy = (g.lignes - 1) / 2
-    tete = contour * (g.cols - 1)
-    epaisseur = 0.6 + force * 2.6
-    traine = (4 + force * 14 + frappe * 12) * g.ch / max(0.001, g.cw)
+    haut = g.lignes
+    depart = (1.0 - contour) * haut
+    vitesse = 2.5 + 5.0 * (1.0 - tenue)
+    densite = 0.15 + force * 0.85
 
-    lignes = []
-    for l in range(g.lignes):
-        ligne = []
-        for c in range(g.cols):
-            dy = abs(l - cy) / max(0.3, epaisseur)
-            derriere = tete - c
-            if dy > 1.0:
-                ligne.append(" ")
-            elif derriere < -0.5:
-                ligne.append(" ")
-            elif derriere < 1.0:
-                ligne.append("█")
-            elif derriere < traine * (1 - dy * 0.7):
-                # La traînée s'amincit à mesure qu'on s'éloigne de la tête.
-                part = derriere / max(1.0, traine)
-                ligne.append("▪" if part < 0.35 else ("●" if part < 0.7 else "·"))
-            else:
-                ligne.append(" ")
-        lignes.append("".join(ligne))
-    return lignes
+    # UN TRAIT CONTINU, ET NON DES CASES EPARSES. Une premiere version posait trois cellules
+    # a des hauteurs independantes : l'oeil y lisait un semis, c'est-a-dire le motif du
+    # grain. Ce qui tombe se reconnait a sa TRAINEE — une tete pleine, une queue qui
+    # s'efface derriere elle.
+    longueur = max(2, int(2 + force * 3))
+    lignes = [[" "] * g.cols for _ in range(g.lignes)]
+    for c in range(g.cols):
+        # Une colonne sur deux, pour que les traits se detachent les uns des autres.
+        if c % 2:
+            continue
+        # Un décalage propre à chaque colonne, sans quoi elles tomberaient toutes ensemble
+        # et l'on verrait un rideau au lieu d'une pluie.
+        phase = ((c * 0.618) % 1 + tempo * vitesse / haut) % 1.0
+        if ((c * 7) % 10) >= densite * 10:
+            continue
+        tete = depart + phase * haut
+        for k in range(longueur):
+            l = int(tete - k) % haut
+            lignes[l][c] = "█" if k == 0 else ("▪" if k < longueur - 1 else "·")
+    return ["".join(l) for l in lignes]
 
 
 def etoile(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
@@ -347,7 +348,7 @@ def grain_source(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
 
 
 _FORMES = {
-    "barres": barres, "onde": onde, "orbe": orbe, "comete": comete,
+    "barres": barres, "onde": onde, "masse": masse, "chute": chute,
     "etoile": etoile, "grain": grain_source, "vague": vague,
 }
 

@@ -18,8 +18,8 @@ public static class SourceShape
 {
     public const byte Barres = 1;   // monte — des colonnes espacees, depuis le bas
     public const byte Onde = 2;     // ondule — UNE sinusoide lente qui traverse
-    public const byte Orbe = 3;     // enfle — un disque PLEIN qui grandit et rapetisse
-    public const byte Comete = 4;   // glisse — une masse qui traverse, avec sa trainee
+    public const byte Masse = 3;    // enfle — une masse PLEINE ET ANGULEUSE qui respire
+    public const byte Chute = 4;    // tombe — des traits qui descendent, seul mouvement vertical
     public const byte Etoile = 5;   // eclate — un eclat PONCTUEL sur l'attaque
     public const byte Grain = 6;    // scintille — un semis, pour ce qui n'a pas de contour
     public const byte Vague = 7;    // deferle — des cretes serrees, remplies depuis le bas
@@ -27,6 +27,17 @@ public static class SourceShape
     public const byte Count = 7;
 
     /// <summary>
+    /// L'ORBE EST DEVENUE UNE MASSE ANGULEUSE, ET POUR LA MEME RAISON QUE LES LEVRES SONT
+    /// PARTIES : le DJ a regarde. Elle enflait et retombait comme il l'avait demande, mais
+    /// ronde elle se confondait avec l'anneau de GRAVE — « la source 3 et la 7, c'est des
+    /// orbes, ca se ressemble, c'est moche ». L'anneau est la seule forme qu'il ait jamais
+    /// dite bonne : c'est donc a l'autre de ceder. Le geste ne change pas, la geometrie si.
+    ///
+    /// LA COMETE EST DEVENUE UNE CHUTE. Elle glissait horizontalement avec une trainee, et
+    /// « ressemblait a rien » : sur neuf lignes et cinquante colonnes, un deplacement
+    /// horizontal se confond avec l'onde qui traverse. Il manquait au vocabulaire un
+    /// mouvement que rien d'autre ne fait — la verticale.
+    ///
     /// LES LEVRES ONT ETE RETIREES, ET C'EST LE DJ QUI L'A TRANCHE.
     ///
     /// Elles voulaient dire « ce qui chante » : un ovale de filets qui s'ouvrait avec le
@@ -51,19 +62,19 @@ public static class SourceShape
     /// agitation : un motif centre lui va mal, il lui faut quelque chose qui bouge partout
     /// a la fois.
     /// </summary>
-    private static readonly byte[] ParRang = [Barres, Onde, Orbe, Comete, Vague, Grain];
+    private static readonly byte[] ParRang = [Barres, Onde, Masse, Chute, Vague, Grain];
 
     /// <summary>La forme d'un rang, faute d'indication dans la fiche.</summary>
     public static byte Default(int rank) =>
-        (byte)(rank >= 0 && rank < ParRang.Length ? ParRang[rank] : Orbe);
+        (byte)(rank >= 0 && rank < ParRang.Length ? ParRang[rank] : Masse);
 
     /// <summary>Le nom d'une forme, pour les ecrans de reglage. Jamais projete.</summary>
     public static string Nommer(byte shape) => shape switch
     {
         Barres => "barres",
         Onde => "onde",
-        Orbe => "orbe",
-        Comete => "comete",
+        Masse => "masse",
+        Chute => "chute",
         Etoile => "etoile",
         Grain => "grain",
         Vague => "vague",

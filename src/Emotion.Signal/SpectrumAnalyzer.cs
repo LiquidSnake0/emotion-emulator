@@ -1341,6 +1341,12 @@ public sealed class SpectrumAnalyzer
             NoveltyOnset: _novelty.Onset,
             EventFamily: famille,
             GridAgreement: _accord.Accord,
+            // CE QUI SE REPETE. Zero quand rien n'est designe, et c'est une reponse : « des
+            // la premiere ecoute on a cet indice, puis quand on l'entend une deuxieme fois
+            // on sait que c'est un refrain ». La premiere fois, l'information n'existe pas.
+            MotifPeriode: _motif.Meilleure() is var bm && bm >= 0 ? _motif.Periode(bm) : 0,
+            MotifCertitude: _motif.Meilleure() is var bc && bc >= 0 ? _motif.Certitude(bc) : 0f,
+            MotifBande: Math.Max(0, _motif.Meilleure()),
             EventPrint: _evenements.Derniere,
             Flux: Clamp01(rKick / scale),
             Threshold: Clamp01(_kick.Threshold / scale),

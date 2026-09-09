@@ -396,6 +396,23 @@ public struct GpuPacket
 
     [FieldOffset(RetraitOffset)] public RetraitBlock Retraits;
 
+    /// <summary>
+    /// CE QUI SE REPETE, ET TOUS LES COMBIEN. Trois octets. Voir <see cref="MotifTracker"/>.
+    ///
+    ///   240  periode    en mesures, 0 si rien n'est designe
+    ///   241  certitude  0 a 255
+    ///   242  bande      quelle bande porte le motif, 0 a 11
+    ///
+    /// Une periode nulle veut dire « on ne sait pas », et c'est une reponse. Ce projet a
+    /// deja paye une valeur par defaut qui avait l'air juste : un suivi rendait « huit
+    /// mesures, cent pour cent du temps » sans avoir rien decide.
+    /// </summary>
+    [FieldOffset(240)] public byte MotifPeriode;
+
+    [FieldOffset(241)] public byte MotifCertitude;
+
+    [FieldOffset(242)] public byte MotifBande;
+
     [FieldOffset(212)] public byte EventFamily;
 
     /// <summary>L'empreinte de cette frappe, un octet par axe.</summary>
@@ -576,6 +593,10 @@ public struct GpuPacket
         if (f.Voices.LowHit) p.VoiceHits |= 1;
         if (f.Voices.MidHit) p.VoiceHits |= 2;
         if (f.Voices.HighHit) p.VoiceHits |= 4;
+
+        p.MotifPeriode = (byte)Math.Clamp(f.MotifPeriode, 0, 255);
+        p.MotifCertitude = Byte255(f.MotifCertitude);
+        p.MotifBande = (byte)Math.Clamp(f.MotifBande, 0, 255);
 
         p.BpmExpected = f.ExpectedBpm ?? 0f;
         p.TempoDrift = f.TempoDrift;
