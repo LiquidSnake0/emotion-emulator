@@ -1339,6 +1339,35 @@ Une impulsion se consomme **une fois par image d'analyse**, jamais par image de 
 **Le panneau de contrôle DJ** — listes, formulaires, état — reste un bon candidat Angular
 si le DJ en veut un au dossier. Ce serait une application à part, jamais le rendu.
 
+## La prochaine piste : étudier chaque source pour elle-même
+
+Tout ce qui a été mesuré jusqu'ici porte sur des grandeurs **globales** — le tempo, la
+phase, le motif — ou sur les six sources prises ensemble. Aucune mesure ne dit si **la
+source du piano gère bien le piano**.
+
+C'est la question suivante, et elle se pose en deux temps.
+
+**Isoler.** Prendre un morceau dont on sait ce qu'il contient, et vérifier source par source
+que ce qu'elle décrit correspond à ce qu'on entend dans son registre. Aujourd'hui on ne
+sait rien de tel : on sait seulement que leurs activations sont piquées et mal calées sur le
+temps — ce qui a tué le classement des rôles et rendu le drapeau « absente » peu fiable.
+Ces deux échecs viennent peut-être de la même cause, et on ne l'a jamais regardée en face.
+
+**Corréler.** Si le piano frappe tous les demi-temps et un xylophone tous les temps et demi,
+les deux entretiennent un rapport qui s'analyse — et ce rapport dit quelque chose qu'aucune
+source ne sait dire seule. Deux sources qui se chevauchent ne sont pas forcément une erreur
+de séparation : ce peut être deux instruments qui jouent ensemble, et la différence se
+mesure.
+
+> C'est la même idée que la diffusion de chaleur sur une plaque : chaque cellule calcule
+> chez elle, puis passe sa valeur aux voisines pour qu'elles s'en servent. `MotifTracker` le
+> fait déjà entre bandes. Le faire entre sources demande d'abord de savoir ce que chaque
+> source vaut, seule — et **la diffusion redistribue de l'information, elle n'en crée pas**.
+
+**La mesure à faire d'abord, et le critère avant de construire :** vérifier qu'une source
+isolée porte une information qu'on peut nommer. Si elle n'en porte pas — et deux mesures
+laissent craindre que non — la corrélation entre sources n'aura rien à corréler.
+
 ## Façon de travailler
 
 Questions ciblées avant de partir sur une solution. Mesurer avant de corriger, et écrire
