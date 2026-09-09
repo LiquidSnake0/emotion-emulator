@@ -230,6 +230,43 @@ public sealed class BeatGrid
         Conclude();
     }
 
+    /// <summary>
+    /// Recale la phase sur une position venue d'ailleurs — celle que
+    /// <see cref="PhaseFold"/> lit dans le repli de l'energie du medium.
+    ///
+    /// POURQUOI CE SECOND CHEMIN EXISTE A COTE DE <see cref="Sync"/>.
+    ///
+    /// <see cref="Sync"/> se cale sur les frappes detectees. Or moins d'une sur deux tombe
+    /// sur un multiple du temps, et une boucle qui se corrige autant sur le bruit que sur
+    /// le signal poursuit le bruit : confrontee a une verite terrain exterieure, la phase
+    /// de cette grille tombe a 190 ms du vrai temps la ou un tirage au sort en donnerait
+    /// 172. Elle est au hasard, et sa periode est pourtant juste.
+    ///
+    /// L'accumulateur, lui, ne depend d'aucune detection : il empile l'energie du medium
+    /// sur la periode connue et regarde ou elle se concentre. 69 ms au lieu de 190.
+    ///
+    /// LA CORRECTION EST PONDEREE PAR LE RELIEF, ET C'EST INDISPENSABLE. Un passage sans
+    /// percussion — une nappe, une intro — n'accumule rien de saillant : son histogramme
+    /// est plat et son sommet ne designe qu'un accident. Le laisser tirer la grille
+    /// reviendrait a la deplacer au hasard pendant les seuls moments ou elle a besoin de
+    /// tenir seule.
+    /// </summary>
+    /// <param name="phase">Position dans le temps, 0 a 1, vue de l'exterieur.</param>
+    /// <param name="poids">Ce qu'on lui accorde, 0 a 1.</param>
+    public void Recaler(float phase, float poids)
+    {
+        if (poids <= 0f) return;
+
+        var error = _phase - phase;
+        if (error > 0.5) error -= 1.0;
+        else if (error < -0.5) error += 1.0;
+
+        _phase -= error * Math.Clamp(poids, 0f, 1f) * Pull;
+        if (_phase < 0) _phase += 1.0;
+        else if (_phase >= 1) _phase -= 1.0;
+        Phase = (float)_phase;
+    }
+
     public void Reset()
     {
         _phase = 0;

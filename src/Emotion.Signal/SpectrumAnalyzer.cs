@@ -361,6 +361,31 @@ public sealed class SpectrumAnalyzer
     public int BandesKick { get; set; } = 5;
 
     /// <summary>
+    /// La phase de la grille vient du repli de l'energie du medium. Voir <see cref="PhaseFold"/>.
+    ///
+    /// Coupe, la grille se cale comme avant sur les seules frappes detectees — c'est-a-dire
+    /// au hasard : 190 ms d'ecart au vrai temps pour un hasard de 172.
+    /// </summary>
+    public bool ReplierPhase { get; set; } = true;
+
+    /// <summary>
+    /// Les frappes detectees continuent-elles de tirer la grille. Garde par defaut : le
+    /// repli donne la position, les frappes disent qu'il se passe quelque chose, et l'on
+    /// n'a pas de raison mesuree de renoncer aux secondes.
+    /// </summary>
+    public bool CalerSurFrappes { get; set; } = true;
+
+    /// <summary>Memoire du repli, en temps.</summary>
+    public float MemoireRepli
+    {
+        get => _repli.Memoire;
+        set => _repli.Memoire = value;
+    }
+
+    /// <summary>Le repli lui-meme, pour la sonde.</summary>
+    public PhaseFold Repli => _repli;
+
+    /// <summary>
     /// Force minimale d'un kick, en fraction de la force habituelle des precedents.
     /// Voir <see cref="OnsetDetector.Fermete"/>.
     /// </summary>
@@ -569,6 +594,9 @@ public sealed class SpectrumAnalyzer
     // deux frequences, pas leur difference. Douze bandes lineaires donneraient onze
     // bandes d'aigus et une seule pour tout le grave.
     private readonly int[] _edges;
+    private readonly PhaseFold _repli = new();
+    private readonly float[] _prevMag = new float[Window / 2];
+    private float _fluxMedium;
 
     /// <param name="separate">
     /// Separer le percussif de l'harmonique avant analyse. Coute la latence annoncee par
@@ -716,6 +744,28 @@ public sealed class SpectrumAnalyzer
         Span<float> spectrum = stackalloc float[half];
         for (var i = 0; i < half; i++)
             spectrum[i] = MathF.Sqrt(_re[i] * _re[i] + _im[i] * _im[i]);
+
+        // LE FLUX DU MEDIUM, BIN PAR BIN, POUR LE REPLI DE PHASE.
+        //
+        // Il ne peut pas se tirer des douze bandes, et la mesure a coute deux tentatives
+        // pour l'admettre. Agreger avant de differencier fait s'annuler, dans une meme
+        // bande, une partielle qui monte contre une qui descend — il ne reste presque rien
+        // de la ponctuation qui porte le temps. On differencie donc chaque bin, puis on
+        // somme les hausses : c'est l'ordre inverse, et c'est le seul qui garde le signal.
+        //
+        // Compression logarithmique avant la difference, pour la meme raison qu'ailleurs :
+        // sans elle les passages forts ecrasent tout le reste et le repli ne suit plus que
+        // les cretes.
+        var mid0 = Math.Min(half, _edges[3]);      // 144 Hz
+        var mid1 = Math.Min(half, _edges[8]);      // 1969 Hz
+        _fluxMedium = 0f;
+        for (var i = mid0; i < mid1; i++)
+        {
+            var c = MathF.Log(1f + spectrum[i] * 8f);
+            var d = c - _prevMag[i];
+            if (d > 0f) _fluxMedium += d;
+            _prevMag[i] = c;
+        }
 
         // La separation remplace le spectre par sa seule composante percussive. Tant
         // que son tampon n'est pas plein elle ne rend rien, et on travaille alors sur
@@ -1006,6 +1056,34 @@ public sealed class SpectrumAnalyzer
         var stepped = _grid.Advance(tMs, _tempo.Bpm);
         if (stepped) _arc.Advance();
 
+        // OU TOMBE LE TEMPS : L'ENERGIE DU MEDIUM, REPLIEE SUR LA PERIODE CONNUE.
+        //
+        // La grille tenait sa phase des seules frappes detectees, et cette phase etait au
+        // niveau du hasard — 190 ms du vrai temps sur dix morceaux du bac, quand un tirage
+        // au sort en donne 172. Le repli en rend 69.
+        //
+        // Le medium et non le grave, et c'est la mesure qui l'impose contre l'intuition :
+        // replie sur le grave, l'energie designe le temps a 231 ms pres ; sur le medium, a
+        // 60. Le registre du kick reste le meilleur pour dire QU'UNE attaque a lieu, et il
+        // est le pire pour dire OU EST le temps.
+        //
+        // Bandes 3 a 8, soit 144 a 1969 Hz : la voix, la caisse claire, le piano, tout ce
+        // qui ponctue. On garde le rapport au masque, comme le kick, pour que le repli ne
+        // suive pas le volume du disque.
+        if (ReplierPhase)
+        {
+            // LE FLUX BRUT PAR BIN, ET SURTOUT PAS LE RAPPORT AU MASQUE.
+            //
+            // Le rapport au masque est fait pour detecter des EVENEMENTS : il compare chaque
+            // bande a une crete qui la suit et s'efface entre deux frappes. C'est
+            // exactement ce qu'il faut pour dire qu'une attaque a lieu, et exactement ce
+            // qu'il ne faut pas pour trouver une periode — un motif regulier de meme
+            // amplitude n'y produit presque rien, puisque le masque a appris a l'attendre.
+            // Nourri du rapport, le repli tombait a 169 ms du vrai temps, soit le hasard.
+            _repli.Feed(tMs, _fluxMedium, _tempo.Bpm);
+            _grid.Recaler(_repli.PhaseDuTemps, _repli.Relief);
+        }
+
         // LA GRILLE SE CALE SUR L'INSTANT REEL DE LA FRAPPE, ET LE CALCUL ETAIT FAUX.
         //
         // L'intention etait bonne : ne pas dater une frappe de l'instant de la fenetre qui
@@ -1045,7 +1123,12 @@ public sealed class SpectrumAnalyzer
         // temps a partir de cette grille. Vingt millisecondes de biais sur l'origine
         // deviennent vingt millisecondes de retard sur chaque temps annonce.
         var at = tMs - (long)_frameMs + (long)_offsetPrec;
-        if (hits.Kick) { FrappeMs = at; _grid.Sync(at); _grid.MarkKick(at); }
+        if (hits.Kick)
+        {
+            FrappeMs = at;
+            if (CalerSurFrappes) _grid.Sync(at);
+            _grid.MarkKick(at);
+        }
         if (hits.Clap) _grid.MarkClap(tMs);
         if (harmony.Change > ChordChangeVote) _grid.MarkChange(tMs);
         if (_novelty.Onset) _grid.MarkSection(tMs);

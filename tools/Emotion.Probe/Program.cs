@@ -110,6 +110,17 @@ foreach (var a2 in args)
             System.Globalization.CultureInfo.InvariantCulture, out var fb))
         analyzer.Amorcer(fb);
 
+// « repli=0 » : coupe le repli d'energie qui donne sa phase a la grille, pour comparer.
+// « memrepli=X » : memoire du repli, en temps.
+// « nosync » : les frappes ne tirent plus la grille ; seul le repli la place.
+if (args.Contains("repli=0")) analyzer.ReplierPhase = false;
+if (args.Contains("nosync")) analyzer.CalerSurFrappes = false;
+foreach (var a3 in args)
+    if (a3.StartsWith("memrepli=") && float.TryParse(a3[9..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var mr))
+        analyzer.MemoireRepli = mr;
+
 // « brutmed » : retire aussi le lissage du clap et du charley. Mesure sur macro : nuisible.
 if (args.Contains("brutmed")) analyzer.LissageAttaques = false;
 
@@ -214,6 +225,27 @@ int[] kickCase = new int[16], clapCase = new int[16], hatCase = new int[16];
 int kickTotalC = 0, clapTotalC = 0, hatTotalC = 0;
 var phaseHisto = new int[16];
 var nosTemps = new List<long>();
+
+// LES INSTANTS DU MEDIUM ET DE L'AIGU, POUR POUVOIR LES CONFRONTER AU MEME JUGE.
+//
+// Seul le kick etait exporte, parce que seul le kick cale la grille. Or la mesure du
+// repli d'energie dit que le registre du kick est le PIRE endroit ou chercher la phase du
+// temps — replie sur le grave elle se trompe de 231 ms, sur le medium de 60. On ne peut
+// pas verifier cela sans sortir aussi ce que le medium et l'aigu ont detecte.
+//
+// La date est celle de la fenetre : la correction de transitoire n'est calculee que pour
+// le kick. Cela ne gene pas la concentration, qui est invariante par decalage — mais
+// interdit d'en tirer une conclusion sur un retard.
+var clapAt = new List<long>();
+var hatAt = new List<long>();
+
+// LES TEMPS QUE LE REPLI DESIGNE, INDEPENDAMMENT DE LA GRILLE.
+//
+// Sans cette sortie on ne peut pas savoir si un repli decevant vient du repli lui-meme ou
+// de la facon dont il tire la grille — deux defauts qui se corrigent a des endroits
+// opposes. On note l'instant ou sa phase repasse par zero : c'est la qu'il place le temps.
+var repliAt = new List<long>();
+var repliPrec = -1f;
 var dernierBeat = -2;
 var fluxE = new List<float>();
 var fluxC = new List<float>();
@@ -311,8 +343,13 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
         syncErr.Add(MathF.Abs(analyzer.SyncError));
         offsets.Add(analyzer.TransientOffsetMs);
     }
-    if (f.Hits.Clap) claps++;
-    if (f.Hits.Hat) hats++;
+    var phRepli = analyzer.Repli.PhaseDuTemps;
+    if (analyzer.Repli.Temps >= 4f && repliPrec >= 0f && phRepli < repliPrec - 0.5f)
+        repliAt.Add(f.T - (long)(phRepli * 60_000f / Math.Max(1f, analyzer.Bpm ?? 87f)));
+    repliPrec = phRepli;
+
+    if (f.Hits.Clap) { claps++; clapAt.Add(f.T); }
+    if (f.Hits.Hat) { hats++; hatAt.Add(f.T); }
     if (f.Voices.LowHit) vLow++;
     if (f.Voices.MidHit) vMid++;
     if (f.Voices.HighHit) vHigh++;
@@ -681,7 +718,14 @@ if (args.FirstOrDefault(a => a.StartsWith("instants="))?[9..] is { } prefixe)
         System.Globalization.CultureInfo.InvariantCulture)));
     File.WriteAllLines(prefixe + "-temps.txt", nosTemps.Select(t => (t / 1000.0).ToString("F3",
         System.Globalization.CultureInfo.InvariantCulture)));
-    Console.WriteLine($"\n{kickAt.Count} frappes et {nosTemps.Count} temps ecrits vers {prefixe}-*.txt");
+    File.WriteAllLines(prefixe + "-repli.txt", repliAt.Select(t => (t / 1000.0).ToString("F3",
+        System.Globalization.CultureInfo.InvariantCulture)));
+    File.WriteAllLines(prefixe + "-claps.txt", clapAt.Select(t => (t / 1000.0).ToString("F3",
+        System.Globalization.CultureInfo.InvariantCulture)));
+    File.WriteAllLines(prefixe + "-charleys.txt", hatAt.Select(t => (t / 1000.0).ToString("F3",
+        System.Globalization.CultureInfo.InvariantCulture)));
+    Console.WriteLine($"\n{kickAt.Count} frappes, {clapAt.Count} claps, {hatAt.Count} charleys " +
+                      $"et {nosTemps.Count} temps ecrits vers {prefixe}-*.txt");
 }
 
 Console.WriteLine("\nla phase elle-meme, sur toutes les images  " +

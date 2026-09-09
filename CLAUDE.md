@@ -655,6 +655,58 @@ en soi :
 qui la porte. « Quelle bande dit qu'il y a une attaque » et « quelle bande dit où est le
 temps » ne sont pas la même question — et le projet n'avait posé que la première.
 
+## La grille tient sa phase du repli du médium, plus des frappes
+
+**Le défaut le plus grave du projet, et il était invisible.** `BeatGrid` calait sa phase
+sur les kicks détectés. Sa période est juste. Sa phase était **exactement au hasard** :
+confrontée à la vérité terrain sur dix morceaux, **0,252 temps d'écart quand un tirage au
+sort en donne 0,25**. C'est ce que le DJ voyait à l'écran.
+
+`PhaseFold` empile l'énergie du médium dans un histogramme de phase et regarde où elle
+s'accumule. **Toutes les phases candidates sont examinées à chaque instant** : il n'y a pas
+d'état à faire converger, donc pas de phase d'acquisition — c'est ce qui le distingue des
+quatre tentatives de fenêtre de capture, qui échouaient toutes parce qu'une boucle à
+verrouillage de phase ne peut pas s'accrocher tant qu'elle est mal calée.
+
+| | écart à la vérité, en fraction de temps |
+|---|---|
+| frappes seules (avant) | **0,252** — le hasard |
+| repli + frappes (en place) | **0,187** |
+| repli seul | 0,190 |
+
+Les frappes n'apportent presque plus rien, et on les garde : atténuer plutôt qu'effacer.
+
+### Trois branchements avant que ça marche, et chacun a appris quelque chose
+
+| Ce qu'on lui donnait | Écart | Pourquoi |
+|---|---|---|
+| `BandRise` en mode rapport | 169 ms | le masque est fait pour détecter des **événements** : il s'efface entre deux frappes, donc un motif régulier n'y produit presque rien. Il efface exactement la périodicité qu'on cherche. |
+| flux brut des douze bandes | 165 ms | agréger avant de différencier fait s'annuler, dans une même bande, une partielle qui monte contre une qui descend |
+| **flux bin par bin, 144–1969 Hz** | **91 ms** | on différencie chaque bin, puis on somme les hausses. L'ordre inverse, et le seul qui garde le signal. |
+
+*(hasard : 182 ms)*
+
+### Il cherche sa période, et ce n'est pas un luxe
+
+Le repli est d'une sensibilité qu'on ne devine pas :
+
+| erreur de période | 0 % | 1 % | 2 % | 4 % |
+|---|---|---|---|---|
+| mémoire 48 temps | 85 ms | 112 | **175** | 183 |
+| mémoire 12 temps | 103 ms | 104 | 128 | 147 |
+
+**Deux pour cent suffisent à le ramener au hasard** — sur quarante-huit temps de mémoire,
+cela fait un temps entier de dérive. Or le tempo du moteur est faux de 2 à 5 % sur
+plusieurs morceaux. Sept histogrammes tournent donc en parallèle à ±1,5 %, et l'on garde
+celui qui se concentre le mieux. Le coût est nul à côté de la FFT.
+
+### Ce qui reste
+
+Trois morceaux sur dix restent calés à un demi-temps (t04, t09, t10). Le repli ne dit pas
+non plus **quel** temps est le « 1 » — c'est une autre question, et `DownbeatProfile` la
+traite. Et le plafond mesuré reste loin : une sélection parfaite sur le même flux atteint
+0,675 de concentration là où le détecteur fait 0,286.
+
 **Deux erreurs de mesure commises et corrigées en chemin**, toutes deux dans le sens
 flatteur : une tolérance relative à l'unité testée, qui rendait les croches *moins*
 souvent justes que les temps — impossible, tout multiple du temps étant multiple de la
