@@ -1368,6 +1368,39 @@ mesure.
 isolée porte une information qu'on peut nommer. Si elle n'en porte pas — et deux mesures
 laissent craindre que non — la corrélation entre sources n'aura rien à corréler.
 
+### La vérité de l'oreille : `outils/taper.py`
+
+L'idée est du DJ, et elle vaut mieux que ce qu'on lui demandait — on ne demandait que
+« où est le temps », il propose de dire **quelle source fait quoi, et quand** :
+
+> « J'appuie une touche quand j'entends un souffle ; si c'est un pizzicato, je taperai en
+> rythme, et on comparera ça pour être sûr que chaque cellule cadre bien. »
+
+**Deux gestes, un seul mécanisme.** Maintenir une touche donne des intervalles de présence,
+à confronter au niveau et au retrait qu'une source publie ; taper donne des instants, à
+confronter aux frappes et à la grille. On enregistre toujours l'enfoncement **et** le
+relâchement, et c'est l'analyse qui décide de les lire comme l'un ou comme l'autre — décider
+à l'enregistrement perdrait ce qu'on ne pourrait plus retrouver.
+
+**L'horloge est celle du morceau.** Chaque touche est datée sur le temps publié dans
+l'anneau, le même que celui de toutes les autres mesures. Un décalage entre deux horloges est
+le genre de défaut qui survit des semaines sans se voir ; il n'y en a qu'une, donc la
+question ne se pose pas.
+
+**Et la latence de la main se mesure** — `outils/latence_main.py`. Une main tape *après*
+avoir entendu, de cinquante à cent cinquante millisecondes selon la personne et le jour. Ce
+retard ne gêne pas une mesure de période, où il s'annule, mais il fausse entièrement une
+mesure de phase — et c'est la phase qui manque. Quatre-vingt-dix secondes tapées sur
+`etalon-kick.wav`, dont les clics sont dans le fichier, donnent le chiffre exact.
+
+> **Les instants sont enregistrés bruts, sans correction.** Corriger à l'enregistrement
+> enfouirait une hypothèse dans une donnée, et une donnée corrigée par une hypothèse fausse
+> ne se répare plus. La latence se retranche à l'analyse, où elle reste visible.
+
+La dispersion compte autant que la médiane : une main régulière à dix millisecondes près
+donne une vérité de phase ; une main qui varie de cent ne dira jamais où tombe un temps,
+quelle que soit la correction.
+
 ## Façon de travailler
 
 Questions ciblées avant de partir sur une solution. Mesurer avant de corriger, et écrire
