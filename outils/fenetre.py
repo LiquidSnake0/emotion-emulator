@@ -31,6 +31,9 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
+sys.path.insert(0, __file__.rsplit("/", 1)[0])
+import formes
+
 
 CHEMIN = "/dev/shm/emotion-emulator"
 
@@ -52,7 +55,7 @@ P_VOIX_BAS, P_VOIX_MED, P_VOIX_HAUT = 96, 97, 98
 P_BPM_ATTENDU = 192
 P_SOURCES = 128        # huit mots de huit octets
 SOURCE_PAS = 8
-S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NETTETE = 0, 1, 2, 5
+S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NETTETE, S_FORME = 0, 1, 2, 5, 7
 
 GRIS_FOND = QColor(14, 14, 15)
 GRIS_CADRE = QColor(48, 50, 52)
@@ -136,6 +139,7 @@ class Paquet:
                 "hauteur": mm[o + S_HAUTEUR] / 255.0,
                 "frappe": bool(mm[o + S_DRAPEAUX] & 1),
                 "nettete": mm[o + S_NETTETE] / 255.0,
+                "forme": mm[o + S_FORME],
             })
 
 
@@ -177,6 +181,9 @@ class Mur(QWidget):
         self.charley = Pulse(7.0)
         self.coups = [Pulse(4.0) for _ in range(6)]
 
+        # L'onde defile : elle a besoin d'une horloge, pas d'un evenement.
+        self.tempo = 0.0
+
         self.mono = QFont("monospace", 10)
         self.mono.setStyleHint(QFont.StyleHint.Monospace)
 
@@ -202,6 +209,7 @@ class Mur(QWidget):
                         self.coups[r].tirer()
 
         dt = 1.0 / 60.0
+        self.tempo += dt
         for imp in (self.kick, self.clap, self.charley, *self.coups):
             imp.pas(dt)
         self.update()
@@ -253,36 +261,43 @@ class Mur(QWidget):
         return y + 16
 
     def registres(self, d, p, x, y, largeur):
-        """Les six sources : la barre porte le niveau, le curseur porte la hauteur.
+        """Les six sources, chacune dans sa case, avec sa forme.
 
-        Deux grandeurs différentes, deux dessins différents. La hauteur est rapportée à
-        l'étendue que la source parcourt réellement, pas au spectre entier — sans quoi tout
-        se tasserait dans le bas.
+        Le rang ne decide pas de la forme : le paquet porte un octet par source et c'est lui
+        qui commande. L'ordre du grave a l'aigu n'est qu'un repli quand la fiche n'a rien dit.
         """
-        ligne = 26
-        util = largeur - 150
+        cols, rangs = 3, 2
+        larg = (largeur - 2 * 14) / cols
+        haut = 132
+        self.mono.setPointSizeF(9)
         for r, s in enumerate(p.sources):
-            yy = y + r * ligne
+            cx = x + (r % cols) * (larg + 14)
+            cy = y + (r // cols) * (haut + 12)
+
+            d.setPen(QPen(GRIS_CADRE, 1))
+            d.drawRect(int(cx), int(cy), int(larg), haut)
+
+            nom = formes.NOMS.get(s["forme"], formes.NOMS[(r % 6) + 1])
             d.setPen(GRIS_TEXTE)
-            d.drawText(x, yy + 10, f"source {r + 1}")
-
-            gx = x + 78
-            d.setPen(QPen(QColor(28, 30, 32), 1))
-            d.drawLine(gx, yy + 6, gx + util, yy + 6)
-
-            n = int(s["niveau"] * util)
-            if n > 0:
-                d.setPen(QPen(VERT_SOURD, 5))
-                d.drawLine(gx, yy + 6, gx + n, yy + 6)
-
-            cx = gx + int(s["hauteur"] * util)
-            vif = self.coups[r].valeur > 0.05
-            d.setPen(QPen(VERT if vif else GRIS_CLAIR, 3))
-            d.drawLine(cx, yy, cx, yy + 12)
-
+            d.drawText(int(cx) + 8, int(cy) + 16, f"{r + 1}  {nom}")
             d.setPen(GRIS_CLAIR if s["nettete"] > 0.6 else GRIS_CADRE)
-            d.drawText(gx + util + 14, yy + 10, "nette" if s["nettete"] > 0.6 else "....")
-        return y + 6 * ligne
+            d.drawText(int(cx + larg) - 52, int(cy) + 16,
+                       "nette" if s["nettete"] > 0.6 else "....")
+
+            g = formes.Grille(cx, cy, larg, haut, lignes=9)
+            lignes, force = formes.rendu(nom, g, s["niveau"], s["hauteur"],
+                                         self.coups[r].valeur, self.tempo)
+
+            police = QFont(self.mono)
+            police.setPointSizeF(max(6.0, g.taille))
+            d.setFont(police)
+            teinte = QColor(VERT)
+            teinte.setAlphaF(min(1.0, 0.22 + force * 0.70))
+            d.setPen(teinte)
+            for i, ligne in enumerate(lignes):
+                d.drawText(int(g.x0), int(g.y0 + (i + 1) * g.ch), ligne)
+            d.setFont(self.mono)
+        return y + rangs * (haut + 12)
 
     def spectre(self, d, p, x, y, largeur):
         """Douze jauges couchées, une par bande."""
