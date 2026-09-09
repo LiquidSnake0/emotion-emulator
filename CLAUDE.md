@@ -571,6 +571,90 @@ toutes les micro-attaques sans distinguer le kick.
 > annotation manuelle de quelques mesures, soit un signal de test dont la grille est
 > connue par construction.
 
+### La vérité terrain, enfin — et ce qu'elle a révélé
+
+`outils/verite_terrain.py` fabrique la grille d'un morceau de studio à partir de deux
+nombres. Un morceau de studio a un tempo constant : sa grille est donc entièrement décrite
+par une période et une phase.
+
+| | Source | Pourquoi c'est extérieur |
+|---|---|---|
+| période | **le crate**, affinée sur l'audio à ±1 % | le DJ l'a calée à l'oreille sur les platines |
+| phase | l'**énergie** repliée sur cette période | aucun détecteur n'intervient, ni le nôtre ni un autre |
+
+**Elle se vérifie sur un signal dont la vérité est dans le fichier.** Sur `etalon-kick.wav`
+— des grosses caisses seules à 87,85 BPM, dont les clics se relèvent à l'échantillon — la
+chaîne rend **87,854 BPM et la phase à 1,3 ms près**. Deux étapes ont été nécessaires, et
+la seconde a été imposée par la mesure : le repli grossier sur spectrogramme s'y trompait
+encore de **77 ms**, parce que pour une grosse caisse le flux culmine bien après le début
+de l'attaque. Le resserrement se fait donc sur une enveloppe filtrée **à phase nulle**,
+dans le domaine fréquentiel — un filtre récursif déplacerait ce qu'il mesure.
+
+**Deux fausses pistes, toutes deux instructives.** Prendre la phase des battements
+d'`aubiotrack` échouait : au double du tempo, ses instants repliés forment *deux paquets
+opposés* dont la somme vectorielle est nulle, et le R de Rayleigh valait 0,005 — le hasard
+exactement — sur neuf morceaux sur dix. Et supposer le tempo rigoureusement égal à la
+fiche échouait aussi : deux dixièmes de pour cent d'écart font 180 ms de dérive en
+quatre-vingt-dix secondes, soit un quart de temps.
+
+### La mesure qui tranche : la concentration à la période du crate
+
+`outils/concentration.py`. Elle replie les frappes sur la période **imposée**, et rend le R
+de Rayleigh avec son niveau de hasard calculé. **Elle ne demande aucune phase** — ce qui la
+rend robuste là où le rappel ne l'est pas, dater le « vrai » temps sur du barber beats
+restant ambigu à quelques dizaines de millisecondes.
+
+> **`Emotion.Pulse` ne pouvait pas répondre à cette question.** Elle cherche elle-même la
+> période qui concentre le mieux : un détecteur qui pulse régulièrement sur les
+> contretemps, ou une fois sur deux, y obtient une excellente note. « Est-ce un pouls » et
+> « est-ce **le** pouls » sont deux questions différentes, et seule la seconde compte pour
+> la projection.
+
+### Le plafond, et où va la distance
+
+Mesuré sur le même flux du registre grave, dix morceaux du bac :
+
+| | R |
+|---|---|
+| **oracle** — sélection parfaite, un sommet par temps | **0,675** |
+| sommets locaux au-dessus de moyenne + écart-type, sans grille | 0,051 |
+| le détecteur | 0,239 → **0,286** |
+| hasard | 0,082 |
+
+**Le signal porte le temps.** Le prendre au plus fort ne le trouve pas — c'est le hasard.
+Toute la distance entre 0,05 et 0,68 est de la **connaissance de grille**, et le détecteur
+n'en parcourt qu'un tiers.
+
+**Cinq bandes valent mieux que trois** — 30 à 410 Hz au lieu de 30 à 144. R de 0,238 à
+0,286, cinq morceaux sur dix au-delà du double du hasard puis huit, accord avec
+`aubioonset` de 54,5 à 59,6 % pour un hasard de 25 %. C'est un maximum franc (b4 0,270,
+b6 0,270). La valeur était déjà écrite ici et pas dans le code.
+
+**Et ce n'est qu'un tiers du chemin.** L'écart médian entre deux kicks détectés vaut encore
+**1,49 temps** : le détecteur saute un temps sur trois.
+
+### Une piste essayée et réfutée : la phase par accumulation
+
+L'idée : les quatre tentatives de fenêtre de capture ont échoué parce qu'une boucle à
+verrouillage de phase ne peut pas s'accrocher tant qu'elle est mal calée. Un histogramme de
+phase, lui, examine toutes les phases candidates à la fois — pas d'état à faire converger,
+donc pas de phase d'acquisition. La période est connue du crate dès la première seconde.
+
+**Mesurée hors ligne, elle donne 188 ms d'écart médian à la vérité pour un hasard de
+251 ms.** Presque rien. La mémoire n'y change rien, même infinie. La raison est une mesure
+en soi :
+
+| bande repliée | écart médian à la vérité |
+|---|---|
+| grave 0–160 Hz | 231 ms |
+| 0–400 Hz | 114 ms |
+| **médium 160–2000 Hz** | **60 ms** |
+| tout le spectre | 104 ms |
+
+**Le registre du kick est le pire endroit où chercher la phase du temps.** C'est le médium
+qui la porte. « Quelle bande dit qu'il y a une attaque » et « quelle bande dit où est le
+temps » ne sont pas la même question — et le projet n'avait posé que la première.
+
 **Deux erreurs de mesure commises et corrigées en chemin**, toutes deux dans le sens
 flatteur : une tolérance relative à l'unité testée, qui rendait les croches *moins*
 souvent justes que les temps — impossible, tout multiple du temps étant multiple de la

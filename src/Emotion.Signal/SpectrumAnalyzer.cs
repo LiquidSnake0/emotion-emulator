@@ -326,8 +326,39 @@ public sealed class SpectrumAnalyzer
     /// </summary>
     public float PartDeTemps { get; set; } = 0.85f;
 
-    /// <summary>Derniere bande, exclue, sur laquelle le kick est juge.</summary>
-    public int BandesKick { get; set; } = 3;
+    /// <summary>
+    /// Derniere bande, exclue, sur laquelle le kick est juge. Cinq bandes valent 30 a
+    /// 410 Hz ; trois s'arretaient a 144.
+    ///
+    /// TROIS ETAIT ECRIT DANS LE CODE, CINQ DANS LA DOCUMENTATION, ET C'EST CINQ QUI EST
+    /// JUSTE. Le desaccord a survecu parce qu'aucune mesure ne pouvait le trancher : les
+    /// indicateurs internes comparent les frappes a une grille calee sur ces memes frappes.
+    ///
+    /// Mesure contre une verite terrain exterieure — periode du crate, phase par repli
+    /// d'energie — sur dix morceaux du bac, concentration de Rayleigh des frappes a la
+    /// periode reelle :
+    ///
+    ///     bandes    3       4       5       6
+    ///     R      0,238   0,270   0,286   0,270      (hasard 0,09)
+    ///     au-dessus du double du hasard : 5/10, 9/10, 8/10, 7/10 morceaux
+    ///
+    /// Cinq est un maximum franc. Confirme par une seconde reference exterieure,
+    /// <c>aubioonset</c> : l'accord de nos frappes avec de vrais evenements passe de 54,5 a
+    /// 59,6 % pour un hasard de 25 %.
+    ///
+    /// LES TROIS JUGES NE SONT PAS D'ACCORD, ET IL FAUT LE DIRE. <see cref="Emotion.Pulse"/>
+    /// voit la stabilite tomber de 48 a 31 % — mais elle cherche elle-meme la periode qui
+    /// concentre le mieux, si bien qu'un detecteur qui pulse regulierement AILLEURS qu'au
+    /// temps y excelle. C'est exactement la distinction que la verite terrain permet enfin
+    /// de faire, et c'est elle qui tranche : la projection suit le temps de la musique,
+    /// pas la periode la plus commode.
+    ///
+    /// La bande 4 sert alors aussi au clap, qui commence a 4. Le chevauchement est couvert
+    /// par la garde de dominance existante — un clap ne compte que si le medium l'emporte
+    /// franchement sur le grave. Mesure sur macro : 80 a 85 kicks, 85 a 75 claps, 353
+    /// charleys inchanges.
+    /// </summary>
+    public int BandesKick { get; set; } = 5;
 
     /// <summary>
     /// Force minimale d'un kick, en fraction de la force habituelle des precedents.
