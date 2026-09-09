@@ -1401,37 +1401,97 @@ La dispersion compte autant que la médiane : une main régulière à dix millis
 donne une vérité de phase ; une main qui varie de cent ne dira jamais où tombe un temps,
 quelle que soit la correction.
 
-### Entendre ce que chaque source entend
+### Entendre ce que chaque source entend — `outils/ecouter.sh`
 
-L'idée suivante du DJ, et c'est la validation la plus directe qui soit :
+L'idée est du DJ, et c'est la validation la plus directe qui soit :
 
 > « On pourrait aussi faire en sorte que tu extraies ce qu'entend chaque source. Par exemple
 > `sourceXpiano.wav`, je l'écoute et je regarde si c'est vraiment le piano, si c'est en
 > rythme avec le piano réel. »
 
-Aucune statistique ne remplace ça. Toutes nos mesures disent si une source est régulière, pas
-si elle contient ce qu'elle prétend contenir — et l'oreille tranche en dix secondes ce
-qu'aucun chiffre n'a su dire.
+```sh
+./outils/ecouter.sh morceau.wav 87.06        # le BPM de la fiche, s'il est connu
+```
 
-**C'est faisable, et le chemin le moins cher passe par Python.** Le séparateur tient déjà les
-profils spectraux (`_w`, bins × 6) et les activations. Il suffit de les exporter depuis la
-sonde, puis de reconstruire hors ligne : masque doux par source, appliqué au spectre complexe
-d'origine, transformée inverse, un WAV par source. Numpy fait tout cela ; le moteur n'a
-qu'un accesseur en lecture à ouvrir.
+La sonde rejoue le morceau hors ligne — **elle n'ouvre aucun port** — et exporte les six
+profils spectraux appris. `outils/extraire.py` refait sa propre transformée, retrouve les
+activations à profils fixés, répartit le spectre au prorata et resynthétise avec la phase
+d'origine. Un WAV par source, plus un **témoin** par source.
 
-> **LE PIÈGE, ET IL EST GRAVE.** L'analyse avance par blocs de 1024 échantillons **sans
-> recouvrement**. Resynthétiser sur cette grille produirait une coupure franche toutes les
-> 21 ms — un bourdonnement à 47 Hz sur les six fichiers. Il entendrait un artefact de
-> reconstruction et l'attribuerait à la séparation, ce qui est pire qu'aucune mesure : une
-> fausse preuve à charge contre une pièce qui n'y peut rien.
->
-> L'extraction doit donc faire **sa propre transformée, à recouvrement de moitié et fenêtre
-> de Hann**. Les profils sont fréquentiels et se transportent tels quels d'une grille à
-> l'autre ; c'est gratuit, et c'est la seule façon que ce qu'il entende soit ce que la
-> séparation a réellement retenu.
+**Le BPM de la fiche compte ici comme partout ailleurs** : sans lui le moteur cherche son
+tempo dans le vide, et ce qu'il apprend des sources en dépend.
 
-Deux fichiers à écrire, et rien à changer dans le chemin chaud : un accesseur en lecture sur
-les profils, une option de la sonde pour les exporter, et `outils/extraire.py`.
+### Six contrôles passent avant que le premier fichier soit écrit
+
+Un outil de validation qui se trompe est pire que pas d'outil : il produit une preuve à
+charge contre une pièce qui n'y peut rien.
+
+| | Ce qu'il refuse de laisser passer | Mesuré |
+|---|---|---|
+| reconstruction sans masque | une chaîne transformée/synthèse fausse | 146 à 149 dB |
+| somme des six = le morceau | des masques qui ne se partagent pas tout | 64 à 97 dB |
+| bourdonnement à la cadence | l'artefact qu'on prendrait pour de la séparation | voir ci-dessous |
+| les six sont distinctes | deux fichiers qui portent le même son | **0,39 à 0,98** ✗ |
+| au-delà d'un simple filtre | une factorisation qui ne ferait que couper des fréquences | 0,44 à 0,95 |
+| mêmes sources deux fois | des numéros qui ne veulent rien dire | **1 à 3 rangs sur 6** ✗ |
+
+### Le recouvrement, et le facteur cent qu'il valait
+
+Le piège annoncé était réel, et bien pire qu'estimé. Chaque source est comparée à **son
+témoin** : le morceau filtré par le même profil, mais par un gain qui ne bouge jamais — même
+contenu spectral, aucune modulation possible.
+
+| recouvrement | cadence | t02 | t04 | t05 | t09 | t11 | pire |
+|---|---|---|---|---|---|---|---|
+| 50 % | 93,8 Hz | 7,7 | 2,0 | **103,4** | 5,2 | 11,2 | ×103 |
+| 75 % | 187,5 Hz | 2,4 | 1,7 | 7,2 | 1,7 | 1,7 | ×7 |
+| **88 %** | 375,0 Hz | 4,5 | 2,4 | 2,2 | 2,2 | 1,4 | **×5** |
+
+**Le gain décisif est entre 50 et 75 %.** Au-delà ce n'est plus tranché : 75 % gagne en
+médiane, 88 % en pire cas — et c'est le pire cas qui compte, comme partout dans ce projet.
+Un lissage du masque sur une longueur de fenêtre ramène la moyenne de 3,2 à 2,5 ; seize
+trames au lieu de huit ne gagnent que deux dixièmes, et **on garde huit parce que c'est la
+valeur que le raisonnement désigne**, pas celle qui donne le meilleur chiffre.
+
+> **Trois juges ont été écrits pour cette seule ligne, et il faut retenir la conclusion.**
+> Un fond large : piégé par les sources aiguës, qui portent peu d'énergie basse. Un fond
+> local : piégé par la musique — sur t04, un pic à 360,5 Hz, plus fort dans le témoin que
+> dans la source, tenait lieu de fond. Une démodulation exacte : sans moyennage, x1,0
+> devenait x23,9 sur la même source. **Les trois s'accordent sur un facteur vingt et se
+> contredisent sur un facteur trois.** La mesure avait la résolution de trancher le
+> recouvrement, elle n'a pas celle de juger ce qui reste — l'outil rend donc trois verdicts
+> au lieu de deux, dont un qui dit « je ne sais pas ».
+
+### Et deux résultats sont tombés avant la première écoute
+
+**Les six sources ne sont pas six objets distincts.** Sur trois morceaux sur quatre, deux
+d'entre elles se ressemblent à 0,84 ou plus ; sur t04, à **0,98** — deux fichiers qui portent
+le même son. Un seul morceau descend à 0,39. Sur t06 les six centres
+de gravité tiennent dans une octave et demie (1011 à 2024 Hz), et les deux premiers sont
+égaux au hertz près.
+
+**Le numéro d'une source ne veut rien dire d'une lecture à l'autre.** Deux apprentissages du
+même morceau, avec la même fiche, trouvent les mêmes objets — cosinus **0,77 à 0,91** sous le
+meilleur appariement, dans la fourchette du 0,87–0,99 déjà mesuré — mais **un à trois rangs
+sur six seulement sont conservés**. L'ordre est celui des centres de gravité ; il suffit que deux
+sources voisines se croisent pour que tout glisse.
+
+> C'est une conséquence qu'on n'avait pas vue et qui va loin : **la case 3 de l'écran ne
+> montre pas le même instrument d'une lecture du disque à la suivante.** Entendre le piano
+> dans `t05-source3.wav` n'apprend donc rien sur ce que la case 3 montrera ce soir. Ce qui
+> est stable, c'est l'ensemble des six ; pas leurs places.
+
+Ces deux résultats vont dans le même sens que les deux échecs déjà mesurés — le classement
+des rôles, le drapeau « absente ». **L'oreille du DJ tranchera ce que les chiffres ne peuvent
+pas dire** : si les six fichiers portent six choses reconnaissables, la piste vaut d'être
+poursuivie ; s'ils portent tous le même morceau plus ou moins filtré, le vocabulaire à six
+cases décrit une découpe en fréquences et non six instruments.
+
+Le dossier `temoin/` est là pour ça, et c'est la comparaison qui répond : le même morceau
+passé dans un simple filtre fixe. **Si `sourceN` et `temoinN` sonnent pareil, la séparation
+n'a fait que couper des fréquences.** Mesuré, elles ne sonnent pas tout à fait pareil — 0,44
+à 0,95 de corrélation, donc la factorisation sculpte réellement — mais c'est l'oreille qui
+dit si ce qu'elle sculpte a un nom.
 
 ## Façon de travailler
 

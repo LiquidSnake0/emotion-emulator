@@ -746,6 +746,66 @@ Passé six, la factorisation n'a plus d'objets à trouver et se met à couper de
 en morceaux — des morceaux qui ne se retrouvent plus d'une fois sur l'autre. On paierait
 donc deux fois pour un résultat moins bon.
 
+### Ce que la netteté ne disait pas, et qu'il a fallu écouter pour voir
+
+La netteté ci-dessus répond à « les six profils se retrouvent-ils d'un apprentissage au
+suivant ». La réponse est oui, et elle est solide : **0,77 à 0,91** de cosinus entre deux
+passages du même morceau avec la même fiche.
+
+Elle ne répond pas à la question voisine, que personne n'avait posée : **se retrouvent-ils à
+la même place ?** Les sources sont ordonnées du grave à l'aigu par leur centre de gravité
+spectral, faute de savoir les nommer. Il suffit que deux sources voisines se croisent pour
+que tout glisse — et mesuré sur quatre morceaux, **un à trois rangs sur six seulement sont
+conservés**.
+
+> La conséquence va loin, et elle n'était pas prévue : **la case 3 de l'écran ne montre pas
+> le même instrument d'une lecture du disque à la suivante.** Ce qui est stable, c'est
+> l'ensemble des six ; pas leurs places. Une netteté de 0,84 en moyenne et un ordre qui tient une
+> fois sur trois sont deux faits compatibles, et le premier masquait le second.
+
+### Écouter ce que chaque source entend
+
+Toutes les mesures du projet disent si une source est **régulière**. Aucune ne dit si elle
+contient ce qu'elle prétend contenir — et c'est pourtant la seule question qui compte quand
+on affiche six formes en prétendant qu'elles suivent six instruments.
+
+```sh
+./outils/ecouter.sh morceau.wav 87.06
+```
+
+Les six profils sont exportés par la sonde, l'extraction refait sa propre transformée,
+répartit le spectre au prorata et resynthétise avec la phase d'origine. Un WAV par source. Et
+à côté, un **témoin** par source : le même morceau passé dans un filtre fixe taillé sur le
+même profil. Si `sourceN` et `temoinN` sonnent pareil, la factorisation n'a fait que couper
+des fréquences, et « la source du piano » n'est qu'une bande à laquelle on a donné un nom.
+
+**Un outil de validation qui se trompe est pire que pas d'outil**, parce qu'il produit une
+preuve à charge contre une pièce qui n'y peut rien. Six contrôles passent donc avant que le
+premier fichier soit écrit — dont celui-ci, qui a coûté trois juges successifs :
+
+| recouvrement des trames | pire source, rapportée à son témoin |
+|---|---|
+| 50 % | **×103** |
+| 75 % | ×7 |
+| **88 %** | **×5** |
+
+Un masque qui change d'une trame à l'autre module l'amplitude à la cadence des trames. À
+recouvrement de moitié — ce que le bon sens suggérait — une source bourdonnait **cent fois**
+plus que son témoin. On l'aurait entendue hachée et l'on aurait accusé la séparation.
+
+> **Les trois juges écrits pour cette ligne s'accordent sur un facteur vingt et se
+> contredisent sur un facteur trois.** La mesure avait la résolution de trancher le
+> recouvrement, elle n'a pas celle de juger ce qui reste : l'outil rend donc trois verdicts,
+> dont un qui dit « je ne sais pas ». Prétendre le contraire aurait été tirer des flèches
+> jusqu'à ce que l'une aille au milieu.
+
+Et deux résultats sont tombés avant la première écoute : **deux sources sur six portent
+presque le même son** sur trois morceaux sur quatre — jusqu'à 0,98 — et sur l'un d'eux les
+six centres de gravité tiennent dans une octave et demie. Avec les deux échecs
+déjà mesurés — le classement des rôles, le drapeau « absente » — cela fait quatre indices
+concordants. **C'est l'oreille qui tranchera**, et c'est exactement pour ça que l'outil
+existe.
+
 ---
 
 ## Faire monter la stabilité

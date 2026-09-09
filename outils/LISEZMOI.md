@@ -130,6 +130,33 @@ python3 outils/tempo_reference.py morceau.wav rapport=reference/
 Le moteur amorce alors son tempo sur la fiche sans jamais s'y verrouiller — un disque poussé
 au fader est suivi malgré elle.
 
+## `ecouter.sh` — entendre ce que chaque source entend
+
+```sh
+./outils/ecouter.sh morceau.wav 87.06        # le BPM de la fiche, s'il est connu
+```
+
+La sonde rejoue le morceau hors ligne, **sans ouvrir de port**, et exporte les six profils
+spectraux appris. `extraire.py` refait sa propre transformée, retrouve les activations à
+profils fixés, répartit le spectre au prorata et resynthétise avec la phase d'origine.
+
+```
+morceau-source1.wav … source6.wav      ce que chaque source retient
+temoin/morceau-temoin1.wav … 6         le meme morceau dans un simple filtre fixe
+```
+
+**Écouter les deux.** Si `sourceN` et `temoinN` sonnent pareil, la séparation n'a fait que
+couper des fréquences, et la source ne suit aucun instrument. C'est la seule question à
+laquelle aucun chiffre du projet ne sait répondre.
+
+Six contrôles passent avant qu'un fichier soit écrit — reconstruction exacte, somme des six,
+bourdonnement à la cadence des trames, distinction des six, écart au filtre fixe,
+reproductibilité des profils. Un outil de validation qui se trompe est pire que pas d'outil :
+il produit une preuve à charge contre une pièce qui n'y peut rien.
+
+`RECOUVREMENT` et `LISSAGE` se règlent par l'environnement, pour refaire les balayages qui
+ont fixé leurs valeurs.
+
 ## Le partage des rôles
 
 ```
