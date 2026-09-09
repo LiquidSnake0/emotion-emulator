@@ -457,6 +457,10 @@ export class Visual {
     this.sweep = -1;
     this.lastAt = performance.now();
 
+    // Horodatage de la derniere image d'ANALYSE consommee, pour ne lire chaque impulsion
+    // qu'une fois. Voir la barriere dans draw().
+    this._derniereAnalyse = -1;
+
     // L'horloge de battement : elle ne remplace pas la detection, elle la devance. Toute
     // la chaine ajoute du retard — fenetre, separation, sommet, interpolation, affichage,
     // ecran — et aller plus vite a chaque etage ne suffit pas. Un morceau a un tempo :
@@ -586,6 +590,34 @@ export class Visual {
 
     this.lerp.push(frame, now);
 
+    // UNE IMPULSION SE CONSOMME UNE FOIS PAR IMAGE D'ANALYSE, JAMAIS PAR IMAGE DE RENDU.
+    //
+    // Le contrat est ecrit dans VisualFrame : « Vrai sur la seule image qui porte une
+    // attaque. Une impulsion, jamais un etat : si elle restait vraie toute la duree du
+    // temps, le renderer redeclencherait son effet a chaque image et l'ecran resterait
+    // fige au maximum. » Le serveur le respecte. Le renderer, lui, le rompait — il
+    // redessine la DERNIERE image recue a chaque reveil, donc il relisait les memes
+    // drapeaux encore et encore.
+    //
+    // CE QUE CELA COUTAIT, MEME EN MARCHE NORMALE. L'analyse arrive a 47 images par
+    // seconde, l'ecran se rafraichit a 120 : chaque frappe etait donc consommee deux a
+    // trois fois. Les impulsions repartaient de zero avant d'avoir decru, et surtout
+    // `clock.sync()` rappelait la phase vers la meme frappe plusieurs fois de suite.
+    //
+    // CE QUE CELA COUTAIT PENDANT UN TROU. La capture s'interrompt environ deux secondes,
+    // une fois toutes les deux minutes — mesure : 2 008 ms sur 2 089 passees a attendre
+    // des octets de parec. Pendant ce temps la derniere image reste affichee, et si elle
+    // portait un kick, `sync()` etait rappele deux cent quarante fois sur cette unique
+    // frappe. L'horloge cessait alors d'avancer : elle etait tiree en arriere aussi vite
+    // qu'elle progressait. C'est exactement ce que le DJ decrivait — « le rendu empeche le
+    // battement de se rafraichir ».
+    //
+    // Avec cette barriere, une capture muette ne fige plus rien : l'horloge tient son
+    // tempo verrouille et continue de predire les temps, puis se recale quand les images
+    // reviennent. Deux secondes de trou deviennent deux secondes de battement libre.
+    const neuve = frame.t !== this._derniereAnalyse;
+    if (neuve) this._derniereAnalyse = frame.t;
+
     const bands = this.lerp.bands(this.bandBuf, now);
     const rms = this.lerp.scalar(f => f.rms, now);
     const bpm = frame.bpm ?? 90;
@@ -598,25 +630,29 @@ export class Visual {
     // Elle avance de l'ecart reel plus l'avance voulue, et se recale sur chaque kick
     // detecte sans jamais s'y aligner d'un coup.
     this.clock.step(dtMs, frame.bpm, this.leadMs);
-    if (hit.kick) this.clock.sync();
+    if (neuve && hit.kick) this.clock.sync();
+
+    // Verrouillee, l'horloge tire d'elle-meme et n'a besoin d'aucune image ; sinon on
+    // retombe sur la detection, qui ne vaut que sur une image neuve.
+    const kickImpulsion = this.clock.locked ? this.clock.justFired : (neuve && hit.kick);
 
     // ---- impulsions ----
     // Le kick part de la grille quand elle est verrouillee, de la detection sinon. C'est
     // le seul evenement periodique : un clap irregulier, une voix, un break n'ont pas de
     // grille et doivent rester reactifs. Predire l'imprevisible inventerait des
     // evenements, ce qui est pire qu'un visuel en retard.
-    if (this.clock.locked ? this.clock.justFired : hit.kick) this.kick.fire();
-    if (hit.clap) { this.clap.fire(); this.clips.onOnset(this.kindName, this.intensity); }
-    if (hit.hat) this.hat.fire();
-    if (v.lowHit) this.bassHit.fire();
-    if (v.midHit) this.voiceHit.fire();
-    if (v.highHit) this.bellHit.fire();
-    if (frame.noveltyOnset) this.sweep = 0;
+    if (kickImpulsion) this.kick.fire();
+    if (neuve && hit.clap) { this.clap.fire(); this.clips.onOnset(this.kindName, this.intensity); }
+    if (neuve && hit.hat) this.hat.fire();
+    if (neuve && v.lowHit) this.bassHit.fire();
+    if (neuve && v.midHit) this.voiceHit.fire();
+    if (neuve && v.highHit) this.bellHit.fire();
+    if (neuve && frame.noveltyOnset) this.sweep = 0;
 
     // Les six registres : une attaque par bit, un niveau et un contour par bande.
     const hits = v.hits | 0;
     for (let r = 0; r < 6; r++) {
-      if ((hits >> r) & 1) this.regCoup[r].fire();
+      if (neuve && ((hits >> r) & 1)) this.regCoup[r].fire();
       this.regNiveau[r].step(this.lerp.scalar(f => f.voices?.levels?.[r] ?? 0, now));
       this.regPos[r].step(this.lerp.scalar(f => f.voices?.pitches?.[r] ?? 0.5, now));
 
@@ -630,7 +666,7 @@ export class Visual {
 
     // L'annonce de tempo : « on est a 87,9 », puis « 88,1 ». Elle ne dure qu'une image
     // cote analyse, on la tient quatre temps a l'ecran pour qu'elle soit lisible.
-    if (frame.tempoAnnounce) {
+    if (neuve && frame.tempoAnnounce) {
       this.annonce.fire();
       this.annonceBpm = frame.announcedBpm ?? 0;
     }
@@ -643,14 +679,14 @@ export class Visual {
     // <i>sur</i> l'instant plutot qu'apres, et la latence de la chaine cesse de compter.
     const st = frame.structure ?? {};
     this.tension.step(this.lerp.scalar(f => f.structure?.buildup ?? 0, now));
-    if (st.drop) this.drop.fire();
+    if (neuve && st.drop) this.drop.fire();
     this.drop.step(beatMs, dtMs);
 
     // Le premier temps de la mesure porte un accent plus large. C'est le seul endroit ou
     // le rang du temps se voit directement — et il ne se voit que si l'on sait ou il est :
     // beat vaut -1 tant que la grille n'a pas tranche, et l'on reste alors neutre plutot
     // que d'accentuer un temps au hasard.
-    if (this.clock.locked ? this.clock.justFired : hit.kick)
+    if (kickImpulsion)
       this.onOne = st.beat === 0 ? 1 : (st.beat > 0 ? 0.5 : 0.62);
 
     for (const p of [this.kick, this.clap, this.hat,
