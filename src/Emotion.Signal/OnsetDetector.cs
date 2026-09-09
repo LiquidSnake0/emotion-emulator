@@ -173,8 +173,106 @@ public sealed class OnsetDetector
         for (var i = 0; i < _window.Length; i++)
             if (i != Lookahead && _window[i] >= candidate) return false;
 
+        // LA FERMETE : UNE FRAPPE EST AUSSI FORTE QUE LES AUTRES FRAPPES DU MORCEAU.
+        //
+        // Le seuil adaptatif compare la candidate a la MOYENNE de la courbe. C'est un
+        // plancher : il dit « il se passe quelque chose », pas « c'est une frappe comme
+        // les precedentes ». Or entre deux temps, ce repertoire est plein de petites
+        // montees reelles — une note de basse, un bruit de bande — qui franchissent ce
+        // plancher sans etre des kicks.
+        //
+        // POURQUOI CELA COUTE PLUS QU'UN ECLAIR DE TROP. Le detecteur devient sourd
+        // pendant une fraction de temps apres avoir tire. Une fausse detection au quart
+        // du temps bloque donc le vrai kick qui suit, puisqu'il n'est qu'a trois quarts
+        // d'elle ; la detection suivante tombe un temps et quart plus loin, c'est-a-dire
+        // de nouveau au quart du temps. Une seule bavure decale durablement tout le
+        // train, et c'est un candidat serieux pour l'eparpillement des periodes.
+        //
+        // On ajoute donc une seconde condition, qui ne compare plus a la courbe mais aux
+        // frappes deja retenues : la candidate doit valoir au moins une fraction de leur
+        // mediane. La mediane et non la moyenne, pour qu'une frappe enorme ne relève pas
+        // la barre au point d'eteindre les suivantes.
+        //
+        // Zero desactive tout, et c'est le defaut tant que la mesure n'a pas tranche.
+        // LA FERMETE, ET POURQUOI ELLE SUFFIT.
+        //
+        // Le mecanisme vise est precis. Le detecteur devient sourd pendant une fraction de
+        // temps apres avoir tire ; une bavure au quart du temps bloque donc le vrai kick
+        // qui suit, puisqu'il n'est qu'a trois quarts d'elle. La detection suivante tombe un
+        // temps et quart plus loin — de nouveau au quart du temps — et le train reste
+        // decale. Une seule bavure deplace durablement toute la suite.
+        //
+        // Refuser la bavure la empeche d'armer la surdite : le vrai kick n'est plus masque.
+        // C'est exactement ce qu'il fallait, et cela se voit sur la mesure de pulsation.
+        //
+        // UNE VARIANTE A ETE ECRITE PUIS RETIREE. Elle rendait la frappe faible en lui
+        // interdisant seulement d'armer la surdite, pour ne rien perdre a l'ecran. Elle ne
+        // pouvait pas marcher : la garde de l'ecart minimal se verifie AVANT tout jugement
+        // de force, donc une frappe faible ne passe jamais pendant la surdite — il n'y avait
+        // rien a debloquer. Elle ne faisait qu'ajouter des frappes dans les trous, ce que la
+        // mesure a confirme : 144 marquages pour cent temps, et la force du pouls tombee de
+        // 0,623 a 0,357.
+        if (Fermete > 0f && _piquesRemplies >= Piques)
+        {
+            var reference = MedianePiques();
+            if (reference > 0f && candidate < reference * Fermete) return false;
+        }
+
+        RetenirPique(candidate);
         _sinceLast = 0;
         return true;
+    }
+
+    /// <summary>
+    /// Part de la force habituelle des frappes qu'une candidate doit atteindre, 0 a 1.
+    /// Zero desactive la condition.
+    ///
+    /// CE QUE LA MESURE DE PULSATION EN DIT, SUR TREIZE MORCEAUX.
+    ///
+    /// <code>
+    ///   fermete    force   stable  couvre  verrou
+    ///     eteinte  0,623     33 %    100 %    57 %
+    ///        0,45  0,673     40 %     73 %    52 %
+    ///        0,55  0,695     45 %     66 %    54 %
+    ///        0,75  0,723     42 %     40 %      —
+    ///        0,85  0,695     55 %     34 %      —
+    /// </code>
+    ///
+    /// ON S'ARRETE A 0,55, ET LA COUVERTURE EST LA RAISON. Au-dela, la stabilite continue
+    /// de monter mais elle est <b>achetee en jetant des frappes</b> : a 0,85 il n'en reste
+    /// qu'une pour trois temps. C'est le defaut symetrique de celui qu'on reprochait a la
+    /// justesse — l'une recompensait l'exces de detections, l'autre recompenserait la
+    /// disette — et c'est pour l'attraper que la couverture a ete ajoutee a l'instrument.
+    ///
+    /// Le verrouillage, lui, ne bouge presque pas : trois points perdus pour douze points
+    /// de stabilite gagnes. On esperait mieux — l'idee etait qu'un train plus regulier
+    /// aiderait la grille a tenir — et la mesure ne le confirme pas. Elle ne l'infirme pas
+    /// non plus.
+    /// </summary>
+    public float Fermete { get; set; }
+
+    /// <summary>Combien de frappes retenues servent de reference.</summary>
+    private const int Piques = 8;
+
+    private readonly float[] _piques = new float[Piques];
+    private readonly float[] _piquesTri = new float[Piques];
+    private int _piquesEcrit;
+    private int _piquesRemplies;
+
+    private void RetenirPique(float v)
+    {
+        _piques[_piquesEcrit % Piques] = v;
+        _piquesEcrit++;
+        if (_piquesRemplies < Piques) _piquesRemplies++;
+    }
+
+    private float MedianePiques()
+    {
+        Array.Copy(_piques, _piquesTri, _piquesRemplies);
+        Array.Sort(_piquesTri, 0, _piquesRemplies);
+        return _piquesRemplies % 2 == 1
+            ? _piquesTri[_piquesRemplies / 2]
+            : (_piquesTri[_piquesRemplies / 2 - 1] + _piquesTri[_piquesRemplies / 2]) * 0.5f;
     }
 
     private void Push(float v)

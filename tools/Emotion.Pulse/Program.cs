@@ -43,7 +43,8 @@ static List<double> Lire(string chemin) =>
 // C'est moins ambitieux et parfaitement suffisant pour comparer deux detecteurs sur la
 // meme matiere, puisque aucun ne consulte alors la grille du systeme.
 var contre = args.Length > 1 && args[0] == "--contre";
-var fichiers = contre ? args.Skip(2).ToArray() : args;
+var detail = args.Contains("--detail");
+var fichiers = (contre ? args.Skip(2) : args.AsEnumerable()).Where(a => a != "--detail").ToArray();
 
 Pulsation.Pouls? impose = null;
 if (contre)
@@ -71,7 +72,7 @@ if (contre)
     impose = pouls;
 }
 
-Console.WriteLine($"{"suite",-24}{"force",8}{"fois",7}{"stable",8}{"pouls",14}{"fen",6}" +
+Console.WriteLine($"{"suite",-24}{"force",8}{"stable",8}{"couvre",9}{"pouls",14}{"fen",6}" +
                   (contre ? $"{"accord",9}{"periode",16}" : ""));
 Console.WriteLine(new string('-', contre ? 92 : 67));
 
@@ -86,8 +87,28 @@ foreach (var chemin in fichiers)
     var (sien, stabilite, fenetres) = Pulsation.ChercherLocal(t);
     if (sien.Periode <= 0) { Console.WriteLine($"{nom,-24}  pas assez de matiere"); continue; }
 
-    var ligne = $"{nom,-24}{sien.Force,8:F3}{sien.Rapport,7:F1}{100 * stabilite,8:F0}%" +
-                $"{sien.Bpm,9:F1} BPM{fenetres,7}";
+    if (detail)
+    {
+        var liste = Pulsation.ParFenetre(t);
+        var octave = Pulsation.StabiliteOctave(liste, sien.Periode);
+        Console.WriteLine($"\n{nom}  ·  mediane {sien.Bpm:F1} BPM  ·  stricte {100 * stabilite:F0} %" +
+                          $"  ·  a l'octave pres {100 * octave:F0} %");
+        Console.Write("  ");
+        foreach (var f in liste)
+        {
+            var r = f.Periode / sien.Periode;
+            var marque = Math.Abs(r - 1) < 0.03 ? "=" : Pulsation.Rapport(f.Periode, sien.Periode) switch
+            {
+                "la moitie" or "le double" or "le tiers" or "le triple" => "o",
+                _ => "?",
+            };
+            Console.Write($"{f.Bpm,6:F1}{marque} ");
+        }
+        Console.WriteLine();
+    }
+
+    var ligne = $"{nom,-24}{sien.Force,8:F3}{100 * stabilite,8:F0}%" +
+                $"{100 * Pulsation.Couverture(t, sien),9:F0}%{sien.Bpm,9:F1} BPM{fenetres,6}";
     if (impose is { } p)
         ligne += $"{Pulsation.Accord(t, p),9:+0.000;-0.000}{Pulsation.Rapport(sien.Periode, p.Periode),16}";
     Console.WriteLine(ligne);
@@ -99,6 +120,8 @@ Console.WriteLine("         mediane sur des fenetres de quinze secondes — une 
 Console.WriteLine("         exigerait un tempo constant au millieme. « fois » la rapporte au hasard.");
 Console.WriteLine("stable : part des fenetres qui trouvent la meme periode a 3 % pres. Un vrai");
 Console.WriteLine("         pouls la retrouve partout ; des frappes irregulieres en changent.");
+Console.WriteLine("couvre : marquages par periode. Sans lui, force et stabilite se trichent —");
+Console.WriteLine("         ne garder qu'une frappe sur trois les fait monter toutes les deux.");
 if (contre)
 {
     Console.WriteLine("accord : +1 chaque frappe sur un temps de la reference · 0 dispersees");

@@ -85,7 +85,13 @@ justesse, −7 points de verrouillage.
   et deux sorties : la **force** (concentration) et la **stabilité** (part des fenêtres qui
   retrouvent la même période). Elle ne consulte aucune grille.
 
-  Repères : le métronome donne 0,973 et 100 %. Le répertoire donne **0,62 et 33 %**.
+  Repères : le métronome donne 0,973 et 100 %. Le répertoire donne **0,695 et 45 %**.
+
+- **Elle compte trois grandeurs, et aucune ne se lit seule.** La **couverture** — marquages
+  par période — a été ajoutée après coup, parce que force et stabilité se trichent sans elle :
+  en durcissant un seuil, la stabilité montait de 33 à 55 % pendant que les frappes tombaient
+  à une pour trois temps. Ce qui est rendu doit être juste, régulier, **et à peu près
+  complet**.
 
 **Toute comparaison de détecteur passe désormais par elle.** C'est elle qui a clos le débat
 étroit/blanchi — match nul, 0,623 contre 0,645 — après que les deux autres familles
@@ -109,6 +115,7 @@ Chaque correction vient d'une mesure, pas d'une intuition. À conserver dans cet
 | intervalle de mesure à 149 ms | la grille recalculait sa position depuis une origine lointaine : changer la période faisait sauter le rang de seize temps | la phase s'accumule, elle ne se recalcule pas |
 | 0,90 de confiance sur du bruit blanc | confiance mesurée sur la forme de la courbe, dont la moitié vaut zéro par troncature | sur la hauteur de la corrélation, qui est absolue |
 | écart médian entre kicks = 1,21 temps | courbe moyennée sur deux fenêtres avant jugement : un pic d'une fenêtre en ressort étalé sur **deux fenêtres égales**, que le maximum local strict rejette | juger le kick sans lissage — 1,00 temps, intervalles justes 35 → 52 % |
+| une seule bavure décalait tout le train | le détecteur devient sourd 0,85 temps après avoir tiré : une bavure au quart du temps bloque le vrai kick, et la détection suivante retombe au quart du temps suivant | la **fermeté** — une frappe doit valoir 0,55 fois la médiane des huit précédentes ; stabilité du pouls 33 → 45 % |
 | toutes les frappes publiées 17 à 30 ms trop tard | l'instant valait `tMs + offset_courant` alors que la frappe est jugée sur la fenêtre **précédente**, et que l'offset à employer est celui de cette précédente-là — deux erreurs de même sens | `tMs − fenêtre + offset_précédent` ; l'accord avec aubio passe de 17 à 43 % sur macro, pour un hasard de 21 % |
 | `Phase` ne dépassait jamais 0,35 | remplie par `TempoTracker.Phase`, dont l'origine repart **à chaque attaque retenue** : un temps écoulé depuis le dernier coup, pas une position dans la mesure | la prendre sur `BeatGrid`, dont le « 1 » est voté et dont la phase avance seule |
 | le grain sortait de sa case | `◆ ◇` avancent de 18 px et `✳ ✷` de 12,57 sur une grille réglée à 9,00 : ils ne sont pas dans la fonte monospace | palette au bon chasse, découpage sur chaque case, contrôle au démarrage |

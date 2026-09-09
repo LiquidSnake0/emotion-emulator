@@ -71,6 +71,19 @@ foreach (var a in args)
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var bh))
         analyzer.BlanchiHz = bh;
+    // « gap=X » : fraction de temps de surdite apres une frappe.
+    if (a.StartsWith("gap=") && float.TryParse(a[4..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var gp))
+        analyzer.PartDeTemps = gp;
+    // « bandes=N » : derniere bande, exclue, sur laquelle le kick est juge.
+    if (a.StartsWith("bandes=") && int.TryParse(a[7..], out var bd))
+        analyzer.BandesKick = bd;
+    // « fermete=X » : force minimale d'un kick, en fraction de celle des precedents.
+    if (a.StartsWith("fermete=") && float.TryParse(a[8..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var fm))
+        analyzer.FermeteKick = fm;
 }
 
 // « marge=X » : marge du kick au-dessus du fond, pour la balayer.

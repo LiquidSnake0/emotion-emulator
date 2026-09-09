@@ -29,7 +29,7 @@ public sealed class SpectrumAnalyzer
     // Un detecteur par registre. Ils partagent la mecanique — flux positif, seuil
     // adaptatif, ecart minimal — mais chacun ne regarde que sa tranche de spectre,
     // et chacun se cale donc sur le niveau de bruit qui lui est propre.
-    private readonly OnsetDetector _kick = new();
+    private readonly OnsetDetector _kick = new() { Fermete = FermeteParDefaut };
     private readonly OnsetDetector _clap = new();
     private readonly OnsetDetector _hat = new(minGap: 4);   // les charleys vont vite
     private readonly float[] _prevBand = new float[VisualFrame.BandCount];
@@ -310,6 +310,37 @@ public sealed class SpectrumAnalyzer
 
     /// <summary>Jusqu'ou le flux blanchi regarde, en hertz.</summary>
     public float BlanchiHz { get; set; } = 500f;
+
+    /// <summary>
+    /// Fraction de temps pendant laquelle le detecteur de kick reste sourd apres avoir
+    /// frappe.
+    ///
+    /// LE MECANISME QU'ELLE CACHE, ET QU'IL FAUT MESURER. Une fois qu'il a tire, le
+    /// detecteur est aveugle pendant cette fraction. Si une fausse detection tombe au
+    /// quart du temps, le vrai kick qui suit n'est qu'a trois quarts de temps d'elle :
+    /// bloque. La detection suivante arrive donc un temps et quart plus tard,
+    /// c'est-a-dire de nouveau au quart du temps — et le train reste decale.
+    ///
+    /// Une seule fausse detection peut ainsi deplacer durablement toute la suite, ce qui
+    /// est un candidat serieux pour l'eparpillement des periodes d'une fenetre a l'autre.
+    /// </summary>
+    public float PartDeTemps { get; set; } = 0.85f;
+
+    /// <summary>Derniere bande, exclue, sur laquelle le kick est juge.</summary>
+    public int BandesKick { get; set; } = 3;
+
+    /// <summary>
+    /// Force minimale d'un kick, en fraction de la force habituelle des precedents.
+    /// Voir <see cref="OnsetDetector.Fermete"/>.
+    /// </summary>
+    public float FermeteKick
+    {
+        get => _kick.Fermete;
+        set => _kick.Fermete = value;
+    }
+
+    /// <summary>Valeur retenue par la mesure. Voir <see cref="OnsetDetector.Fermete"/>.</summary>
+    public const float FermeteParDefaut = 0.55f;
 
     /// <summary>La derniere valeur du flux blanchi, pour la sonde.</summary>
     public float DernierFluxBlanchi => _fluxBlanchi.DernierTotal;
@@ -785,7 +816,7 @@ public sealed class SpectrumAnalyzer
         // complexe, lui, voit qu'une note repart d'une phase arbitraire meme quand son
         // amplitude bouge peu. Les deux sont ramenes a un rapport sans dimension avant
         // d'etre melanges, sinon le poids du melange dependrait du volume du disque.
-        var brutKick = BandRise(bands, 0, 3)
+        var brutKick = BandRise(bands, 0, BandesKick)
                      + PoidsComplexe * _fluxComplexe.Rapport
                      + PoidsBlanchi * _fluxBlanchi.Rapport;
         var rKick = LissageKick ? Smooth(0, brutKick) : brutKick;
@@ -834,7 +865,7 @@ public sealed class SpectrumAnalyzer
         // deux temps — les 0,75 temps qui dominaient les mesures — sans refuser un temps
         // dont la frappe arrive un peu tot. Un kick legerement en avance reste un kick ;
         // une frappe aux trois quarts du temps n'en est pas un.
-        _kick.Suivre(_tempo.Bpm, _frameSeconds * 1000f, 0.85f);
+        _kick.Suivre(_tempo.Bpm, _frameSeconds * 1000f, PartDeTemps);
 
         var kick = _kick.Feed(rKick);
         var clap = _clap.Feed(rClap);

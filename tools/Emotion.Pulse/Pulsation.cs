@@ -197,6 +197,82 @@ public static class Pulsation
     }
 
     /// <summary>
+    /// Combien de temps sont effectivement marques, rapporte a ce qu'il en passe.
+    ///
+    /// LE GARDE-FOU SANS LEQUEL LA FORCE ET LA STABILITE SE TRICHENT.
+    ///
+    /// Les deux precedentes ne comptent que la qualite de ce qui est rendu, jamais la
+    /// quantite. Un detecteur qui ne garderait qu'une frappe sur trois — les plus nettes,
+    /// forcement les plus regulieres — obtiendrait donc d'excellents chiffres en laissant
+    /// deux temps sur trois sans image. La mesure l'a fait constater : en durcissant un
+    /// seuil, la stabilite montait de 33 a 55 % pendant que les frappes tombaient de 1,38
+    /// a 0,42 par seconde, soit d'un temps sur un a un temps sur trois.
+    ///
+    /// C'est le defaut symetrique de celui qu'on reprochait a la justesse, qui recompensait
+    /// au contraire l'exces de detections. Trois mesures sont donc necessaires, et aucune
+    /// ne se lit seule : ce qui est rendu doit etre juste, regulier, ET a peu pres complet.
+    ///
+    /// Un vaut « un marquage par periode ». On ne demande pas mieux que un : au-dela, le
+    /// detecteur marque plusieurs fois par temps, ce qui n'est pas forcement un defaut —
+    /// des croches sont musicales — mais n'est plus de la couverture.
+    /// </summary>
+    public static double Couverture(IReadOnlyList<double> instants, Pouls pouls)
+    {
+        if (instants.Count < 2 || pouls.Periode <= 0) return 0;
+        var duree = instants[^1] - instants[0];
+        if (duree <= 0) return 0;
+        return instants.Count / (duree / pouls.Periode);
+    }
+
+    /// <summary>
+    /// Le detail fenetre par fenetre, pour comprendre COMMENT une suite est instable.
+    ///
+    /// Deux instabilites tres differentes donnent le meme chiffre global, et elles ne se
+    /// soignent pas de la meme facon : des fenetres qui trouvent 690, 345, 690, 1035 ms
+    /// s'accordent en realite sur un pouls et se trompent d'octave ; des fenetres qui
+    /// trouvent 690, 552, 810, 470 n'ont trouve aucun pouls du tout.
+    /// </summary>
+    public static IReadOnlyList<Pouls> ParFenetre(
+        IReadOnlyList<double> instants, double fenetreS = 15.0)
+    {
+        var trouves = new List<Pouls>();
+        if (instants.Count < 8) return trouves;
+
+        var pas = fenetreS / 2;
+        for (var d = instants[0]; d + fenetreS <= instants[^1] + pas; d += pas)
+        {
+            var tranche = new List<double>();
+            foreach (var t in instants)
+                if (t >= d && t < d + fenetreS) tranche.Add(t);
+            if (tranche.Count < 8) continue;
+            var p = Chercher(tranche);
+            if (p.Periode > 0) trouves.Add(p);
+        }
+        return trouves;
+    }
+
+    /// <summary>
+    /// Stabilite tolerante aux octaves : deux fenetres qui trouvent 345 et 690 ms
+    /// decrivent le meme pouls, l'une l'ayant compte deux fois plus vite.
+    ///
+    /// Le rapprocher de la stabilite stricte separe deux defauts que le chiffre global
+    /// confondait — « le detecteur ne trouve pas de pouls » et « il en trouve un, mais
+    /// hesite sur sa vitesse ».
+    /// </summary>
+    public static double StabiliteOctave(IReadOnlyList<Pouls> fenetres, double reference)
+    {
+        if (fenetres.Count == 0 || reference <= 0) return 0;
+        var d = 0;
+        foreach (var f in fenetres)
+        {
+            var r = f.Periode / reference;
+            foreach (var m in new[] { 0.25, 1.0 / 3, 0.5, 2.0 / 3, 1.0, 1.5, 2.0, 3.0, 4.0 })
+                if (Math.Abs(r - m) / m < 0.03) { d++; break; }
+        }
+        return d / (double)fenetres.Count;
+    }
+
+    /// <summary>
     /// Ce que la resultante vaut en moyenne pour n instants places au hasard.
     /// Racine de pi sur deux racines de n — la valeur classique pour une marche
     /// aleatoire de n pas unitaires.

@@ -734,6 +734,73 @@ donc deux fois pour un résultat moins bon.
 
 ---
 
+## Faire monter la stabilité
+
+L'instrument construit, il fallait s'en servir. La stabilité valait **33 %** — une fenêtre de
+quinze secondes sur trois seulement retrouvait la même période que ses voisines.
+
+### D'abord un diagnostic, pas une intuition
+
+Le détail fenêtre par fenêtre a écarté la première hypothèse d'un coup :
+
+```
+  metronome  87.9= 87.8= 87.9= 87.8= 87.8= 87.9= ...
+  macro     108.3? 85.0= 86.2= 80.7? 77.3? 81.4? 83.5= 85.8= 87.7? 97.2? 79.1?
+```
+
+Ce ne sont **pas** des erreurs d'octave — la tolérance à l'octave donne le même 36 %. C'est un
+éparpillement réel de ±6 % autour du tempo.
+
+### Le mécanisme, puis le remède
+
+Le détecteur devient sourd pendant 0,85 temps après avoir tiré. Une bavure au quart du temps
+bloque donc le vrai kick qui suit, puisqu'il n'est qu'à trois quarts d'elle ; la détection
+suivante tombe un temps et quart plus loin, c'est-à-dire de nouveau au quart du temps.
+**Une seule bavure décale durablement tout le train.**
+
+Raccourcir l'écart ne marche pas — mesuré, la force baisse continûment (0,623 → 0,579 → 0,532
+→ 0,492) parce qu'on laisse entrer plus de bavures qu'on n'en débloque.
+
+Ce qui marche, c'est de **refuser la bavure**. Le seuil adaptatif comparait la candidate à la
+moyenne de la courbe : un plancher, qui dit « il se passe quelque chose » et non « c'est une
+frappe comme les précédentes ». On ajoute la seconde question — la candidate doit valoir au
+moins une fraction de la médiane des huit frappes déjà retenues.
+
+| fermeté | force | stabilité | couverture | verrouillage |
+|---|---|---|---|---|
+| éteinte | 0,623 | 33 % | 100 % | 57 % |
+| 0,45 | 0,673 | 40 % | 73 % | 52 % |
+| **0,55** | **0,695** | **45 %** | **66 %** | **54 %** |
+| 0,75 | 0,723 | 42 % | 40 % | — |
+| 0,85 | 0,695 | 55 % | 34 % | — |
+
+### La couverture a été ajoutée à l'instrument à cause de ce tableau
+
+À 0,85 la stabilité atteint 55 % — et le nombre de frappes tombe de 1,38 à 0,42 par seconde,
+soit **une frappe pour trois temps**. La stabilité était achetée en jetant des images.
+
+C'est le défaut symétrique de celui qu'on reprochait à la justesse : l'une récompensait
+l'excès de détections, l'autre récompenserait la disette. La mesure de pulsation compte donc
+désormais trois grandeurs, et aucune ne se lit seule — **ce qui est rendu doit être juste,
+régulier, et à peu près complet.**
+
+On s'arrête à 0,55 : le meilleur point qui garde deux temps marqués sur trois.
+
+### Ce qu'on espérait et qui n'est pas venu
+
+Le verrouillage ne bouge presque pas — 57 % à 54 %. L'idée était qu'un train plus régulier
+aiderait la grille à tenir ; la mesure ne le confirme pas. Elle ne l'infirme pas non plus : on
+paie trois points de verrouillage pour douze points de stabilité.
+
+Une variante a été écrite puis retirée : rendre la frappe faible en lui interdisant seulement
+d'armer la surdité, pour ne rien perdre à l'écran. Elle ne pouvait pas marcher — la garde de
+l'écart minimal se vérifie *avant* tout jugement de force, donc une frappe faible ne passe
+jamais pendant la surdité ; il n'y avait rien à débloquer. Elle ne faisait qu'ajouter des
+frappes dans les trous, et la mesure l'a dit : 144 marquages pour cent temps, force tombée à
+0,357.
+
+**Bilan : 33 % → 45 % de stabilité, 0,623 → 0,695 de force, pour 34 points de couverture.**
+
 ## Mesurer la pulsation, et non les événements
 
 Le projet avait deux familles d'indicateurs, et aucune ne répondait à la question qui décide

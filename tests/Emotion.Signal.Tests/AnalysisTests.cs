@@ -131,6 +131,56 @@ public class OnsetDetectorTests
         Assert.True(moyenne.Baseline > 5f);
     }
 
+    /// <summary>
+    /// LA FERMETE : UNE FRAPPE EST AUSSI FORTE QUE LES AUTRES FRAPPES DU MORCEAU.
+    ///
+    /// Le seuil adaptatif compare la candidate a la moyenne de la courbe — un plancher, qui
+    /// dit « il se passe quelque chose » et non « c'est une frappe comme les precedentes ».
+    /// La fermete ajoute la seconde question, en comparant aux frappes deja retenues.
+    ///
+    /// Ce n'est pas qu'un eclair de trop qu'on evite : le detecteur devient sourd apres
+    /// avoir tire, donc une bavure au quart du temps bloque le vrai kick qui suit, et le
+    /// train reste decale. Sur le repertoire, la stabilite du pouls passe de 33 a 45 %.
+    /// </summary>
+    [Fact]
+    public void Une_frappe_trop_faible_devant_les_precedentes_est_refusee()
+    {
+        var d = new OnsetDetector(minGap: 2) { Fermete = 0.55f };
+        for (var i = 0; i < 60; i++) d.Feed(1f);
+
+        // Huit frappes franches, pour que la reference existe.
+        for (var i = 0; i < 8; i++)
+        {
+            d.Feed(30f);
+            d.Feed(1f);
+            d.Feed(1f);
+            d.Feed(1f);
+        }
+
+        // Un tiers de la force habituelle : refuse.
+        Assert.False(d.Feed(10f));
+        Assert.False(d.Feed(1f));
+
+        // Les trois quarts : accepte.
+        Assert.False(d.Feed(22f));
+        Assert.True(d.Feed(1f));
+    }
+
+    /// <summary>
+    /// Tant que la reference n'est pas etablie, la fermete ne juge rien : sinon les
+    /// premieres frappes du morceau se compareraient a une poignee d'observations, et la
+    /// toute premiere a rien du tout.
+    /// </summary>
+    [Fact]
+    public void Sans_frappes_de_reference_la_fermete_ne_refuse_rien()
+    {
+        var d = new OnsetDetector(minGap: 2) { Fermete = 0.9f };
+        for (var i = 0; i < 60; i++) d.Feed(1f);
+
+        Assert.False(d.Feed(9f));
+        Assert.True(d.Feed(1f));
+    }
+
     [Fact]
     public void Une_montee_progressive_ne_declenche_pas()
     {
