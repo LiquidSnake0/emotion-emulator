@@ -28,7 +28,7 @@ import struct
 import sys
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
@@ -269,7 +269,6 @@ class Mur(QWidget):
         cols, rangs = 3, 2
         larg = (largeur - 2 * 14) / cols
         haut = 132
-        self.mono.setPointSizeF(9)
         for r, s in enumerate(p.sources):
             cx = x + (r % cols) * (larg + 14)
             cy = y + (r // cols) * (haut + 12)
@@ -284,18 +283,34 @@ class Mur(QWidget):
             d.drawText(int(cx + larg) - 52, int(cy) + 16,
                        "nette" if s["nettete"] > 0.6 else "....")
 
-            g = formes.Grille(cx, cy, larg, haut, lignes=9)
+            # LA TAILLE SE DONNE EN PIXELS, PAS EN POINTS. setPointSizeF prend des
+            # points ; a 96 points par pouce un point vaut 1,33 pixel, donc une taille
+            # calculee en pixels et passee la sortait un tiers trop grande — et chaque
+            # ligne debordait d'autant. C'est ce qui faisait se chevaucher les cases.
+            provisoire = formes.Grille(cx, cy, larg, haut, lignes=9)
+            police = QFont(self.mono)
+            police.setPixelSize(max(6, int(provisoire.taille)))
+
+            # Puis on mesure l'avance reelle de cette police, et l'on recompte les colonnes
+            # avec elle. Mesurer plutot que supposer : c'est la seule chose qui empeche une
+            # ligne de sortir de sa case.
+            avance = QFontMetricsF(police).horizontalAdvance("M")
+            g = formes.Grille(cx, cy, larg, haut, lignes=9, avance=avance)
             lignes, force = formes.rendu(nom, g, s["niveau"], s["hauteur"],
                                          self.coups[r].valeur, self.tempo)
 
-            police = QFont(self.mono)
-            police.setPointSizeF(max(6.0, g.taille))
+            # ET L'ON DECOUPE, PAR-DESSUS TOUT LE RESTE. Les controles servent a comprendre,
+            # le decoupage garantit : ce qui depasse n'est pas dessine, quelle qu'en soit la
+            # cause. Le renderer web a mis trois tentatives a l'admettre.
+            d.save()
+            d.setClipRect(int(cx) + 1, int(cy) + 1, int(larg) - 2, haut - 2)
             d.setFont(police)
             teinte = QColor(VERT)
             teinte.setAlphaF(min(1.0, 0.22 + force * 0.70))
             d.setPen(teinte)
             for i, ligne in enumerate(lignes):
                 d.drawText(int(g.x0), int(g.y0 + (i + 1) * g.ch), ligne)
+            d.restore()
             d.setFont(self.mono)
         return y + rangs * (haut + 12)
 

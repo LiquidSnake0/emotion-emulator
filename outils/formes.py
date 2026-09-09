@@ -59,16 +59,27 @@ class Grille:
     GRAVE se retrouvait avec une seule ligne : son anneau n'avait nulle part où exister.
     """
 
-    def __init__(self, x, y, largeur, hauteur, lignes=9):
+    def __init__(self, x, y, largeur, hauteur, lignes=9, avance=None):
         titre = hauteur * 0.22
         dispo = max(8.0, hauteur - titre - 3)
         self.lignes = lignes
         self.ch = dispo / lignes
-        self.cw = self.ch * 0.52
+        self.taille = self.ch * 0.82
+
+        # L'AVANCE SE MESURE, ELLE NE SE SUPPOSE PAS.
+        #
+        # Le renderer web comptait ses colonnes en supposant une avance de 0,52 fois la
+        # hauteur de cellule. Cette constante etait fausse des que la police reelle differait
+        # de celle imaginee, et la case GRAIN debordait alors de 213 px chez sa voisine.
+        # Recopier la supposition en portant le code aurait reimporte le meme defaut — ce
+        # qui est exactement ce qui s'est passe au premier jet.
+        #
+        # L'appelant mesure donc l'avance de sa police et la passe ici. A defaut, on retombe
+        # sur l'ancienne estimation, mais on ne pretend pas qu'elle soit juste.
+        self.cw = avance if avance and avance > 0 else self.ch * 0.52
         self.cols = max(5, int((largeur - 4) / self.cw))
         self.x0 = x + max(2.0, (largeur - self.cols * self.cw) / 2)
         self.y0 = y + titre
-        self.taille = self.ch * 0.82
 
 
 def rendu(nom, g, niveau, contour, frappe, tempo):
