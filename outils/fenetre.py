@@ -39,6 +39,7 @@ LA CHARTE EST CELLE DU DJ : du gris, un seul accent vert, aucun rouge.
 """
 
 import copy
+import math
 import mmap
 import os
 import struct
@@ -685,9 +686,13 @@ class Mur(QWidget):
 
             # UNE SOURCE RETIREE SE DIT, ELLE NE DISPARAIT PAS.
             # « Quand le kick est en retrait pendant un moment, on est censé le savoir. »
+            # « ABSENT 0 S » NE VEUT RIEN DIRE, et c'est ce que l'arrondi affichait pour un
+            # retrait de quatre dixièmes. Un retrait se compte en mesures — deux, avant
+            # qu'on en parle — donc on ne l'annonce qu'une fois qu'il en vaut la peine, et
+            # on l'arrondit à la seconde par le haut.
             absente = s["retrait"] > 0.4
             if absente:
-                titre += f"  ⌁ absent {s['retrait']:.0f} s"
+                titre += f"  ⌁ absent {max(1, math.ceil(s['retrait']))} s"
 
             d.setPen(GRIS_CADRE if absente else GRIS_TEXTE)
             d.drawText(int(cx) + 8, int(cy) + 16, titre)
