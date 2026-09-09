@@ -1082,6 +1082,48 @@ détruit ce qui fait un motif — sa forme **dans le temps** — et le critère 
 à passer, ce qui est le défaut le plus dangereux d'une mesure : elle donne raison sans rien
 prouver.
 
+### `MotifTracker` : construit après la mesure, et confronté à elle
+
+Le décalage trouvé par le moteur, comparé à celui que la mesure hors ligne trouve sur les
+mêmes morceaux :
+
+| | macro | t02 | t03 | t04 | t05 | t06 | t08 | t09 | t10 | t11 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| hors ligne | 2 | 2 | 2 | 4 | 8 | 4 | — | 8 | 4 | 4 |
+| moteur | 2 | 2 | **8** | 4 | 8 | 4 | — | 8 | 4 | **5** |
+
+**Huit sur dix.** Le moteur voit moins que la mesure hors ligne — huit mesures de mémoire au
+lieu du morceau entier, et une grille de mesure tirée de son propre tempo — et il tombe
+pourtant sur le même chiffre huit fois.
+
+**En revanche il ne désigne pas la même bande**, jamais. La bande qui porte un motif n'est
+pas une donnée stable : plusieurs bandes le portent, et la diffusion l'étale volontairement
+sur les voisines. Le décalage est le résultat ; la bande est une indication.
+
+### Le défaut qui a coûté cinq tentatives, et sa cause
+
+Le suivi ne voyait rien sur un signal fabriqué qui se répétait franchement. Cinq corrections
+du signal de test ont échoué avant qu'un simple affichage des votes ne donne la réponse :
+
+```
+votes de la bande 5 :  2:-0.09  3:-0.11  4:0.69  5:-0.11  6:-0.10  7:-0.09  8:0.68
+```
+
+**Il voyait parfaitement.** C'est le relief qui était faux : il comptait le décalage 8 — le
+**double** de 4 — parmi les rivaux. Une figure de quatre mesures se répète aussi à huit ;
+c'est une conséquence de sa période, pas une période concurrente. Le relief tombait donc à
+2,3 et le suivi se taisait, **d'autant plus sûrement que la réponse était franche**.
+
+`SectionTracker` s'y était déjà fait prendre entre 8 et 16 mesures, et c'est écrit plus haut
+dans ce fichier : « la bonne réponse et son double se tiennent, ce qui écrase l'écart au
+suivant précisément quand tout va bien ». En écartant multiples et diviseurs du candidat, le
+relief passe de 2,3 à plus de vingt.
+
+> **Cinq tentatives sur le signal de test, une seule sur le code, et c'est le diagnostic qui
+> a tranché.** Corriger le fixture pour qu'il satisfasse le code est la même faute que
+> corriger le code pour qu'il satisfasse le fixture : dans les deux cas on tire des flèches.
+> Afficher la grandeur intermédiaire a coûté deux minutes et donné la réponse.
+
 ## Le rôle des sources dans l'orchestre : essayé, mesuré, abandonné
 
 L'idée était bonne et l'image du DJ juste : « le mec qui fait le tambour joue le métronome

@@ -629,6 +629,12 @@ public sealed class SpectrumAnalyzer
     private readonly int[] _edges;
     private readonly PhaseFold _repli = new();
 
+    /// <summary>Ce qui se repete, et tous les combien. Voir <see cref="MotifTracker"/>.</summary>
+    private readonly MotifTracker _motif = new();
+
+    /// <summary>Le suivi de motif, pour la sonde et le rendu.</summary>
+    public MotifTracker Motif => _motif;
+
     /// <summary>
     /// Crete propre a chaque source. Elle monte tout de suite et oublie lentement.
     ///
@@ -1255,6 +1261,12 @@ public sealed class SpectrumAnalyzer
             _profile.Reset();
             if (_continuity.WasSilence) { _tempo.Reset(); _gate.Reset(); }
         }
+
+        // CE QUI SE REPETE, BANDE PAR BANDE. Mesure avant d'etre ecrit : le melange des
+        // douze bandes ne porte pas le motif — une fois sur dix — quand la meilleure bande
+        // seule le porte huit fois sur dix. Chaque bande calcule donc chez elle, puis passe
+        // sa valeur a ses voisines.
+        _motif.Feed(tMs, _tempo.Bpm, bands);
 
         // La signature de la mesure en cours, close a chaque debut de mesure.
         _section.Feed(bands, timbre.Centroid, timbre.Density);

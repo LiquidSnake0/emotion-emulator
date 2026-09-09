@@ -459,6 +459,25 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
 // Mesurer cela demandait jusqu'ici de lancer le moteur web et d'ouvrir un port. La sonde
 // fait tourner exactement le meme analyseur sans rien ouvrir : c'est elle qu'il faut
 // interroger, et l'oublier a coute des ports laisses ouverts.
+// LE MOTIF : quelle bande se repete, et tous les combien.
+{
+    var m = analyzer.Motif;
+    var bande = m.Meilleure();
+    Console.Write($"motif   {m.Mesures} mesures entendues   ");
+    if (bande < 0)
+        Console.WriteLine("aucune bande ne designe de periode");
+    else
+        Console.WriteLine($"bande {bande} : {m.Periode(bande)} mesures "
+                          + $"(certitude {m.Certitude(bande):F2})");
+    Console.Write("        par bande        ");
+    for (var i = 0; i < MotifTracker.Bandes; i++)
+    {
+        var p = m.Periode(i);
+        Console.Write(p > 0 ? $"{i}:{p} " : ". ");
+    }
+    Console.WriteLine();
+}
+
 Console.Write("sources, part du temps absentes  ");
 for (var i = 0; i < Voices.Registers; i++)
     Console.Write($"{i + 1}:{100.0 * absentes[i] / Math.Max(1, cadres):F0}% ");
