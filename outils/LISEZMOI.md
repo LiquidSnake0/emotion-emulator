@@ -68,3 +68,24 @@ un, un seuil de fondamental qui écartait les subdivisions réelles.
 valeur tirée du crate ; celui-ci prend la résonance perceptive publiée par van Noorden et
 Moelants (1999), centrée sur 120 BPM. Lui emprunter sa préférence reviendrait à demander
 au moteur de se vérifier tout seul.
+
+## `fenetre.py` — le rendu natif, sans navigateur
+
+Elle lit les 256 octets dans `/dev/shm` et dessine. Pas de HTTP, pas de WebSocket, pas de
+moteur web : le jour où l'unité de rendu tournera, elle empruntera exactement ce chemin.
+
+```
+./run.sh pulse            # dans un terminal
+python3 outils/fenetre.py # dans un autre
+```
+
+`q` ou Échap pour fermer. **Elle est faite pour être modifiée** : tout ce qui se dessine
+tient dans `Mur.paintEvent`, chaque grandeur du paquet est nommée dans `Paquet`. Ajouter une
+forme, c'est ajouter une méthode et l'appeler.
+
+La lecture binaire est vérifiée contre le serveur : 84,988 BPM lus dans l'anneau contre
+84,98787 rendus par `/ready`. Les décalages de ce fichier et ceux de `GpuPacket` doivent
+rester d'accord — c'est tout le contrat.
+
+`tools/Emotion.Ascii` fait la même chose dans un terminal, en C#, sans dépendance. Les deux
+valident le même contrat depuis deux langages.
