@@ -997,6 +997,58 @@ fort.
 paquet brut il avancerait par paliers de 21 ms au lieu de suivre l'écran — c'est-à-dire
 qu'il produirait le hoquet qu'il est censé supprimer.
 
+## La mémoire de motif : mesurée hors ligne, et elle tient — dans UNE bande
+
+> « Souvent on a un coup de piano qui n'est que quelques notes, genre huit notes ; ces huit
+> notes une fois passées repassent après. C'est comme si on analysait une chanson avec des
+> paroles : on reconnaît le refrain qui est en quatrain, dès la première écoute on a cet
+> indice, puis quand on l'entend une deuxième fois on sait que c'est un refrain. »
+
+`outils/motif.py` répond avant qu'une ligne soit écrite dans le moteur. Il découpe le
+morceau en mesures, décrit chacune par **seize pas sur douze bandes**, et compare chaque
+mesure à celle qui la suit de 2 à 8 mesures.
+
+### Deux juges, parce qu'un seul se laisse tromper
+
+| | ce qu'il demande | ce qui le trompe |
+|---|---|---|
+| **z** | dépasser un morceau dont on a brassé les mesures | une dérive lente : elle élève tous les décalages, et le brassage la détruit |
+| **relief** | dépasser les AUTRES décalages | rien de global — seul un décalage qui ressort de ses voisins est un motif |
+
+Les deux ne se remplacent pas : le premier dit « il y a de l'ordre », le second « cet ordre
+a une période ».
+
+### Le résultat
+
+| | z seul | z **et** relief |
+|---|---|---|
+| les douze bandes ensemble | 7/10 | **1/10** |
+| la meilleure bande seule | 10/10 | **8/10** |
+
+**Le mélange ne porte pas le motif.** Ses 7/10 apparents étaient de la dérive : le morceau
+change lentement, et le brassage détruit ce changement. Le second juge les efface.
+
+**Une bande seule le porte.** Huit morceaux sur dix passent les deux juges, à des décalages
+de 2, 4 ou 8 mesures — des longueurs de phrase. C'est exactement l'hypothèse du DJ : le
+piano se répète même quand le reste change, et c'est pour cela qu'il faut le regarder seul.
+
+### Ce que ça implique pour la construction
+
+**Sur les BANDES, pas sur les sources séparées.** Les activations de la séparation ne sont
+pas calées sur le temps — leur concentration est au niveau du hasard, c'est ce qui a tué le
+classement des rôles. Les bandes, elles, viennent directement du spectre.
+
+**Le « 1 » n'est pas nécessaire**, et c'est une bonne propriété : une corrélation à un
+décalage ne dépend que de la *période* de la mesure, pas de son origine. Le vote du temps
+fort ne verrouille que 60 % du temps ; le motif s'en passe.
+
+**Une première version a passé son critère et ne valait rien**, et il faut le retenir. Elle
+décrivait chaque mesure par la moyenne de douze bandes sur toute sa durée : 9/10 « réussis »,
+avec des scores de 0,96 à 0,996 pour un hasard de 0,93 à 0,994. Moyenner sur la mesure
+détruit ce qui fait un motif — sa forme **dans le temps** — et le critère était trop facile
+à passer, ce qui est le défaut le plus dangereux d'une mesure : elle donne raison sans rien
+prouver.
+
 ## Le rôle des sources dans l'orchestre : essayé, mesuré, abandonné
 
 L'idée était bonne et l'image du DJ juste : « le mec qui fait le tambour joue le métronome
