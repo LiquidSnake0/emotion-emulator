@@ -361,6 +361,32 @@ public sealed class SpectrumAnalyzer
     public int BandesKick { get; set; } = 5;
 
     /// <summary>
+    /// Part du flux du medium versee dans l'enveloppe du tempo, en plus du registre du kick.
+    /// </summary>
+    public float PoidsMedium { get; set; } = DefautPoidsMedium;
+
+    /// <summary>
+    /// Valeur par defaut, tiree de la mesure et non d'un principe.
+    ///
+    /// Part du tempo publie sur l'album du bac, amorce par la fiche, et ecart au tempo du
+    /// crate :
+    ///
+    ///     med       0        0,08      0,15
+    ///     publie   54 %      79 %      78 %
+    ///     ecart    0,7 %     0,6 %     0,7 %
+    ///
+    /// Les morceaux les plus feutres sont ceux qui gagnent le plus — t04 de 22 a 92 %, t09
+    /// de 24 a 88, t06 (« Passepartout », que le DJ a signale) de 27 a 58. Ce sont
+    /// exactement ceux ou le grave n'a pas d'attaque franche.
+    ///
+    /// HUIT CENTIEMES ET NON QUINZE, A CAUSE D'UN SEUL MORCEAU. t11 tourne a 59,87 BPM et
+    /// ne publiait deja qu'un tempo sur vingt fenetres ; a 0,15 il se tait completement, a
+    /// 0,08 il garde ses trois pour cent. Le gain moyen est le meme, et l'on ne perd pas
+    /// un morceau entier pour un point de moyenne.
+    /// </summary>
+    public const float DefautPoidsMedium = 0.08f;
+
+    /// <summary>
     /// La phase de la grille vient du repli de l'energie du medium. Voir <see cref="PhaseFold"/>.
     ///
     /// Coupe, la grille se cale comme avant sur les seules frappes detectees — c'est-a-dire
@@ -971,7 +997,23 @@ public sealed class SpectrumAnalyzer
         var pulse = 0f;
         for (var i = 1; i < kickBins; i++) pulse += full[i];
         Etapes.Fin(7);                       // les douze bandes
-        _tempo.Feed(Smooth(3, PulseRise(pulse)));
+        // CE QUI NOURRIT L'ESTIMATEUR DE TEMPO, ET POURQUOI LE GRAVE SEUL NE SUFFIT PAS.
+        //
+        // Il ne voyait que 30 a 410 Hz, et a travers un rapport au masque — c'est-a-dire la
+        // meme combinaison qui a rendu le repli de phase inutile : un masque fait pour
+        // detecter des evenements efface justement la periodicite d'un motif regulier.
+        //
+        // Sur les morceaux joues aux instruments continus, ou l'attaque est molle et le
+        // grave etouffe, cela se paie cash. Mesure sur « Passepartout », que le DJ a
+        // signale : sans fiche le moteur annonce 115,3 BPM la ou l'analyse Python en trouve
+        // 87,89 a cent pour cent de stabilite ; avec la fiche il trouve 86,7 mais ne le
+        // publie que sur vingt-sept pour cent des fenetres. Le tempo n'est pas faux, il est
+        // absent — et un tempo absent clignote a l'ecran.
+        //
+        // Le medium porte la pulsation de ce repertoire mieux que le grave : c'est deja ce
+        // qu'a montre le repli de phase, 60 ms d'erreur contre 231. On lui en donne donc
+        // une part, en flux brut par bin.
+        _tempo.Feed(Smooth(3, PulseRise(pulse)) + PoidsMedium * _fluxMedium);
         Etapes.Fin(8);                       // autocorrelation du tempo
 
         // L'ECART MINIMAL SUIT LE TEMPO, IL N'EST PLUS UNE CONSTANTE.

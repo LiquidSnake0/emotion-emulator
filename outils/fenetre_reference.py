@@ -351,22 +351,29 @@ class Selecteur(QWidget):
 
         envoye = poser_fiche(f)
         dit = "fiche envoyee au moteur" if envoye else "moteur injoignable — fiche non posee"
-        trouve = "precalcul charge" if rapport else "aucun precalcul pour cette face"
+        trouve = ("precalcul charge"
+                  if rapport else
+                  f"aucun precalcul — attendu {ardoise(f['titre'])}.json")
         self.etat.setText(f"{f['titre']}\n{f['album']}\n{dit}\n{trouve}")
 
     def rapport_de(self, face):
         """Le precalcul d'une face, s'il a ete produit.
 
-        La convention est celle du corpus : un rapport par numero de piste. Elle est
-        explicite ici plutot que devinee ailleurs.
+        ON APPARIE PAR LE TITRE, ET PLUS PAR LE NUMERO DE PISTE.
+        
+        La convention precedente cherchait `t05.json` pour la cinquieme piste — de
+        n'importe quel album. Le bac en compte plusieurs : selectionner la piste cinq d'un
+        autre disque chargeait donc le precalcul de celui-ci et l'affichait comme la
+        verite. Un rapprochement faux presente comme une reference est pire que pas de
+        reference du tout : on croit mesurer un ecart alors qu'on compare deux morceaux
+        differents.
         """
         if not self.dossier:
             return None
-        for nom in (f"t{face['piste']:02d}.json", f"{face['piste']}.json"):
-            chemin = os.path.join(self.dossier, nom)
-            if os.path.exists(chemin):
-                with open(chemin, encoding="utf-8") as fh:
-                    return json.load(fh)
+        chemin = os.path.join(self.dossier, ardoise(face["titre"]) + ".json")
+        if os.path.exists(chemin):
+            with open(chemin, encoding="utf-8") as fh:
+                return json.load(fh)
         return None
 
 
@@ -393,6 +400,12 @@ def poser_fiche(face, hote="http://localhost:5099"):
             return 200 <= r.status < 300
     except Exception:                                  # noqa: BLE001
         return False
+
+
+def ardoise(titre):
+    """Le nom de fichier d'un titre : minuscules, seuls les mots, relies par des tirets."""
+    mots = "".join(c.lower() if c.isalnum() else " " for c in titre).split()
+    return "-".join(mots) or "sans-titre"
 
 
 def lire_crate(chemin):

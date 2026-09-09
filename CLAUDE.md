@@ -655,6 +655,27 @@ en soi :
 qui la porte. « Quelle bande dit qu'il y a une attaque » et « quelle bande dit où est le
 temps » ne sont pas la même question — et le projet n'avait posé que la première.
 
+### Et il porte aussi la période, sur les morceaux feutrés
+
+L'estimateur de tempo ne voyait que 30–410 Hz, à travers le **rapport au masque** — la même
+combinaison qui avait rendu le repli de phase inutile. Sur un répertoire joué aux
+instruments continus, où l'attaque est molle et le grave étouffé, cela se paie.
+
+Une part du flux du médium versée dans l'enveloppe du tempo, mesurée sur l'album :
+
+| `PoidsMedium` | 0 | **0,08** | 0,15 |
+|---|---|---|---|
+| tempo publié | 54 % | **79 %** | 78 % |
+| écart au crate | 0,7 % | **0,6 %** | 0,7 % |
+
+Les morceaux les plus feutrés gagnent le plus : t04 de 22 à 92 %, t09 de 24 à 88,
+**« Passepartout » de 27 à 58** — exactement ceux où le grave n'a pas d'attaque franche.
+Huit centièmes et non quinze à cause d'un seul morceau : t11, à 59,87 BPM, ne publiait déjà
+qu'un tempo sur vingt fenêtres et se tait complètement à 0,15.
+
+> **Le tempo n'était pas faux, il était absent** — et un tempo absent clignote à l'écran.
+> C'est ce que le DJ voyait sur Passepartout.
+
 ## La grille tient sa phase du repli du médium, plus des frappes
 
 **Le défaut le plus grave du projet, et il était invisible.** `BeatGrid` calait sa phase

@@ -115,6 +115,11 @@ foreach (var a2 in args)
 // « nosync » : les frappes ne tirent plus la grille ; seul le repli la place.
 if (args.Contains("repli=0")) analyzer.ReplierPhase = false;
 if (args.Contains("nosync")) analyzer.CalerSurFrappes = false;
+foreach (var a5 in args)
+    if (a5.StartsWith("med=") && float.TryParse(a5[4..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var pm))
+        analyzer.PoidsMedium = pm;
 foreach (var a4 in args)
     if (a4.StartsWith("demi=") && float.TryParse(a4[5..],
             System.Globalization.NumberStyles.Float,
