@@ -18,29 +18,38 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `mémoire partagée` · `PulseAudio` · `xUnit` · `Python` · `Qt` ·
-**128 tests** · **zéro dépendance tierce dans le cœur** · **48 ms du son au paquet**
+**187 tests** · **zéro dépendance tierce dans le cœur** · **21 ms d'analyse**
 
 ---
 
 ## Voir tourner
 
-Le mur en marche, et l'écran de réglage qui montre ce que le système sait au même instant.
-Rien n'est décoratif : chaque forme est commandée par une grandeur mesurée.
-
-Le rendu se lance sans matériel — `dotnet run --project src/Emotion.Server` fabrique un
-signal et anime la scène, ce qui permet de régler le visuel sans table de mixage ni
-platine. Voir [**Faire tourner**](#faire-tourner).
+Deux fenêtres, et elles ne montrent pas la même chose. **Le mur** est ce que l'unité de
+rendu affichera ; **la mesure** dit si ce qu'il affiche est juste. Rien n'y est décoratif :
+chaque forme est commandée par une grandeur mesurée, et chaque grandeur est confrontée à ce
+qu'une analyse hors ligne indépendante a trouvé sur le même morceau.
 
 <table>
 <tr>
-<td width="52%"><img src="docs/images/renderer.jpg" alt="Le renderer en marche"><br>
-<sub><b>Le mur</b> · six sources séparées, une forme chacune ; le verdict de chaque bande
-dans son titre</sub></td>
-<td width="48%"><img src="docs/images/demo.jpg" alt="La démo interactive"><br>
-<sub><b>La démo</b> · les mêmes images, avec le son et les grandeurs mesurées en
-regard</sub></td>
+<td width="55%"><img src="docs/images/mur.png" alt="Le mur"><br>
+<sub><b>Le mur</b> · six sources, une forme chacune, aucune deux fois ; le tempo, la mesure
+et ce qui se répète en bandeau</sub></td>
+<td width="45%"><img src="docs/images/mesure.png" alt="La mesure"><br>
+<sub><b>La mesure</b> · clair = ce que l'analyse hors ligne attend, vert = ce que le moteur
+publie au même instant</sub></td>
 </tr>
 </table>
+
+```sh
+./outils/voir.sh [dossier-des-précalculs]
+```
+
+Le moteur écoute la sortie système : on joue ce qu'on veut avec son lecteur habituel, il
+suit. La fenêtre de mesure liste le bac, et choisir une face envoie sa fiche au moteur.
+
+**Le rendu ne passe par aucun réseau.** Le moteur publie 256 octets dans `/dev/shm`, la
+fenêtre Qt les lit, et l'eGPU les lira sur PCIe ou USB-C — même contrat, sans intermédiaire.
+C'est ce qui fait de cette fenêtre une mesure et non une illustration.
 
 ---
 
@@ -1285,11 +1294,10 @@ microsecondes. Le langage n'est pas le goulot.
 Le rendu final tournera dans un **processus séparé**, en CUDA. Le contrat est donc défini
 avant le branchement, et il est visible dès aujourd'hui.
 
-![Écran des signaux](docs/signals.jpg)
-
-**Touche `S`.** Cet écran ne montre pas un visuel : il montre **le message qui partira**,
-champ par champ, sous les noms exacts de `GpuPacket`. Aucune traduction mentale entre ce
-qu'on regarde ici et ce qu'on lira de l'autre côté.
+L'écran qui listait le message champ par champ vivait dans le navigateur et est parti avec
+lui. Ce qui le remplace est plus fort : **`outils/fenetre.py` lit exactement les 256 octets
+que l'eGPU lira**, aux mêmes décalages, sans traduction. Ce n'est plus une vue du contrat,
+c'est un client du contrat — et un désaccord se voit à l'écran plutôt que dans un tableau.
 
 ### Le contrat : 256 octets, plats
 
@@ -1462,25 +1470,28 @@ indébogable.
 
 ---
 
-## L'écran de réglage
+## Voir ce qui décide
 
-![Diagnostic](docs/diagnostic.jpg)
+**On ne règle pas ce qu'on ne voit pas** — et l'on ne croit pas un écran qui montre autre
+chose que ce qui décide.
 
-**Touche `D`. On ne règle pas ce qu'on ne voit pas.**
+Les écrans de réglage vivaient dans le navigateur et sont partis avec lui. Ce qui les
+remplace ne montre plus le système à lui-même : **`outils/fenetre_reference.py` le confronte
+au dehors.** À gauche ce qu'une analyse hors ligne indépendante a trouvé sur le morceau, à
+droite ce que le moteur publie au même instant. Un désaccord se lit sans rien calculer.
 
-Et **touche `C`** pour l'écran de calage : tout y est immobile **sauf ce que le son
-déclenche** — un disque pour le kick, un carré pour le clap, un trait pour le charley,
-plus la grille du tempo. Dans un visuel où tout bouge en permanence, l'œil ne sait pas
-dire ce qui est déclenché par le son et ce qui dérive tout seul. Là, si une forme
-s'allume en même temps que la frappe s'entend, c'est calé ; si elle traîne, ça se voit
-sans rien mesurer.
+Deux autres outils ne s'affichent pas mais tranchent :
 
-Il montre l'enveloppe qui décide vraiment — celle du kick — le seuil adaptatif en vert,
-chaque attaque en trait vertical coloré par registre, les douze bandes, et l'écart médian
-converti en BPM.
+| | ce qu'il demande |
+|---|---|
+| `Emotion.Pulse` | cette suite d'instants forme-t-elle un pouls, à une période qu'elle choisit |
+| `outils/concentration.py` | forme-t-elle **le** pouls, à la période du crate |
 
-C'est l'outil qui a permis de passer de **341 BPM implicites à 87,8 mesurés**, en quatre
-diagnostics successifs :
+La nuance a compté : un détecteur qui bat régulièrement sur les contretemps excelle au
+premier test et échoue au second.
+
+C'est cette famille d'outils qui a permis de passer de **341 BPM implicites à 87,8 mesurés**,
+en quatre diagnostics successifs :
 
 | Constat à l'écran | Cause | Correction |
 |---|---|---|
@@ -1563,8 +1574,14 @@ change d'une ligne.
 ## Faire tourner
 
 ```sh
+# Tout : le moteur, le GPU simulé, la mesure
+./outils/voir.sh [dossier-des-précalculs]
+
 # Signal fabriqué, aucun matériel requis
 dotnet run --project src/Emotion.Server
+
+# Aucun port ouvert : le cas nominal
+dotnet run --project src/Emotion.Server -- --sans-reseau
 
 # Écoute réelle : ce qui sort des haut-parleurs
 Signal__Source=pulse \
@@ -1576,23 +1593,41 @@ Signal__CueDevice=alsa_input.pci-0000_00_1f.3.analog-stereo \
 dotnet run --project src/Emotion.Server
 ```
 
-`http://localhost:5299` · `F` plein écran · `D` diagnostic · `H` masque le bandeau —
-il ne doit jamais finir sur le mur.
+Dans la fenêtre : `Q` ferme, `+` et `-` règlent l'avance du visuel. **Le réglage appartient
+à ce qui affiche**, et à lui seul : le son met 5,8 ms pour atteindre celui qui règle à la
+table et 29 pour le public à dix mètres, donc on cale depuis la piste.
+
+Le port **5099** ne sert plus qu'au crate — plus aucune page, plus aucun hub :
 
 ```sh
-curl -X POST localhost:5299/deck/play -H 'Content-Type: application/json' -d '{
-  "title":"instamata","disc":"haircuts for men","side":"",
-  "camelot":"9A","family":"M+","colorHex":"#154360","coverUrl":null}'
+curl -X POST localhost:5099/deck/play -H 'Content-Type: application/json' -d '{
+  "title":"Passepartout","disc":"The Era of Information","side":"A",
+  "camelot":"8A","family":"M-","colorHex":"#154360","bpm":87.06}'
 
-curl -X POST localhost:5299/deck/cue  -H 'Content-Type: application/json' -d '{
-  "title":"Dreamcast Nostalgia","disc":"macintosh plus","side":"B",
-  "camelot":"8A","family":"M-","colorHex":"#7FB3D5","coverUrl":null}'
+curl -X POST localhost:5099/deck/cue  -H 'Content-Type: application/json' -d '{
+  "title":"Dead Internet Theory","disc":"The Era of Information","side":"B",
+  "camelot":"8A","family":"M-","colorHex":"#7FB3D5","bpm":90.92}'
 
-curl -X POST localhost:5299/deck/take
+curl -X POST localhost:5099/deck/take
 ```
 
+Le `bpm` de la fiche compte : il ne verrouille rien, il dit **où chercher**. Mesurée sur un
+album entier, la justesse du tempo passe de **43 % sans fiche à 99 % avec**.
+
+### Mesurer sans rien ouvrir
+
 ```sh
-dotnet test        # 128 tests
+dotnet run -c Release --project tools/Emotion.Probe -- <morceau.wav> 0 90 fiche=87.06
+python3 outils/verite_terrain.py <morceau.wav> 87.06 verite.txt
+python3 outils/concentration.py verite/ banc/xxx/
+python3 outils/motif.py
+```
+
+La sonde fait tourner le même analyseur que le serveur **sans ouvrir de port**. L'oublier a
+coûté des ports laissés ouverts pendant des mesures qui n'en avaient pas besoin.
+
+```sh
+dotnet test        # 187 tests
 ```
 
 ### Les images et les clips
@@ -1619,12 +1654,69 @@ inerte et la géométrie tourne seule.
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
 | `Emotion.Server` | endpoints du crate, boucle d'analyse | ASP.NET Core |
-| `Emotion.Signal.Tests` | 170 tests | xUnit |
-| `outils/` | le GPU simulé et sa mesure | Python, PySide6 |
+| `Emotion.Signal.Tests` | 187 tests | xUnit |
+| `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent — **et aucun port ne s'ouvre** | — |
+| `Emotion.Pulse` | la pulsation, par Rayleigh | — |
+| `outils/` | le GPU simulé, sa mesure, et les juges extérieurs | Python, PySide6 |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans
 serveur, sans carte son et sans navigateur**.
+
+---
+
+## Ce que ce cycle a produit, et ce qu'il a coûté
+
+Le navigateur est parti, et avec lui le dernier réseau du chemin de rendu. Ce qui a suivi a
+été gouverné par une règle simple : **mesurer avant de construire, et fixer le critère
+d'abandon d'avance.**
+
+### La vérité terrain, qui manquait depuis le début
+
+On ne pouvait pas dire si le détecteur était juste : tous les indicateurs comparaient ses
+frappes à une grille calée sur ces mêmes frappes. `outils/verite_terrain.py` fabrique
+désormais la grille d'un morceau à partir de deux choses extérieures — la période vient du
+crate, la phase du repli de l'énergie — et se vérifie sur un signal dont les clics sont dans
+le fichier.
+
+Elle a immédiatement révélé le défaut le plus grave du projet : **la phase de la grille était
+exactement au niveau du hasard.** Sa période était juste ; sa position ne l'était pas. C'est
+ce que le DJ voyait à l'écran depuis des mois.
+
+### Ce qui a marché
+
+| | avant | après |
+|---|---|---|
+| phase de la grille | au hasard | **30 % mieux que le hasard** |
+| verrouillage du temps fort | 45 % | **60 %**, et le pire cas remonte |
+| tempo publié | 54 % des images | **79 %**, à moins d'un pour cent près |
+| concentration des frappes | 1,6× le hasard | **3,1× le hasard** |
+
+Trois de ces gains viennent de **la même substitution** : remplacer des détections discrètes
+par de l'énergie continue, et regarder le **médium** plutôt que le registre du kick. Le
+registre du kick reste le meilleur endroit pour dire *qu'une* attaque a lieu, et le pire pour
+dire *où est* le temps.
+
+### Ce qui a échoué, et pourquoi c'est écrit ici
+
+- **Le classement des rôles** — métronome, ponctuel, continu. Il rendait « continu »
+  **100 %** du temps sur le bac. Pas un seuil mal réglé : les activations de la séparation ne
+  sont pas calées sur le temps. Retiré, deux octets rendus au paquet.
+- **Le drapeau « absente »**, qui dit qu'une source s'est tue. Quatre corrections, aucune ne
+  bouge le chiffre. Il reste peu fiable, et c'est écrit à côté.
+- **Une première vérité terrain** qui se posait à un demi-temps du vrai temps sur deux
+  morceaux — et donnait donc tort au moteur qui avait raison. La correction essayée en
+  réparait deux et en cassait trois : elle a été retirée plutôt que réglée jusqu'à donner
+  raison, ce qui aurait été exactement la circularité que l'outil existe pour rompre.
+- **Une mesure du motif qui passait son critère sans rien prouver** : 90 % de succès pour
+  une marge d'un demi pour cent. Le critère était trop facile — le défaut le plus dangereux
+  d'une mesure, parce qu'elle donne raison sans preuve.
+
+### Ce que le détecteur peut encore gagner
+
+Une sélection parfaite sur le même signal atteint **2,4 fois** ce que le détecteur fait
+aujourd'hui. Le signal porte le temps ; le prendre au plus fort ne le trouve pas — c'est
+exactement le hasard. Toute la distance qui reste est de la connaissance de grille.
 
 ---
 
