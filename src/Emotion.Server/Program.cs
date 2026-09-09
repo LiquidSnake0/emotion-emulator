@@ -37,13 +37,25 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
 
+    // LE JOURNAL DE LA SOURCE N'ETAIT BRANCHE SUR RIEN, ET CELA A COUTE UNE MESURE.
+    //
+    // PulseAudioSource accepte une action de journalisation et s'en sert pour dire ce que
+    // parec ecrit sur sa sortie d'erreur, quand il s'arrete, et quand une fenetre met trop
+    // longtemps a venir. Elle n'etait pas passee : `_log` restait nul et tous ces messages
+    // partaient au neant. En cherchant d'ou venait un trou de deux secondes, l'absence de
+    // ligne « capture lente » a d'abord ete lue comme une preuve que la capture allait
+    // bien. Elle ne prouvait rien du tout.
+    var journal = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Signal.Capture");
+    void Dire(string m) => journal.LogWarning("{Message}", m);
+
     // "mock" fabrique un signal a partir d'un tempo, sans carte son.
     // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
     // materiel, l'entree ligne le jour ou la table est branchee.
     IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
     {
         "pulse" => new PulseAudioSource(cfg["Signal:Device"],
-                                        separate: cfg.GetValue("Signal:Separate", false)),
+                                        separate: cfg.GetValue("Signal:Separate", false),
+                                        log: Dire),
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 
@@ -53,7 +65,8 @@ builder.Services.AddSingleton<IAudioSource>(sp =>
     if (string.IsNullOrWhiteSpace(cueDevice)) return master;
 
     return new DualAudioSource(master,
-        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", false)));
+        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", false),
+                             log: Dire));
 });
 
 builder.Services.AddHostedService<SignalWorker>();

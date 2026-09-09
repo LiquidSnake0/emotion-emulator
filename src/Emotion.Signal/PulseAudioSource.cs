@@ -118,11 +118,22 @@ public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
             var bytes = new byte[SpectrumAnalyzer.Window * 2];   // s16le
             var window = new float[SpectrumAnalyzer.Window];
 
+            // OU PASSENT LES DEUX SECONDES ? La boucle du serveur a montre que le trou
+            // est entierement dans l'attente de l'image suivante — ni le bus, ni la
+            // diffusion, ni le ramasse-miettes. Or cette attente couvre deux choses tres
+            // differentes : lire une fenetre dans le tube de parec, et l'analyser. Les
+            // separer est la seule facon de ne pas optimiser au hasard.
+            var chrono = System.Diagnostics.Stopwatch.StartNew();
+
             while (!ct.IsCancellationRequested)
             {
+                var t0 = chrono.Elapsed.TotalMilliseconds;
+
                 // Une fenetre entiere ou rien : une fenetre partielle produirait un
                 // spectre faux, avec des attaques inventees a chaque bord.
                 if (!await FillAsync(stream, bytes, ct)) yield break;
+
+                var t1 = chrono.Elapsed.TotalMilliseconds;
 
                 for (var i = 0; i < window.Length; i++)
                 {
@@ -131,7 +142,16 @@ public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
                 }
 
                 var t = (long)(DateTime.UtcNow - start).TotalMilliseconds;
-                yield return _analyzer.Analyze(window, t);
+                var image = _analyzer.Analyze(window, t);
+                var t2 = chrono.Elapsed.TotalMilliseconds;
+
+                // Un pas d'analyse vaut 21 ms. Au-dela de quatre, ce n'est plus une
+                // hesitation du planificateur.
+                if (t2 - t0 > 85)
+                    _log?.Invoke($"capture lente a {t / 1000f:F1} s : {t2 - t0:F0} ms " +
+                                 $"— lecture du tube {t1 - t0:F0} · analyse {t2 - t1:F0}");
+
+                yield return image;
             }
         }
         finally
