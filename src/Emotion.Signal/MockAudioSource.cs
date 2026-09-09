@@ -200,7 +200,11 @@ public sealed class MockAudioSource : IAudioSource
             Buildup: buildup,
             Drop: barStart && buildup > 0.9f,
             BarStart: barStart,
-            PhraseStart: barStart && bar == 0);
+            PhraseStart: barStart && bar == 0,
+            // Le mock a deja perdu le contrat deux fois en s'etendant, et plus aucun effet
+            // ne partait en mode simule. La phase du temps y est donc remplie des sa
+            // naissance : ici on la connait exactement, puisque c'est nous qui la posons.
+            BeatPhase: inBeat);
 
         // Les gestes, deduits du meme cycle : quand le filtre se ferme, l'etat suit. Le
         // mock doit remplir le contrat entier, sous peine de laisser l'ecran eteint en
@@ -216,7 +220,12 @@ public sealed class MockAudioSource : IAudioSource
             // Le mock connait son propre morceau : il est pret d'emblee, et le dit. Sans
             // cela, le feu vert ne partirait jamais en mode simule et la bascule visuelle
             // resterait introuvable a regler sans materiel.
-            Readiness: new Readiness(1f, true, "mock", 0f));
+            Readiness: new Readiness(1f, true, "mock", 0f),
+            // Le mock joue une grille exacte : ses familles de frappes tombent par
+            // construction sur des rapports francs du temps, donc l'accord est plein. Le
+            // dire compte — un champ laisse a sa valeur par defaut a deja deux fois vide
+            // l'ecran en mode simule, et un test verifie desormais qu'aucun ne le reste.
+            GridAgreement: 1f);
     }
 
     private double _lastOffbeat = -1;

@@ -234,3 +234,89 @@ public class ArcDetectorTests
         Assert.Equal(1, drops);   // une seule fois : le repos empeche de la rejouer
     }
 }
+
+/// <summary>
+/// La phase du temps, telle qu'elle part vers l'unite de rendu.
+///
+/// Elle a ete ajoutee au contrat parce que le rendu n'avait rien d'utilisable pour
+/// anticiper : il derivait sa cadence des drapeaux de frappe, qui sur un morceau du bac
+/// tombent tous les 962 ms pour un temps de 688 — sept temps marques sur dix. Une horloge
+/// ne verrouille pas sur un train troue.
+/// </summary>
+public class BeatPhaseTests
+{
+    private const float BeatMs = 690f;
+    private const long Step = 21;
+
+    /// <summary>
+    /// ELLE EST PUBLIEE MEME QUAND LE « 1 » EST INCONNU, et c'est tout son interet.
+    ///
+    /// <see cref="VisualFrame.Phase"/> est une position dans la mesure de quatre temps :
+    /// elle est nulle tant que le temps fort n'est pas identifie, ce qui sur un passage
+    /// mesure du repertoire laisse le rendu sans reference quatre-vingt-six pour cent du
+    /// temps. Savoir ou l'on en est du temps ne demande pourtant pas de savoir quel temps
+    /// c'est.
+    /// </summary>
+    [Fact]
+    public void La_phase_du_temps_avance_meme_sans_temps_fort()
+    {
+        var grid = new BeatGrid();
+        var vues = new List<float>();
+
+        // Aucune frappe, aucun vote : le « 1 » ne peut pas etre identifie.
+        for (long t = 0; t < 4000; t += Step)
+        {
+            grid.Advance(t, 60_000f / BeatMs);
+            vues.Add(grid.Phase);
+        }
+
+        Assert.Equal(-1, grid.Beat);              // le temps fort reste inconnu
+        Assert.Contains(vues, p => p > 0.9f);     // la phase, elle, parcourt son tour
+        Assert.Contains(vues, p => p < 0.1f);
+    }
+
+    /// <summary>
+    /// Elle tourne a la cadence du tempo, et non a une autre.
+    ///
+    /// C'est la seule chose qui rende la prediction possible : une horloge de rendu qui
+    /// s'y cale doit pouvoir en deduire quand tombe le temps suivant.
+    /// </summary>
+    [Fact]
+    public void La_phase_du_temps_tourne_a_la_cadence_du_tempo()
+    {
+        var grid = new BeatGrid();
+        var tours = 0;
+        var precedente = 0f;
+
+        const long duree = 30_000;
+        for (long t = 0; t < duree; t += Step)
+        {
+            grid.Advance(t, 60_000f / BeatMs);
+            if (grid.Phase < precedente - 0.5f) tours++;
+            precedente = grid.Phase;
+        }
+
+        // Trente secondes a 690 ms le temps : quarante-trois tours, a un pres selon ou
+        // l'echantillonnage tombe.
+        var attendus = duree / BeatMs;
+        Assert.InRange(tours, (int)attendus - 1, (int)attendus + 1);
+    }
+
+    /// <summary>
+    /// Le paquet la transporte sans la perdre. Un octet donne un deux-cent-cinquante-
+    /// sixieme de temps, soit 2,7 ms a 88 BPM — huit fois plus fin que le pas d'analyse
+    /// de 21 ms qui la produit.
+    /// </summary>
+    [Fact]
+    public void Le_paquet_transporte_la_phase_du_temps()
+    {
+        foreach (var phase in new[] { 0f, 0.25f, 0.5f, 0.75f, 0.999f })
+        {
+            var frame = new VisualFrame(0, 0.1f, new float[VisualFrame.BandCount],
+                                        false, null, null,
+                                        Structure: Structure.None with { BeatPhase = phase });
+            var p = GpuPacket.From(frame, TrackContext.Silence, 0);
+            Assert.InRange(p.BeatPhase / 255f, phase - 0.005f, phase + 0.005f);
+        }
+    }
+}

@@ -24,7 +24,7 @@ namespace Emotion.Signal;
 /// Elle sert aussi, au-dela du diagnostic, a rejouer un set enregistre dans toute la chaine
 /// sans materiel : ce que la sonde ne permet pas, puisqu'elle court-circuite le serveur.
 /// </summary>
-public sealed class WavAudioSource : IAudioSource
+public sealed class WavAudioSource : IAudioSource, ILearnsTracks, IAcceptsCue
 {
     private readonly string _path;
     private readonly SpectrumAnalyzer _analyzer;
@@ -44,6 +44,32 @@ public sealed class WavAudioSource : IAudioSource
     public string Name => $"fichier {Path.GetFileName(_path)}";
 
     public SpectrumAnalyzer Analyzer => _analyzer;
+
+    // LA RELECTURE DE FICHIER DOIT SE COMPORTER COMME L'ECOUTE REELLE, SANS QUOI ELLE NE
+    // VALIDE RIEN.
+    //
+    // Elle ne le faisait pas : ces trois methodes vivaient sur PulseAudioSource seulement,
+    // donc `TrackMemory.Play` ne trouvait pas d'apprenant et l'amorce de la fiche n'etait
+    // jamais posee. Toute mesure faite sur un WAV portait donc sur un moteur NON AMORCE —
+    // et c'est precisement le chemin qu'on emprunte pour mesurer, puisqu'un fichier se
+    // rejoue a l'identique quand un set ne se rejoue pas.
+    //
+    // Le cout de cette lacune est chiffre : sur un album entier du bac, la justesse du
+    // tempo passe de 43 % sans fiche a 99 % avec. Un banc d'essai qui coupe l'amorce
+    // mesure donc l'autre systeme.
+
+    /// <summary>Reprend ce qu'on savait de ce disque.</summary>
+    public void Resume(in TrackKnowledge knowledge) => _analyzer.Reprendre(knowledge);
+
+    /// <summary>Rend ce qu'on sait maintenant, pour rangement.</summary>
+    public TrackKnowledge Park(string id, in TrackKnowledge previous) =>
+        _analyzer.Connaissance(id, previous);
+
+    /// <summary>
+    /// Le tempo annonce par la fiche du crate. Il ne remplace pas la mesure : il recentre
+    /// la ponderation de l'autocorrelation, qui continue de chercher.
+    /// </summary>
+    public void Amorcer(float bpm) => _analyzer.Amorcer(bpm);
 
     public async IAsyncEnumerable<VisualFrame> ReadAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)

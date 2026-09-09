@@ -33,11 +33,44 @@ class Horloge:
     le déclencher au moment où il tombe plutôt qu'après l'avoir constaté. Chaque détection
     ne sert plus à déclencher mais à corriger doucement la phase.
 
+    SUR QUOI ELLE SE CALE, ET POURQUOI CE N'EST PLUS LE KICK. Elle se calait sur les
+    drapeaux de frappe, comme le faisait le renderer web. Mesuré sur un morceau du bac :
+    les kicks arrivent tous les 962 ms pour un temps de 688, soit sept temps marqués sur
+    dix, et les manques ne sont pas réguliers. Une horloge ne verrouille pas sur un train
+    troué — la fiabilité restait à 0,00 sur tout le morceau et la prédiction ne partait
+    jamais. Toute la stratégie de latence du projet était inerte.
+
+    Le moteur tient pourtant déjà cette phase : `BeatGrid` l'accumule, la corrige, et son
+    origine ne bouge pas à chaque coup entendu. Elle est publiée dans le paquet, avec le
+    degré de certitude qui va avec. L'horloge se cale donc dessus, et n'a plus à redécider
+    ici ce qui a été décidé en amont — c'est la règle du projet : une grandeur ne se
+    calcule qu'à un seul endroit.
+
+    CE QU'ELLE FAIT ENCORE, ET QUE L'AMONT NE PEUT PAS FAIRE. La phase arrive par paliers
+    de 21 ms ; l'écran en demande une toutes les 16,7. Entre deux images d'analyse,
+    l'horloge continue seule à la cadence du tempo, et c'est elle qui déclenche — en
+    avance de ce qu'on lui demande, ce que l'analyse ne saurait faire puisqu'elle ignore
+    quand l'écran se réveille.
+
     CE QU'ELLE NE FAIT PAS. Elle ne remplace pas la détection : un clap irrégulier, une
     voix qui entre, un break n'ont pas de grille et doivent rester réactifs. Elle ne sert
     qu'à ce qui est PÉRIODIQUE, c'est-à-dire le kick. Prédire l'imprévisible donnerait un
     visuel qui invente des événements, ce qui est pire qu'un visuel en retard.
     """
+
+    # LE SEUIL SORT DE LA DISTRIBUTION MESURÉE, PAS D'UN CHIFFRE ROND.
+    #
+    # Sur 70 s d'un morceau du bac, l'accord de la grille se répartit en deux modes — un
+    # bas vers 0,3 (955 images), un haut vers 0,65 (1715 images) — séparés par un creux
+    # entre 0,4 et 0,5 (282 images). Le seuil se pose dans le creux : c'est là qu'il
+    # sépare deux régimes réellement distincts plutôt que de couper une population au
+    # milieu. Sur ce morceau, l'horloge prédit un quart du temps.
+    #
+    # ET C'EST L'ACCORD, PAS LA CERTITUDE DU TEMPS FORT. Celle-ci dit si l'on sait QUEL
+    # temps est le « 1 » ; prédire un kick n'en a pas besoin — il suffit de savoir quand
+    # le temps suivant tombe. S'y verrouiller laissait la prédiction inerte : médiane
+    # 0,20, jamais au-dessus de 0,45.
+    SEUIL = 0.5
 
     def __init__(self):
         self.phase = 0.0
@@ -84,31 +117,41 @@ class Horloge:
             self._tire = False
         return self.phase
 
-    def caler(self):
-        """Une détection réelle vient de tomber.
+    def caler(self, phase_grille, accord):
+        """La grille du moteur vient de dire où elle en est. On s'y range.
 
-        On ne s'y aligne pas d'un coup : corriger entièrement ferait sauter la grille à
-        chaque détection un peu décalée, et l'on retrouverait la nervosité qu'on cherche à
-        fuir. Corriger un cinquième laisse l'horloge converger en quelques temps tout en
-        absorbant une détection isolée qui tombe à côté.
+        On ne s'y aligne pas d'un coup : sauter à chaque image d'analyse rendrait la
+        prédiction aussi nerveuse que ce qu'elle remplace, et l'on perdrait la douceur qui
+        fait tout son intérêt. Corriger un cinquième de l'écart laisse l'horloge converger
+        en quelques temps tout en absorbant une image isolée qui tombe à côté.
+
+        LA CONFIANCE VIENT DE L'AMONT, ELLE NE SE REDÉDUIT PAS ICI. `accord` est
+        `GridAgreement` : les familles de frappes, formées sur le timbre sans jamais
+        consulter le tempo, battent-elles à des rapports francs de celui-ci. C'est la seule
+        vérification du projet qui vienne d'ailleurs que de l'estimateur lui-même — une
+        confiance calculée par celui qu'on veut vérifier ne vérifie rien.
+
+        CE QU'ELLE NE PROMET PAS. Que la grille soit *alignée sur la musique*. Elle dit que
+        la période est la bonne, pas que le « 1 » tombe au bon endroit ; l'alignement, lui,
+        ne vient que des frappes détectées, et il reste le problème ouvert du projet — le
+        défaut est dans `OnsetDetector`, pas dans `BeatGrid`. Ce qui est gagné ici est
+        réel mais borné : l'horloge suit désormais une grille continue au lieu d'un train
+        de frappes troué, et elle comble les temps que la détection manque.
         """
-        # L'écart de phase, ramené dans [-0,5 ; 0,5] : une détection à 0,95 est en avance
-        # de 0,05 sur le temps suivant, pas en retard de 0,95 sur le précédent.
-        ecart = self.phase
+        ecart = self.phase - phase_grille
+        # Ramené dans [-0,5 ; 0,5] : être à 0,95 quand la grille dit 0,02, c'est être en
+        # avance de 0,07 sur le tour suivant, pas en retard de 0,93 sur le précédent.
         if ecart > 0.5:
             ecart -= 1.0
+        elif ecart < -0.5:
+            ecart += 1.0
 
         self._dernier_ecart = ecart
         self.phase -= ecart * 0.20
-        if self.phase < 0:
-            self.phase += 1.0
+        self.phase %= 1.0
 
-        # La fiabilité monte quand les détections tombent près de la grille, et chute
-        # quand elles s'en écartent. C'est elle qui décide si l'on ose prédire.
-        pres = abs(ecart) < 0.12
-        self.fiabilite += (1.0 if pres else -self.fiabilite * 0.5) * 0.08
-        self.fiabilite = max(0.0, min(1.0, self.fiabilite))
-        self.verrouille = self.fiabilite > 0.45
+        self.fiabilite = max(0.0, min(1.0, accord))
+        self.verrouille = self.fiabilite > self.SEUIL
 
     def perdre(self):
         """Perd le verrouillage : changement de disque, ou silence."""

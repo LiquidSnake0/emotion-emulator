@@ -721,8 +721,56 @@ qu'elles dépendent de la cadence de l'écran et non de celle du signal :
 
 | | Ce qu'elle fait | Mesuré |
 |---|---|---|
-| `Horloge` | attend le kick au lieu de le constater | verrouille en ~6 temps, intervalle à 0,2 % ; avance demandée 30 ms → réelle 39 |
+| `Horloge` | attend le temps au lieu de le constater | suit la grille à **5,2 ms** de médiane ; avance demandée 30 ms → réelle 39 |
 | `Interpolation` | comble les paliers de 21 ms entre deux images | — |
+
+### L'horloge se cale sur la grille, plus sur les frappes
+
+Elle se calait sur les drapeaux de kick, comme le faisait le renderer web. Mesuré sur
+`macro.wav` : **une frappe tous les 962 ms pour un temps de 688** — six à sept temps
+marqués sur dix, et les manques ne sont pas réguliers. Une horloge ne verrouille pas sur un
+train troué : la fiabilité restait à **0,00 sur tout le morceau**, et toute la stratégie de
+latence du projet était inerte.
+
+`BeatGrid` tient pourtant déjà cette phase — elle s'accumule, elle se corrige, son origine
+ne bouge pas à chaque coup entendu. Elle est désormais publiée : `Structure.BeatPhase`, un
+octet dans le paquet.
+
+| | Ce que ça répond | Où c'est publié |
+|---|---|---|
+| `Phase` | où l'on est dans la **mesure** de quatre temps — **nulle si le « 1 » est inconnu** | offset 24, flottant |
+| `BeatPhase` | où l'on est dans le **temps** — toujours remplie | offset 117, un octet |
+| `GridSure` | sait-on **quel** temps est le « 1 » | offset 118 |
+| `GridAgreement` | la **période** est-elle la bonne, dit par une voie indépendante | offset 119 |
+
+**Un octet suffit** : 1/256 de temps vaut 2,7 ms à 88 BPM, huit fois plus fin que le pas de
+21 ms qui la produit.
+
+**Le verrou est `GridAgreement`, et surtout pas `GridSure`.** Les confondre a coûté une
+soirée : anticiper un temps ne demande pas de savoir où l'on est dans la mesure, seulement
+quand le suivant tombe. Verrouillé sur `GridSure` (médiane 0,20, jamais au-dessus de 0,45),
+rien ne partait — alors que la phase publiée tourne à **87,0 temps/min pour un tempo de
+87,3**. `GridAgreement`, lui, vérifie la période par les familles de frappes, formées sur le
+timbre sans jamais consulter le tempo : c'est la seule vérification du projet qui ne soit
+pas circulaire.
+
+**Le seuil sort de la distribution, pas d'un chiffre rond.** Sur 70 s, l'accord se répartit
+en deux modes — un bas vers 0,3 (955 images), un haut vers 0,65 (1715) — séparés par un
+creux entre 0,4 et 0,5 (282). Le seuil se pose dans le creux : **0,5**.
+
+**Ce qui est gagné, et ce qui ne l'est pas.** L'horloge suit maintenant une grille continue
+au lieu d'un train troué, et comble les temps que la détection manque. Elle prédit **2 à
+25 % du temps selon le passage**. Elle ne promet pas que la grille soit *alignée sur la
+musique* : l'alignement ne vient que des frappes détectées, et **le défaut est dans
+`OnsetDetector`, pas dans `BeatGrid`** — c'est le problème ouvert du projet.
+
+> **La relecture de fichier n'acceptait pas la fiche.** `IAcceptsCue` et `ILearnsTracks`
+> ne vivaient que sur `PulseAudioSource` : `TrackMemory.Play` ne trouvait pas d'apprenant,
+> et l'amorce n'était jamais posée. **Toute mesure faite sur un WAV portait donc sur un
+> moteur non amorcé** — c'est-à-dire sur l'autre système, celui à 43 % de justesse au lieu
+> de 99. Et c'est précisément le chemin qu'on emprunte pour mesurer, puisqu'un fichier se
+> rejoue à l'identique quand un set ne se rejoue pas. Corrigé : `WavAudioSource` implémente
+> les deux.
 
 **Il faut les deux, et les confondre coûte cher.** Amortir donne sa masse au mouvement,
 interpoler comble les trous. Le ressort du renderer web masquait les paliers *par

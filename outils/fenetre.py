@@ -71,6 +71,9 @@ P_FRAPPES = 40
 P_BANDES = 48          # douze octets
 P_CENTROIDE, P_OUVERTURE, P_DENSITE = 100, 101, 102
 P_BEAT = 103
+P_PHASE_TEMPS = 117    # position dans le temps, toujours remplie
+P_GRILLE_SURE = 118    # a quel point le « 1 » est etabli
+P_ACCORD = 119         # ce qu'une voie independante dit de la periode
 P_VOIX_BAS, P_VOIX_MED, P_VOIX_HAUT = 96, 97, 98
 P_NOUVEAUTE = 47
 P_VOIX_COUPS = 99
@@ -150,6 +153,22 @@ class Paquet:
         self.clap = bool(frappes & 2)
         self.charley = bool(frappes & 4)
         self.beat = mm[base + P_BEAT]
+
+        # LA PHASE DU TEMPS N'EST PAS LA PHASE DE LA MESURE.
+        #
+        # `phase` (offset 24) est la position dans la mesure de quatre temps, et elle vaut
+        # zero tant que le « 1 » n'est pas identifie — sur un passage du bac, quatorze pour
+        # cent des images seulement. `phase_temps` dit ou l'on est dans le temps courant,
+        # et elle est toujours remplie : savoir ou l'on en est du temps ne demande pas de
+        # savoir quel temps c'est. C'est elle qui nourrit l'horloge.
+        self.phase_temps = mm[base + P_PHASE_TEMPS] / 255.0
+        self.grille_sure = mm[base + P_GRILLE_SURE] / 255.0
+
+        # L'ACCORD VIENT D'UNE VOIE QUI NE CONNAIT PAS LE TEMPO. Les familles de frappes
+        # se forment sur le timbre ; si elles battent a des rapports francs du tempo
+        # detecte, les deux voies se confirment. C'est la seule verification du projet qui
+        # ne soit pas circulaire, et c'est elle qui autorise la prediction.
+        self.accord = mm[base + P_ACCORD] / 255.0
         self.brillance = mm[base + P_CENTROIDE] / 255.0
         self.ouverture = mm[base + P_OUVERTURE] / 255.0
         self.densite = mm[base + P_DENSITE] / 255.0
@@ -200,6 +219,8 @@ def entre(avant, courant, a):
     v.densite = m(avant.densite, courant.densite)
     v.montee = m(avant.montee, courant.montee)
     v.derive_vue = m(avant.derive_vue, courant.derive_vue)
+    v.grille_sure = m(avant.grille_sure, courant.grille_sure)
+    v.accord = m(avant.accord, courant.accord)
     v.voix = tuple(m(x, y) for x, y in zip(avant.voix, courant.voix))
     v.bandes = [m(x, y) for x, y in zip(avant.bandes, courant.bandes)]
 
@@ -207,6 +228,8 @@ def entre(avant, courant, a):
     # ARRIÈRE — un curseur de mesure qui recule d'un tour à chaque temps. On ne mêle donc
     # que tant qu'elle avance ; au passage du tour on prend la valeur courante.
     v.phase = m(avant.phase, courant.phase) if courant.phase >= avant.phase else courant.phase
+    v.phase_temps = (m(avant.phase_temps, courant.phase_temps)
+                     if courant.phase_temps >= avant.phase_temps else courant.phase_temps)
 
     v.sources = [
         {**c,
@@ -306,13 +329,18 @@ class Mur(QWidget):
                 self.derniere_sequence = p.sequence
                 self.entre_images.pousser(p, maintenant)
 
-                # LE KICK NE SE DÉCLENCHE PLUS SUR LA DÉTECTION QUAND LA GRILLE TIENT :
-                # la détection ne sert alors qu'à recaler l'horloge, et c'est l'horloge
-                # qui tire, au moment où le temps tombe plutôt qu'après l'avoir constaté.
-                if p.kick:
-                    self.horloge.caler()
-                    if not self.horloge.verrouille:
-                        self.kick.tirer()
+                # L'HORLOGE SE CALE SUR LA GRILLE DU MOTEUR, PLUS SUR LES FRAPPES.
+                #
+                # Elle se calait sur les drapeaux de kick. Mesuré sur un morceau du bac :
+                # une frappe tous les 962 ms pour un temps de 688, soit sept temps marqués
+                # sur dix — la fiabilité restait à 0,00 et la prédiction ne partait jamais.
+                # La grille, elle, publie une phase qui s'accumule et se corrige.
+                #
+                # Le kick reste réactif tant que la grille ne sait pas : mieux vaut un
+                # battement en retard qu'un battement inventé.
+                self.horloge.caler(p.phase_temps, p.accord)
+                if p.kick and not self.horloge.verrouille:
+                    self.kick.tirer()
                 if p.clap:
                     self.clap.tirer()
                 if p.charley:
@@ -421,8 +449,15 @@ class Mur(QWidget):
             etat += f"   horloge ● {self.horloge.ecart_ms:+5.1f} ms"
         else:
             etat += f"   horloge ○ {self.horloge.fiabilite:.2f}"
+        if p.beat >= 4:
+            etat += "   1 ?"
+        # LA POSITION SE MESURE, ELLE NE SE DEVINE PAS. Un decalage fixe de 260 px suffisait
+        # tant que le texte etait court ; l'etat de l'horloge l'a allonge et la mention du
+        # temps fort sortait du cadre. C'est la troisieme fois dans ce fichier qu'une
+        # largeur supposee coute un debordement.
         d.setPen(GRIS_CLAIR if self.horloge.verrouille else GRIS_CADRE)
-        d.drawText(x + largeur - 260, y, etat)
+        largeur_etat = QFontMetricsF(self.mono).horizontalAdvance(etat)
+        d.drawText(int(x + largeur - largeur_etat), y, etat)
         return y
 
     def mesure(self, d, p, x, y, largeur):

@@ -175,6 +175,47 @@ public struct GpuPacket
     /// <b>lit</b> et ne les recalcule pas : la regle vivait en double et les deux
     /// implementations avaient deja diverge.
     /// </summary>
+    /// <summary>
+    /// Position dans le <b>temps</b> courant, 0 a 255 pour 0 a 1. Toujours remplie.
+    ///
+    /// A ne pas confondre avec <see cref="Phase"/>, qui est la position dans la mesure de
+    /// quatre temps et qui vaut zero tant que le « 1 » n'est pas identifie — sur un
+    /// passage du bac, quatorze pour cent des images seulement.
+    ///
+    /// UN OCTET SUFFIT, ET CE N'EST PAS UNE ECONOMIE DE BOUT DE CHANDELLE. Il donne un
+    /// deux-cent-cinquante-sixieme de temps, soit 2,7 ms a 88 BPM — huit fois plus fin que
+    /// le pas d'analyse de 21 ms qui le produit. Une precision plus grande decrirait un
+    /// mouvement que personne n'a mesure.
+    /// </summary>
+    [FieldOffset(117)] public byte BeatPhase;
+
+    /// <summary>
+    /// A quel point le temps fort est etabli, 0 a 255. C'est <see cref="BeatGrid.Confidence"/>.
+    ///
+    /// Elle accompagne <see cref="BeatPhase"/> et ne s'en separe pas : une phase sans son
+    /// degre de certitude oblige le rendu a en inventer un, et il l'inventerait a partir
+    /// des memes frappes bruitees qu'on cherche justement a ne plus lui faire lire.
+    /// </summary>
+    [FieldOffset(118)] public byte GridSure;
+
+    /// <summary>
+    /// A quel point une voie <b>independante</b> confirme le tempo, 0 a 255.
+    /// C'est <see cref="Emotion.Signal.GridAgreement.Accord"/>.
+    ///
+    /// ELLE NE DIT PAS LA MEME CHOSE QUE <see cref="GridSure"/>, ET LES CONFONDRE COUTE
+    /// LA PREDICTION. GridSure dit si l'on sait <i>quel</i> temps est le « 1 » ; celle-ci
+    /// dit si la <i>periode</i> est la bonne. Anticiper un kick ne demande que la seconde
+    /// — on n'a pas besoin de savoir ou l'on est dans la mesure pour savoir quand le temps
+    /// suivant tombe. Verrouiller la prediction sur GridSure la laissait inerte : mesure
+    /// sur un morceau du bac, sa mediane vaut 0,23 et elle ne passe jamais 0,45, alors que
+    /// la phase publiee tourne a 87,0 temps par minute pour un tempo de 87,3.
+    ///
+    /// Et c'est bien la confiance a employer, parce qu'elle vient d'ailleurs : les
+    /// familles de frappes se forment sur le timbre sans jamais consulter le tempo. Une
+    /// confiance calculee par celui qu'on veut verifier ne verifie rien.
+    /// </summary>
+    [FieldOffset(119)] public byte GridAgreement;
+
     [FieldOffset(112)] public byte Sides;
 
     /// <summary>Mode mineur, tire de la lettre Camelot. Non nul si mineur.</summary>
@@ -471,6 +512,9 @@ public struct GpuPacket
         p.BarsToBoundary = (byte)Math.Clamp(f.Structure.BarsToBoundary, 0, 255);
         p.SectionSure = (byte)Math.Clamp(f.Structure.SectionConfidence * 255f, 0f, 255f);
         p.Trust = (byte)Math.Clamp(f.Structure.Trust * 255f, 0f, 255f);
+        p.BeatPhase = (byte)Math.Clamp(f.Structure.BeatPhase * 255f, 0f, 255f);
+        p.GridSure = (byte)Math.Clamp(f.Structure.Confidence * 255f, 0f, 255f);
+        p.GridAgreement = (byte)Math.Clamp(f.GridAgreement * 255f, 0f, 255f);
         p.Sides = (byte)track.Sides;
         p.Minor = track.Minor ? (byte)1 : (byte)0;
         p.LowPitch = (byte)Math.Clamp(f.Voices.LowPitch * 255f, 0f, 255f);

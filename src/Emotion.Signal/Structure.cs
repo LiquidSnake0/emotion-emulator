@@ -35,6 +35,25 @@ namespace Emotion.Signal;
 /// <param name="PhraseBars">Longueur de phrase mesuree.</param>
 /// <param name="BarsToBoundary">Mesures avant la prochaine frontiere de phrase.</param>
 /// <param name="SectionConfidence">Fiabilite de la structure longue.</param>
+/// <param name="BeatPhase">
+/// Position dans le <b>temps</b> courant, 0 a 1. Toujours disponible.
+///
+/// A NE PAS CONFONDRE AVEC <see cref="VisualFrame.Phase"/>, qui est la position dans la
+/// <b>mesure</b> de quatre temps et qui est nulle tant que le « 1 » n'est pas identifie.
+/// Les deux sont utiles et ne repondent pas a la meme question : l'une dit ou l'on est
+/// dans le motif, l'autre a quel moment du temps on se trouve.
+///
+/// <b>Pourquoi elle est publiee.</b> L'unite de rendu doit anticiper le temps plutot que
+/// le constater — c'est toute la strategie de latence du projet. Elle en derivait la
+/// phase des drapeaux de kick, qui sont bruites : mesure sur un morceau du bac, les
+/// frappes tombent tous les 962 ms pour un temps de 688, soit sept temps marques sur dix.
+/// Une horloge ne verrouille pas sur un train troue, et la prediction restait inerte.
+///
+/// <see cref="BeatGrid"/> tient pourtant deja cette phase : elle s'accumule, elle se
+/// corrige, et son origine ne bouge pas a chaque coup entendu. La publier evite au rendu
+/// de refaire — plus mal — une decision deja prise en amont. C'est la meme regle que pour
+/// le lissage et pour le Camelot : <b>une grandeur ne se calcule qu'a un seul endroit.</b>
+/// </param>
 /// <param name="Trust">
 /// A quel point le rendu peut se fier a tout ce qui precede, 0 a 1.
 ///
@@ -59,7 +78,8 @@ public readonly record struct Structure(
                           // ne peut pas citer une constante declaree dans le corps
     int BarsToBoundary = 0,
     float SectionConfidence = 0f,
-    float Trust = 1f)
+    float Trust = 1f,
+    float BeatPhase = 0f)
 {
     /// <summary>
     /// Longueur de phrase supposee tant que <see cref="SectionTracker"/> n'a pas tranche.

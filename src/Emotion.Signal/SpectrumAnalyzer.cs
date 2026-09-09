@@ -1071,7 +1071,11 @@ public sealed class SpectrumAnalyzer
             bars,
             _section.BarsToBoundary,
             _section.Confidence,
-            _continuity.Trust);
+            _continuity.Trust,
+            // La phase du temps, celle qui sert au rendu a anticiper. Elle est publiee
+            // meme quand le « 1 » est inconnu : savoir ou l'on est dans le temps ne
+            // demande pas de savoir quel temps c'est.
+            _grid.Phase);
 
         var gestures = _gestures.Feed(timbre.Openness, bass, timbre.Density);
         var readiness = _gate.Feed(tMs, _tempo.Bpm, timbre.Centroid, bass, timbre.Density);
