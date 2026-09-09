@@ -1401,6 +1401,38 @@ La dispersion compte autant que la médiane : une main régulière à dix millis
 donne une vérité de phase ; une main qui varie de cent ne dira jamais où tombe un temps,
 quelle que soit la correction.
 
+### Entendre ce que chaque source entend
+
+L'idée suivante du DJ, et c'est la validation la plus directe qui soit :
+
+> « On pourrait aussi faire en sorte que tu extraies ce qu'entend chaque source. Par exemple
+> `sourceXpiano.wav`, je l'écoute et je regarde si c'est vraiment le piano, si c'est en
+> rythme avec le piano réel. »
+
+Aucune statistique ne remplace ça. Toutes nos mesures disent si une source est régulière, pas
+si elle contient ce qu'elle prétend contenir — et l'oreille tranche en dix secondes ce
+qu'aucun chiffre n'a su dire.
+
+**C'est faisable, et le chemin le moins cher passe par Python.** Le séparateur tient déjà les
+profils spectraux (`_w`, bins × 6) et les activations. Il suffit de les exporter depuis la
+sonde, puis de reconstruire hors ligne : masque doux par source, appliqué au spectre complexe
+d'origine, transformée inverse, un WAV par source. Numpy fait tout cela ; le moteur n'a
+qu'un accesseur en lecture à ouvrir.
+
+> **LE PIÈGE, ET IL EST GRAVE.** L'analyse avance par blocs de 1024 échantillons **sans
+> recouvrement**. Resynthétiser sur cette grille produirait une coupure franche toutes les
+> 21 ms — un bourdonnement à 47 Hz sur les six fichiers. Il entendrait un artefact de
+> reconstruction et l'attribuerait à la séparation, ce qui est pire qu'aucune mesure : une
+> fausse preuve à charge contre une pièce qui n'y peut rien.
+>
+> L'extraction doit donc faire **sa propre transformée, à recouvrement de moitié et fenêtre
+> de Hann**. Les profils sont fréquentiels et se transportent tels quels d'une grille à
+> l'autre ; c'est gratuit, et c'est la seule façon que ce qu'il entende soit ce que la
+> séparation a réellement retenu.
+
+Deux fichiers à écrire, et rien à changer dans le chemin chaud : un accesseur en lecture sur
+les profils, une option de la sonde pour les exporter, et `outils/extraire.py`.
+
 ## Façon de travailler
 
 Questions ciblées avant de partir sur une solution. Mesurer avant de corriger, et écrire
