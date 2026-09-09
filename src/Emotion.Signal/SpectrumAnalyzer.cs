@@ -527,13 +527,22 @@ public sealed class SpectrumAnalyzer
     /// Separer le percussif de l'harmonique avant analyse. Coute la latence annoncee par
     /// <see cref="Hpss.LatencyFrames"/>, soit 64 ms sur le reglage par defaut.
     /// </param>
-    public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false)
+    /// <param name="memoireTempoS">
+    /// Duree observee par l'autocorrelation du tempo. Elle borne par le bas le temps
+    /// d'accroche : on ne peut rien dire d'une periode avant d'en avoir entendu plusieurs.
+    /// </param>
+    /// <param name="inertieTempo">
+    /// Inertie de la courbe de score du tempo. Stabilite d'un cote, reactivite de l'autre.
+    /// </param>
+    public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false,
+                            float memoireTempoS = TempoTracker.DefautMemoireS,
+                            float inertieTempo = TempoTracker.DefautInertie)
     {
         _sampleRate = sampleRate;
         _frameSeconds = Window / (float)sampleRate;
         _binHz = sampleRate / (float)Window;
         _frameMs = _frameSeconds * 1000f;
-        _tempo = new TempoTracker(sampleRate, Window);
+        _tempo = new TempoTracker(sampleRate, Window, memoireTempoS, inertieTempo);
         _accord = new GridAgreement(_evenements.Familles);
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);

@@ -79,6 +79,16 @@ jamais « est-ce le bon » — un détecteur qui tire sur toutes les attaques y 
 grille inutilisable. C'est exactement ce qui arrive au blanchiment adaptatif : +9 points de
 justesse, −7 points de verrouillage.
 
+- **Le temps d'accroche** se mesure par la sonde, et distingue deux instants qu'il ne faut
+  jamais confondre : quand le **tempo** publié se pose à moins de 1,5 BPM de sa valeur finale
+  (le critère est en BPM et non en pour cent, parce que le tempo publié bouge par pas d'un
+  BPM entier), et quand le **temps fort** dépasse 0,35. Chacun doit *tenir* cinq secondes.
+
+  Repères sur treize morceaux : **tempo 15,1 s, temps fort 30,2 s**. Et un arbitrage
+  structurel dont aucune combinaison essayée ne s'échappe — quatre secondes gagnées sur le
+  tempo en coûtent cinq au temps fort, parce que le vote du temps fort accumule ses indices
+  sur une grille qu'il suppose stable.
+
 - **`tools/Emotion.Pulse`** est la troisième mesure, et celle qui tranche désormais. Elle
   demande si une suite d'instants forme un pouls, par la statistique de Rayleigh sur des
   fenêtres de quinze secondes. Aucune tolérance à régler, un niveau de hasard qui se calcule,

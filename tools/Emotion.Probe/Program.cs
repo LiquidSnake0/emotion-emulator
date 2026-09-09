@@ -38,7 +38,19 @@ Console.WriteLine($"{Path.GetFileName(path)} — {mono.Length / (float)rate:F1} 
 // Cinquieme argument : « sep » force la separation harmonique/percussive, coupee par
 // defaut depuis qu'on l'a mesuree. Sert a comparer les deux sur la meme matiere.
 var separate = args.Contains("sep");
-var analyzer = new SpectrumAnalyzer(rate, separate);
+// « memtempo=X » et « inertie=X » : les deux leviers du temps d’accroche du tempo.
+// Le nom evite « memoire », deja pris par le mode deux passages.
+var memoireT = TempoTracker.DefautMemoireS; var inertieT = TempoTracker.DefautInertie;
+foreach (var a in args)
+{
+    if (a.StartsWith("memtempo=") && float.TryParse(a[9..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var mv)) memoireT = mv;
+    if (a.StartsWith("inertie=") && float.TryParse(a[8..],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var iv)) inertieT = iv;
+}
+var analyzer = new SpectrumAnalyzer(rate, separate, memoireT, inertieT);
 
 // « inline » en argument : fait tourner l'apprentissage dans le fil d'analyse, comme
 // avant. Sert a comparer les deux regimes sur le meme morceau.
@@ -113,6 +125,7 @@ var barStarts = new List<long>();
 var phraseStarts = new List<long>();
 var drops = new List<long>();
 var confidences = new List<float>();
+var accroche = new List<(long T, float? Bpm, float Conf)>();
 var buildups = new List<float>();
 int kicks = 0, claps = 0, hats = 0, novelties = 0, chordChanges = 0;
 int vLow = 0, vMid = 0, vHigh = 0;
@@ -303,6 +316,8 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     if (s.PhraseStart) phraseStarts.Add(tMs);
     if (s.Drop) drops.Add(tMs);
     confidences.Add(s.Confidence);
+    // Pour mesurer QUAND chaque grandeur se pose, et non seulement ou elle finit.
+    accroche.Add((tMs, f.Bpm, s.Confidence));
     phraseLen[s.PhraseBars] = phraseLen.GetValueOrDefault(s.PhraseBars) + 1;
     sectionConf.Add(s.SectionConfidence);
     if (analyzer.ContinuityBroken) { ruptures++; lastReason = analyzer.LastBreak; }
@@ -391,6 +406,61 @@ Console.WriteLine($"justesse de phase   ecart moyen {m:F3} temps = {m * beatMs:F
 }
 Console.WriteLine($"registres tonals    {vLow} voix graves · {vMid} medium · {vHigh} aigues");
 Console.WriteLine($"indices de structure {chordChanges} changements d'accord · {novelties} ruptures");
+
+// COMBIEN DE TEMPS AVANT DE POUVOIR SE FIER A QUELQUE CHOSE ?
+//
+// La question s'est posee en regardant un lancement en direct : le tempo publie vagabondait
+// entre 84 et 88 pendant trois quarts de minute avant de se poser. Mais « se poser » ne veut
+// pas dire la meme chose pour la periode et pour le temps fort, et les confondre menerait a
+// regler le mauvais etage.
+//
+// On mesure donc deux instants distincts, et pour chacun on exige que la valeur TIENNE :
+// une grandeur qui frole la bonne valeur une seconde puis repart n'est pas accrochee.
+static long? Tient(IReadOnlyList<(long T, float? Bpm, float Conf)> suite,
+                   Func<(long T, float? Bpm, float Conf), bool> bon, long duree)
+{
+    for (var i = 0; i < suite.Count; i++)
+    {
+        if (!bon(suite[i])) continue;
+        var fin = suite[i].T + duree;
+        var tenu = true;
+        for (var j = i; j < suite.Count && suite[j].T <= fin; j++)
+            if (!bon(suite[j])) { tenu = false; break; }
+        if (tenu) return suite[i].T;
+    }
+    return null;
+}
+
+if (accroche.Count > 20)
+{
+    // La reference : le tempo du dernier tiers, quand tout est etabli.
+    var tardifs = accroche.Skip(accroche.Count * 2 / 3)
+                          .Where(a => a.Bpm is not null).Select(a => a.Bpm!.Value).ToList();
+    var reference = tardifs.Count > 0 ? Median(tardifs) : float.NaN;
+
+    const long Tenue = 5000;   // cinq secondes sans repartir
+    // LE CRITERE SE MESURE EN BPM, PAS EN POUR CENT, ET CE N'EST PAS UN DETAIL.
+    //
+    // Le tempo publie bouge par pas d'un BPM entier (TempoTracker.TempoStep) : exiger un
+    // pour cent, soit 0,87 BPM a 87, revient a demander une precision plus fine que la
+    // quantification. Trois morceaux sur treize paraissaient alors « ne jamais accrocher »
+    // alors qu'ils etaient poses a un pas pres.
+    //
+    // Un BPM et demi laisse passer un pas de publication sans laisser passer une erreur
+    // reelle : a 87 BPM, un pas vaut 11 ms sur la noire, deux pas 23 — au-dela on quitte
+    // le domaine du reglage pour celui de la faute.
+    const float ToleranceBpm = 1.5f;
+    var tTempo = float.IsNaN(reference) ? null
+        : Tient(accroche, a => a.Bpm is { } b && MathF.Abs(b - reference) < ToleranceBpm, Tenue);
+    var tFort = Tient(accroche, a => a.Conf > 0.35f, Tenue);
+    var tPublie = Tient(accroche, a => a.Bpm is not null, Tenue);
+
+    string Dire(long? t) => t is { } v ? $"{v / 1000f,5:F1} s" : "  jamais";
+    Console.WriteLine($"\naccroche  (tenue cinq secondes)");
+    Console.WriteLine($"  un tempo publie      {Dire(tPublie)}");
+    Console.WriteLine($"  a 1,5 BPM du tempo final {Dire(tTempo)}   (reference {reference:F1} BPM)");
+    Console.WriteLine($"  temps fort au-dessus de 0,35 {Dire(tFort)}");
+}
 
 Console.WriteLine($"\nconfiance du temps fort  finale {confidences[^1]:F2} · mediane {Median(confidences):F2}");
 Console.WriteLine($"verrouille sur           {confidences.Count(c => c > 0.35f) * 100 / confidences.Count} % des fenetres");

@@ -39,7 +39,46 @@ public sealed class TempoTracker
     /// pour qu'une periode se detache du bruit, assez peu pour suivre un changement de
     /// disque sans trainer une demi-minute.
     /// </summary>
-    private const float MemorySeconds = 8f;
+    /// <summary>
+    /// Duree observee par defaut, en secondes, et inertie par defaut de la courbe de score.
+    ///
+    /// MESURE SUR TREIZE MORCEAUX, ET C'EST UN ARBITRAGE, PAS UN GAIN NET.
+    ///
+    /// Deux instants comptent et ne se confondent pas : celui ou le tempo publie se pose a
+    /// moins d'un BPM et demi de sa valeur finale, et celui ou le vote du temps fort passe
+    /// au-dessus de 0,35. On exige que chacun TIENNE cinq secondes — une grandeur qui frole
+    /// la bonne valeur une seconde puis repart n'est pas accrochee.
+    ///
+    /// <code>
+    ///                        tempo            temps fort
+    ///   8 s / 0,85 (avant)  19,2 s  11/13     24,9 s  12/13
+    ///   6 s / 0,85          16,1 s  11/13     30,7 s  13/13
+    ///   8 s / 0,93          16,9 s  10/13     23,8 s  11/13
+    ///   8 s / 0,70          19,6 s  12/13     30,7 s  13/13
+    ///   12 s / 0,85         22,7 s  10/13     24,4 s  12/13
+    ///   6 s / 0,90 (retenu) 15,1 s  11/13     30,2 s  12/13
+    /// </code>
+    ///
+    /// QUATRE SECONDES GAGNEES SUR LE TEMPO EN COUTENT CINQ AU TEMPS FORT, et aucune
+    /// combinaison essayee n'y echappe. La raison est structurelle : le vote du temps fort
+    /// accumule ses indices sur une grille qu'il suppose stable, et tout ce qui rend le
+    /// tempo plus reactif la fait vaciller — le vote repart alors de plus loin.
+    ///
+    /// On a choisi le tempo, parce que c'est lui qui conditionne la PREDICTION. L'horloge
+    /// du renderer ne peut annoncer un temps en avance — donc annuler le retard de toute la
+    /// chaine — qu'une fois la periode stable. Le temps fort, lui, ne decide que de
+    /// l'accent : savoir lequel des quatre temps porte le « 1 » change la largeur d'un
+    /// eclair, pas le fait qu'il tombe juste.
+    ///
+    /// Si l'accent comptait plus que l'avance sur un set donne, il suffirait de revenir a
+    /// 8 s et 0,85 : les deux valeurs sont des parametres, pas des constantes.
+    /// </summary>
+    public const float DefautMemoireS = 6f;
+
+    /// <inheritdoc cref="DefautMemoireS"/>
+    public const float DefautInertie = 0.90f;
+
+    private readonly float _memorySeconds;
 
     /// <summary>
     /// Nombre de fenetres entre deux analyses. Un tempo ne change pas en cent
@@ -52,7 +91,7 @@ public sealed class TempoTracker
     /// Inertie de la courbe de score. C'est elle qui fait la stabilite : a 0,85, une
     /// periode doit convaincre pendant plus d'une seconde avant de l'emporter.
     /// </summary>
-    private const float Inertia = 0.85f;
+    private readonly float _inertia;
 
     /// <summary>
     /// Centre de la preference de tempo, en BPM. <b>Tire du repertoire.</b> Le bac vit
@@ -130,14 +169,24 @@ public sealed class TempoTracker
         return lag >= 0 && lag < _raw.Length ? _raw[lag] : 0f;
     }
 
-    public TempoTracker(int sampleRate = 48_000, int window = SpectrumAnalyzer.Window)
+    /// <param name="memorySeconds">
+    /// Duree observee par l'autocorrelation. Elle borne par le bas le temps d'accroche :
+    /// on ne peut rien affirmer d'une periode avant d'en avoir entendu plusieurs.
+    /// </param>
+    /// <param name="inertia">
+    /// Inertie de la courbe de score. Elle fait la stabilite et coute la reactivite.
+    /// </param>
+    public TempoTracker(int sampleRate = 48_000, int window = SpectrumAnalyzer.Window,
+                        float memorySeconds = DefautMemoireS, float inertia = DefautInertie)
     {
+        _memorySeconds = memorySeconds;
+        _inertia = inertia;
         _frameMs = window * 1000f / sampleRate;
 
         _minLag = Math.Max(2, (int)MathF.Floor(60_000f / MaxBpm / _frameMs));
         _maxLag = (int)MathF.Ceiling(60_000f / MinBpm / _frameMs);
 
-        _history = new float[(int)(MemorySeconds * 1000f / _frameMs)];
+        _history = new float[(int)(_memorySeconds * 1000f / _frameMs)];
         _work = new float[_history.Length];
         _score = new float[_maxLag - _minLag + 1];
         _raw = new float[_score.Length];
@@ -278,7 +327,7 @@ public sealed class TempoTracker
             // Deux courbes, et il faut les deux. Celle qui porte la preference sert a
             // choisir ; celle qui reste brute sert a juger si le choix vaut quelque chose.
             // Les confondre revient a mesurer sa propre preference.
-            _raw[i2] = _raw[i2] * Inertia + fresh * (1f - Inertia);
+            _raw[i2] = _raw[i2] * _inertia + fresh * (1f - _inertia);
             _score[i2] = _raw[i2] * _prefer[i2];
         }
 
