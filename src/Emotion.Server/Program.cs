@@ -132,6 +132,68 @@ app.MapGet("/ready", (FrameBus bus) =>
     });
 });
 
+// L'IMAGE COURANTE, TELLE QUE LE HUB LA SERIALISE.
+//
+// Diagnostic d'un defaut precis : la diffusion vers le navigateur mourait silencieusement
+// apres une quarantaine de secondes, sans erreur nulle part, pendant que la boucle serveur
+// continuait de publier a plein regime — douze mille images pour un navigateur fige depuis
+// quarante-cinq secondes.
+//
+// System.Text.Json leve sur NaN et Infinity. Une seule valeur non finie dans l'image suffit
+// donc a faire echouer la serialisation, ce qui tue la connexion de ce client-la sans que
+// la boucle en sache rien. Cet endpoint emprunte exactement le meme chemin : s'il rend une
+// erreur, la cause est trouvee ; s'il rend l'image, il faut chercher ailleurs.
+app.MapGet("/image", (FrameBus bus) => Results.Ok(bus.Latest));
+
+// Les valeurs non finies de l'image courante, nommees. Repond a « laquelle ».
+app.MapGet("/image/verif", (FrameBus bus) =>
+{
+    var f = bus.Latest;
+    var fautives = new List<string>();
+
+    void V(string nom, float x)
+    {
+        if (float.IsNaN(x) || float.IsInfinity(x)) fautives.Add($"{nom} = {x}");
+    }
+
+    V("Rms", f.Rms);
+    V("Novelty", f.Novelty);
+    V("Flux", f.Flux);
+    V("Threshold", f.Threshold);
+    V("Blend", f.Blend);
+    V("TempoDrift", f.TempoDrift);
+    V("DriftVisible", f.DriftVisible);
+    V("AnnouncedBpm", f.AnnouncedBpm);
+    V("GridAgreement", f.GridAgreement);
+    if (f.Phase is { } ph) V("Phase", ph);
+    if (f.Bpm is { } bp) V("Bpm", bp);
+    if (f.Bands is { } bandes)
+        for (var i = 0; i < bandes.Length; i++) V($"Bands[{i}]", bandes[i]);
+    for (var i = 0; i < Voices.Registers; i++)
+    {
+        var l = f.Voices.LaneAt(i);
+        V($"Voices[{i}].Level", l.Level);
+        V($"Voices[{i}].Position", l.Position);
+        V($"Voices[{i}].Heard", l.Heard);
+        V($"Voices[{i}].Sharpness", l.Sharpness);
+        V($"Voices[{i}].Brightness", l.Brightness);
+        V($"Voices[{i}].Texture", l.Texture);
+    }
+    V("Timbre.Centroid", f.Timbre.Centroid);
+    V("Timbre.Openness", f.Timbre.Openness);
+    V("Timbre.Density", f.Timbre.Density);
+    V("Structure.PhrasePos", f.Structure.PhrasePos);
+    V("Structure.Confidence", f.Structure.Confidence);
+    V("Structure.Buildup", f.Structure.Buildup);
+    V("Structure.Trust", f.Structure.Trust);
+    V("Harmony.Change", f.Harmony.Change);
+    V("EventPrint.Brillance", f.EventPrint.Brillance);
+    V("EventPrint.Etalement", f.EventPrint.Etalement);
+    V("EventPrint.Piquant", f.EventPrint.Piquant);
+
+    return Results.Ok(new { t = f.T, sain = fautives.Count == 0, fautives });
+});
+
 app.MapGet("/health", (FrameBus bus, GpuSink gpu) =>
 {
     var (written, mean, worst, over100, over1ms) = gpu.Stats();
