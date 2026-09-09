@@ -87,6 +87,11 @@ public sealed class TrackMemory
     {
         var id = Identify(track);
         _master = (id, TrackKnowledge.Empty(id));
+
+        // La fiche d'abord : elle dit dans quel voisinage chercher, et l'analyse n'a plus a
+        // le deviner. Ce que le disque a appris de lui-meme vient ensuite et prime — un
+        // tempo mesure sur ce passage-ci vaut mieux qu'un tempo note un autre jour.
+        if (track.Bpm > 0f && master is IAcceptsCue amorcable) amorcable.Amorcer(track.Bpm);
         master.Resume(_master.Knowledge);
     }
 

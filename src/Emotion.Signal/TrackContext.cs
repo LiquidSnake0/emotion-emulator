@@ -52,7 +52,23 @@ public sealed record TrackContext(
     /// a l'autre, et annoncer un piano la ou passe un saxophone est pire que ne rien
     /// annoncer. Elle dit seulement si la bande est assez nette pour porter un nom.
     /// </summary>
-    byte[]? Names = null)
+    byte[]? Names = null,
+
+    /// <summary>
+    /// Le tempo fiche dans le crate, ou zero si la fiche n'en porte pas.
+    ///
+    /// LE CRATE EST LA PREMIERE SOURCE D'INFORMATION, ET CE CHAMP EST LE FIL QUI MANQUAIT.
+    ///
+    /// La regle du projet reste entiere : on ne verrouille jamais sur ce chiffre. Un vinyle
+    /// se joue a plus ou moins huit pour cent au fader, donc un BPM stocke est faux des la
+    /// premiere seconde. Mais faux n'est pas inutile — il dit le VOISINAGE, et savoir ou
+    /// chercher change tout : mesure contre les tempos que le DJ a lui-meme cales, sur un
+    /// album entier du bac, le moteur passe de 43 a 99 % de justesse.
+    ///
+    /// Il entre par <see cref="SpectrumAnalyzer.Amorcer"/>, qui recentre la ponderation de
+    /// l'autocorrelation sans jamais forcer sa conclusion.
+    /// </summary>
+    float Bpm = 0f)
 {
     /// <summary>La forme voulue pour une source, ou celle par defaut de son rang.</summary>
     public byte ShapeOf(int rank) =>

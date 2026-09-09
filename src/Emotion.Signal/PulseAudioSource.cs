@@ -16,7 +16,7 @@ namespace Emotion.Signal;
 /// sa sortie standard, et cela evite une dependance native a compiler par plateforme.
 /// Le cout est un processus fils, et deux pieges qu'il faut traiter — voir plus bas.
 /// </summary>
-public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
+public sealed class PulseAudioSource : IAudioSource, ILearnsTracks, IAcceptsCue
 {
     private const int SampleRate = 48_000;
 
@@ -185,4 +185,13 @@ public sealed class PulseAudioSource : IAudioSource, ILearnsTracks
         }
         return true;
     }
+
+    /// <summary>
+    /// Le tempo annonce par la fiche du crate.
+    ///
+    /// Il ne remplace pas la mesure : il recentre la ponderation de l'autocorrelation, qui
+    /// continue de chercher. Un disque pousse au fader est suivi malgre sa fiche. Voir
+    /// <see cref="IAcceptsCue"/> et <see cref="SpectrumAnalyzer.Amorcer"/>.
+    /// </summary>
+    public void Amorcer(float bpm) => _analyzer.Amorcer(bpm);
 }
