@@ -628,6 +628,7 @@ public sealed class SpectrumAnalyzer
     // bandes d'aigus et une seule pour tout le grave.
     private readonly int[] _edges;
     private readonly PhaseFold _repli = new();
+    private SourceEnvelope? _enveloppes;
     private readonly float[] _prevMag = new float[Window / 2];
     private float _fluxMedium;
 
@@ -876,12 +877,22 @@ public sealed class SpectrumAnalyzer
             for (var i = 0; i < SourceSeparator.Sources; i++)
             {
                 var brut = _voices.EtatDe(i);
+
+                // L'ENVELOPPE SE MESURE SUR CE QUI EST AFFICHE, pour la meme raison que la
+                // nettete : elle etait prise sur les bandes d'octave, c'est-a-dire sur
+                // autre chose que ce que l'ecran montre. Une source qui se separe bien mais
+                // dont la bande d'octave est partagee aurait recu l'enveloppe de sa voisine.
+                _enveloppes ??= new SourceEnvelope(SourceSeparator.Sources, _frameSeconds);
+                _enveloppes.Feed(i, act[i]);
+
                 etats[i] = brut with
                 {
                     Level = act[i],
                     Position = haut[i],
                     Heard = _separation.EcouteOrdonnee(i),
                     Sharpness = _separation.StabiliteOrdonnee(i),
+                    Pique = _enveloppes.Pique(i),
+                    Tenue = _enveloppes.Tenue(i),
                 };
             }
 

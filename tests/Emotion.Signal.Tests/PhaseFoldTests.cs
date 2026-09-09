@@ -114,3 +114,85 @@ public class PhaseFoldTests
         Assert.Equal(0f, repli.Relief);
     }
 }
+
+/// <summary>
+/// L'enveloppe d'une source : ce qui separe une corde pincee d'un souffle.
+///
+/// Aucune grandeur ne le disait. Les deux produisent le meme niveau moyen et la meme
+/// hauteur, et le rendu leur donnait donc le meme mouvement.
+/// </summary>
+public class SourceEnvelopeTests
+{
+    private const float Frame = 0.0213f;      // une fenetre d'analyse
+
+    /// <summary>Joue un motif et rend l'enveloppe mesuree.</summary>
+    private static (float Pique, float Tenue) Jouer(Func<int, float> niveau, int fenetres = 400)
+    {
+        var e = new SourceEnvelope(1, Frame);
+        for (var i = 0; i < fenetres; i++) e.Feed(0, niveau(i));
+        return (e.Pique(0), e.Tenue(0));
+    }
+
+    /// <summary>Un souffle : il s'installe et ne frappe jamais.</summary>
+    [Fact]
+    public void Un_continu_ne_pique_pas_et_tient()
+    {
+        var (pique, tenue) = Jouer(_ => 0.7f);
+        Assert.True(pique < 0.15f, $"pique {pique:F2} sur un niveau constant");
+        Assert.True(tenue > 0.9f, $"tenue {tenue:F2} sur un niveau constant");
+    }
+
+    /// <summary>
+    /// Une corde pincee : elle monte en une fenetre et meurt avant la suivante.
+    /// </summary>
+    [Fact]
+    public void Un_pince_pique_et_ne_tient_pas()
+    {
+        // Une note tous les trente-deux fenetres, soit environ deux tiers de seconde.
+        var (pique, tenue) = Jouer(i =>
+        {
+            var depuis = i % 32;
+            return depuis == 0 ? 1f : MathF.Max(0f, 1f - depuis * 0.4f);
+        });
+        Assert.True(pique > 0.5f, $"pique {pique:F2} sur des notes pincees");
+        Assert.True(tenue < 0.45f, $"tenue {tenue:F2} sur des notes pincees");
+    }
+
+    /// <summary>
+    /// UN PIANO : IL PIQUE ET IL TIENT UN PEU. C'est le cas qui prouve que les deux
+    /// grandeurs sont independantes — « une frappe suivie d'une onde courte ou longue »,
+    /// ou la longueur de l'onde EST la tenue.
+    /// </summary>
+    [Fact]
+    public void Un_frappe_qui_resonne_pique_ET_tient()
+    {
+        var (pique, tenue) = Jouer(i =>
+        {
+            var depuis = i % 32;
+            return depuis == 0 ? 1f : MathF.Exp(-depuis * 0.06f);
+        });
+        Assert.True(pique > 0.5f, $"pique {pique:F2} sur un piano");
+        Assert.True(tenue > 0.45f, $"tenue {tenue:F2} sur un piano — il resonne pourtant");
+    }
+
+    /// <summary>Le paquet transporte les deux, sans les melanger.</summary>
+    [Fact]
+    public void Le_paquet_transporte_l_enveloppe()
+    {
+        var p = new GpuPacket();
+        p.WriteEnvelope(2, 0.75f, 0.25f);
+        p.WriteEnvelope(3, 0.25f, 0.75f);
+
+        var (a, b) = p.ReadEnvelope(2);
+        Assert.InRange(a / 255f, 0.74f, 0.76f);
+        Assert.InRange(b / 255f, 0.24f, 0.26f);
+
+        var (c, d) = p.ReadEnvelope(3);
+        Assert.InRange(c / 255f, 0.24f, 0.26f);
+        Assert.InRange(d / 255f, 0.74f, 0.76f);
+
+        // Les enveloppes vivent hors du mot de la source : ecrire l'une ne doit pas
+        // deplacer l'autre, ni toucher au mot lui-meme.
+        Assert.Equal((byte)0, p.ReadSource(2).Level);
+    }
+}

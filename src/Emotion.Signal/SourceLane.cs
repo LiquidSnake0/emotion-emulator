@@ -49,10 +49,26 @@ public interface ISourceLane
 /// <param name="Sharpness">la bande porte-t-elle un seul timbre. Une propriete du disque.</param>
 /// <param name="Brightness">brillance moyenne de la source.</param>
 /// <param name="Texture">raie franche a souffle.</param>
+/// <param name="Pique">
+/// A quel point la source monte d'un coup, 0 a 1. Une corde pincee approche un, un souffle
+/// approche zero. Voir <see cref="SourceEnvelope"/>.
+/// </param>
+/// <param name="Tenue">
+/// A quel point elle reste au niveau atteint, 0 a 1. Un souffle approche un, un pizzicato
+/// approche zero.
+///
+/// AVEC <paramref name="Pique"/>, ELLES DISENT CE QU'AUCUNE AUTRE GRANDEUR NE DISAIT : une
+/// corde pincee et un souffle produisent le meme niveau moyen et la meme hauteur, et le
+/// rendu leur donnait donc le meme mouvement. C'est le couple des deux qui les separe —
+/// pique fort et tenue courte pour un pizzicato, pique nul et tenue pleine pour un vent,
+/// pique fort et tenue moyenne pour un piano, c'est-a-dire « une frappe suivie d'une onde
+/// courte ou longue ».
+/// </param>
 public readonly record struct LaneState(
     float Level, float Position, bool Hit,
     float Heard = 0f, float Sharpness = 0f,
-    float Brightness = 0.5f, float Texture = 0.5f)
+    float Brightness = 0.5f, float Texture = 0.5f,
+    float Pique = 0f, float Tenue = 0f)
 {
     public static LaneState Silent => new(0f, 0.5f, false);
 

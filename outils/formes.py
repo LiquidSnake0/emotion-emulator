@@ -91,7 +91,7 @@ def _repere(g):
     return cx, cy, unite
 
 
-def rendu(nom, g, niveau, contour, frappe, tempo):
+def rendu(nom, g, niveau, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Rend la forme comme une liste de lignes de caractères.
 
     CHAQUE CASE EXPOSE SA SOURCE À SA FAÇON, ET AUCUNE DEUX FOIS.
@@ -118,11 +118,17 @@ def rendu(nom, g, niveau, contour, frappe, tempo):
     Aucun anneau parmi les sources : la case GRAVE en porte un, et c'est la seule forme que
     le DJ ait dite bonne. La garder unique est ce qui la rend lisible.
     """
-    force = min(1.0, niveau + frappe * 0.6)
-    return _FORMES.get(nom, orbe)(g, force, contour, frappe, tempo), force
+    # CE QUE L'ATTAQUE AJOUTE DEPEND DE LA NATURE DE LA SOURCE.
+    #
+    # Une constante donnait le meme sursaut a une corde pincee et a un souffle. Le pique
+    # dit lequel des deux on regarde : a un, l'attaque emporte la forme ; a zero, elle ne
+    # la touche pas et le mouvement ne vient que du niveau — ce qui est exactement ce que
+    # fait un instrument a vent, qui ne frappe jamais.
+    force = min(1.0, niveau + frappe * (0.15 + 0.75 * pique))
+    return _FORMES.get(nom, orbe)(g, force, contour, frappe, tempo, pique, tenue), force
 
 
-def barres(g, force, contour, frappe, tempo):
+def barres(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Des colonnes depuis le bas, espacées. La lecture d'un égaliseur.
 
     Espacées, et c'est ce qui les distingue de la vague : celle-ci est un front continu,
@@ -155,7 +161,7 @@ def barres(g, force, contour, frappe, tempo):
     return ["".join(l) for l in lignes]
 
 
-def onde(g, force, contour, frappe, tempo):
+def onde(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """UNE seule sinusoïde lente qui traverse la case de bord à bord.
 
     Elle se distingue de la vague par sa longueur d'onde : ici une crête et demie sur toute
@@ -172,14 +178,18 @@ def onde(g, force, contour, frappe, tempo):
     for l in range(g.lignes):
         ligne = []
         for c in range(g.cols):
-            y = centre + math.sin(c * k - tempo * 2.0) * amp
+            # UNE SOURCE TENUE ONDULE LENTEMENT, UNE SOURCE BREVE S'AGITE. C'est la meme
+            # information que la retombee de l'impulsion, dite par le mouvement continu
+            # plutot que par l'eclair — ce qui la rend lisible sur une source qui ne frappe
+            # jamais et n'a donc aucun eclair a montrer.
+            y = centre + math.sin(c * k - tempo * (3.4 - 2.2 * tenue)) * amp
             d = abs(l - y)
             ligne.append("≈" if d < 0.55 else ("~" if d < 1.25 else " "))
         lignes.append("".join(ligne))
     return lignes
 
 
-def orbe(g, force, contour, frappe, tempo):
+def orbe(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Un disque PLEIN qui grandit et rapetisse. Il a remplacé les lèvres.
 
     La bouche voulait dire « ce qui chante » et ne disait rien : deux rangées de filets
@@ -220,7 +230,7 @@ def orbe(g, force, contour, frappe, tempo):
     return lignes
 
 
-def comete(g, force, contour, frappe, tempo):
+def comete(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Une masse qui GLISSE horizontalement, avec une traînée derrière elle.
 
     Le seul motif de la matrice qui se déplace de gauche à droite : c'est ce déplacement
@@ -254,7 +264,7 @@ def comete(g, force, contour, frappe, tempo):
     return lignes
 
 
-def etoile(g, force, contour, frappe, tempo):
+def etoile(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Un éclat ponctuel qui scintille sur l'attaque. Le plus petit motif de la matrice.
 
     Petit, et c'est ce qui le distingue : là où l'orbe occupe la case, l'étoile n'en prend
@@ -284,7 +294,7 @@ def etoile(g, force, contour, frappe, tempo):
     return lignes
 
 
-def vague(g, force, contour, frappe, tempo):
+def vague(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Des crêtes serrées qui déferlent, remplies depuis le bas. Pour les registres aigus.
 
     L'aigu n'a pas de contour franc : ni attaque nette ni hauteur stable, seulement une
@@ -318,7 +328,7 @@ def vague(g, force, contour, frappe, tempo):
     return lignes
 
 
-def grain_source(g, force, contour, frappe, tempo):
+def grain_source(g, force, contour, frappe, tempo, pique=0.0, tenue=0.0):
     """Un semis qui scintille, concentré à la hauteur du contour."""
     haut = g.lignes - 1
     centre = haut * (1.0 - contour)

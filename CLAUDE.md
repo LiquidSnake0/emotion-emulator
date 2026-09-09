@@ -912,6 +912,60 @@ apprentissage. L'octet 3 porte donc l'orbe.
 agitation : un motif centré lui va mal, il lui faut quelque chose qui bouge partout à la
 fois.
 
+## L'enveloppe de chaque source
+
+**Ce que le système ne savait pas dire.** Chaque source publiait son niveau, sa hauteur et
+un drapeau de frappe. Rien de tout cela ne distingue une corde pincée d'un souffle : l'une
+monte d'un coup puis meurt, l'autre s'installe et ne frappe jamais. Les deux produisent le
+même niveau moyen et la même hauteur, et le rendu leur donnait donc le même mouvement.
+
+> « Un instrument à corde c'est une frappe suivie d'une onde courte ou longue, un
+> instrument à vent c'est en continu, il ne frappe pas. »
+
+| | Ce que ça mesure | Aucun réglage |
+|---|---|---|
+| `pique` | la pente rapportée à la crête | une montée qui atteint la crête en une fenêtre vaut 1 |
+| `tenue` | la moyenne rapportée à la crête | l'inverse du facteur de crête, un rapport pur |
+
+**Les deux sont indépendantes, et c'est ce qui les rend utiles.** Un orgue : piqué faible,
+tenue forte. Un woodblock : l'inverse. Un piano : piqué fort et tenue moyenne — c'est-à-dire
+exactement « une frappe suivie d'une onde », où la longueur de l'onde **est** la tenue.
+
+Deux octets par source, à l'offset 216 : le mot d'une source fait huit octets et ils sont
+tous pris. Elles vivent donc dans un second bloc, ce qui ne change rien à la garantie qui
+comptait — deux sources n'écrivent jamais dans le même octet.
+
+### L'interpolation passe avant l'enveloppe, et l'ordre n'est pas indifférent
+
+Les deux se ressemblent — toutes deux lissent quelque chose — et les intervertir détruirait
+précisément ce qu'on vient de mesurer. La règle qui les sépare est celle qui tient déjà tout
+le reste : **un descripteur se mêle, un événement jamais.**
+
+- `pique` et `tenue` décrivent la **nature** d'une source. Ils se moyennent sur une seconde
+  et demie en amont et ne bougent pas d'une fenêtre à l'autre : les mêler entre deux images
+  ne perd rien et supprime les paliers de 21 ms. Ils passent donc par l'interpolation, avec
+  le niveau.
+- La **frappe** ne passe pas, et c'est pour ça qu'elle survit.
+
+**Et l'enveloppe agit après, au rendu** : `pique` et `tenue` interpolés règlent la façon
+dont l'impulsion brute retombe. Inverser — enveloppe d'abord, interpolation ensuite —
+mêlerait deux retombées calculées à des instants différents, ce qui arrondirait l'attaque
+même quand `pique` vaut 1. On aurait dépensé un descripteur pour décrire une netteté que le
+rendu venait d'effacer.
+
+### Ce que ça change à l'écran
+
+| | Avant | Après |
+|---|---|---|
+| retombée de l'impulsion | la même pour toutes | `0,7 + 8 × (1 − tenue)` par seconde |
+| force de l'attaque | `+ 0,6` pour toutes | `+ 0,15 + 0,75 × pique` |
+| vitesse de l'onde | fixe | `3,4 − 2,2 × tenue` — ce qui tient ondule lentement |
+| étiquette de la case | le nom de la forme | **`pincé` · `frappé` · `tenu`** |
+
+L'étiquette existe parce qu'un écran qui montre autre chose que ce qui décide est pire
+qu'aucun écran : sans elle on voit un mouvement sans savoir s'il décrit un instrument qui
+frappe ou un qui souffle.
+
 **Le rendu est en caractères** parce qu'il doit rester léger — il n'y a pas de GPU sous la
 main, et un remplissage de texte coûte une fraction d'un dégradé. Ils donnent en prime une
 identité que des polygones translucides n'avaient pas : celle d'un terminal, ce qui va bien

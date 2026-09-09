@@ -347,6 +347,30 @@ public struct GpuPacket
     /// chacune son traitement sans qu'on ait eu besoin de nommer quoi que ce soit — c'est la
     /// meme discipline que pour les six sources separees.
     /// </summary>
+    /// <summary>
+    /// L'ENVELOPPE DE CHAQUE SOURCE : deux octets, hors du mot de la source.
+    ///
+    /// Le mot d'une source fait huit octets et ils sont tous pris. Ces deux-ci vivent donc
+    /// a part, dans un second bloc — ce qui ne change rien a la garantie qui comptait :
+    /// deux sources n'ecrivent jamais dans le meme octet, ici comme la-bas.
+    ///
+    ///   +0  pique   a quel point la source monte d'un coup
+    ///   +1  tenue   a quel point elle reste au niveau atteint
+    ///
+    /// Voir <see cref="SourceEnvelope"/>. Ce sont des DESCRIPTEURS et non des evenements :
+    /// ils se moyennent sur une seconde et demie, se transportent comme le niveau, et
+    /// s'interpolent comme lui. Le drapeau de frappe, lui, reste brut.
+    /// </summary>
+    public const int EnvelopeOffset = 216;
+
+    /// <summary>Deux octets par source.</summary>
+    public const int EnvelopeStride = 2;
+
+    public const int EnvelopePique = 0;
+    public const int EnvelopeTenue = 1;
+
+    [FieldOffset(EnvelopeOffset)] public EnvelopeBlock Envelopes;
+
     [FieldOffset(212)] public byte EventFamily;
 
     /// <summary>L'empreinte de cette frappe, un octet par axe.</summary>
@@ -431,6 +455,23 @@ public struct GpuPacket
         slot[SourceShape] = shape != 0 ? shape : Emotion.Signal.SourceShape.Default(rank);
     }
 
+    /// <summary>Ecrit l'enveloppe d'une source : son pique et sa tenue.</summary>
+    public void WriteEnvelope(int rank, float pique, float tenue)
+    {
+        if ((uint)rank >= SourceSlots) return;
+        var slot = EnvelopeByte(rank);
+        slot[EnvelopePique] = Byte255(pique);
+        slot[EnvelopeTenue] = Byte255(tenue);
+    }
+
+    /// <summary>Relit l'enveloppe d'une source, en octets bruts.</summary>
+    public (byte Pique, byte Tenue) ReadEnvelope(int rank)
+    {
+        if ((uint)rank >= SourceSlots) return (0, 0);
+        var slot = EnvelopeByte(rank);
+        return (slot[EnvelopePique], slot[EnvelopeTenue]);
+    }
+
     /// <summary>Relit ce qu'une source a ecrit.</summary>
     public SourceState ReadSource(int rank)
     {
@@ -441,6 +482,14 @@ public struct GpuPacket
             slot[SourceLevel], slot[SourcePitch], (slot[SourceFlags] & SourceHitBit) != 0,
             slot[SourceLabel], slot[SourceHeard], slot[SourceSharp],
             slot[SourceBrightness], slot[SourceShape]);
+    }
+
+    private Span<byte> EnvelopeByte(int rank)
+    {
+        var all = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+            ref System.Runtime.CompilerServices.Unsafe.As<EnvelopeBlock, byte>(ref Envelopes),
+            SourceSlots * EnvelopeStride);
+        return all.Slice(rank * EnvelopeStride, EnvelopeStride);
     }
 
     private Span<byte> SourceByte(int rank)
@@ -527,7 +576,11 @@ public struct GpuPacket
         // Le nom et la forme viennent de la fiche et traversent sans etre recalcules ; le
         // reste vient de l'analyse. Les deux voyagent dans le meme mot, sans s'attendre.
         for (var i = 0; i < SourceCount; i++)
-            p.WriteSource(i, f.Voices.LaneAt(i), track.NameOf(i), track.ShapeOf(i));
+        {
+            var lane = f.Voices.LaneAt(i);
+            p.WriteSource(i, lane, track.NameOf(i), track.ShapeOf(i));
+            p.WriteEnvelope(i, lane.Pique, lane.Tenue);
+        }
 
         // Couleur deja decomposee par TrackContext : rien a analyser ici.
         var (r, g, b) = track.Rgb;
@@ -548,6 +601,16 @@ public struct GpuPacket
 /// </summary>
 [System.Runtime.CompilerServices.InlineArray(GpuPacket.SourceSlots * GpuPacket.SourceStride)]
 public struct SourceBlock
+{
+    private byte _first;
+}
+
+/// <summary>
+/// Les huit enveloppes, cote a cote. Deux octets chacune, plats pour la meme raison que
+/// les mots de source : un seul acces plutot que huit champs.
+/// </summary>
+[System.Runtime.CompilerServices.InlineArray(GpuPacket.SourceSlots * GpuPacket.EnvelopeStride)]
+public struct EnvelopeBlock
 {
     private byte _first;
 }

@@ -148,10 +148,20 @@ public sealed class MockAudioSource : IAudioSource
             // avec le temps. Les deux etaient confondues, et la barre trompait.
             var ecoute = Clamp01((float)(t / 1000.0) / (4f + r * 0.8f));
             var nette = new[] { 0.05f, 0.30f, 0.45f, 0.90f, 0.60f, 0.80f }[r];
+            // L'ENVELOPPE AUSSI, ET LE MOCK LUI DONNE SIX VALEURS DIFFERENTES.
+            //
+            // Il a deja perdu le contrat deux fois en s'etendant, et plus aucun effet ne
+            // partait en mode simule. Un test verifie desormais qu'aucun champ ne reste a
+            // sa valeur par defaut — mais un mock qui remplirait les six sources de la
+            // meme valeur passerait ce test tout en rendant l'enveloppe intestable a l'oeil.
+            // On etale donc : du souffle pur au bas, de la corde pincee en haut.
+            var pique = r / 5f;
+            var tenue = 1f - r / 6f;
             voies[r] = new LaneState(niveau, contours[r], (attaques >> r & 1) != 0,
                                      Heard: ecoute, Sharpness: nette,
                                      Brightness: r / 5f,
-                                     Texture: 0.3f + r * 0.1f);
+                                     Texture: 0.3f + r * 0.1f,
+                                     Pique: pique, Tenue: tenue);
         }
 
         // Un nom se pose sur une source mure, et sur elle seule. Zero partout ailleurs :

@@ -85,6 +85,11 @@ P_BPM_ANNONCE = 204
 P_ANNONCE = 208
 P_SOURCES = 128        # huit mots de huit octets
 SOURCE_PAS = 8
+
+# L'enveloppe de chaque source, hors du mot de la source : celui-ci fait huit octets et
+# ils sont tous pris. Deux octets chacun — le pique et la tenue.
+P_ENVELOPPES = 216
+ENVELOPPE_PAS = 2
 S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2, 3, 4, 5, 7
 
 GRIS_FOND = QColor(14, 14, 15)
@@ -196,6 +201,11 @@ class Paquet:
                 "entendu": mm[o + S_ENTENDU] / 255.0,
                 "nom": mm[o + S_NOM],
                 "forme": mm[o + S_FORME],
+                # LE PIQUE ET LA TENUE : ce que le niveau seul ne disait pas. Une corde
+                # pincee monte d'un coup et meurt ; un souffle s'installe et ne frappe
+                # jamais. Les deux donnaient le meme niveau moyen et la meme hauteur.
+                "pique": mm[base + P_ENVELOPPES + r * ENVELOPPE_PAS] / 255.0,
+                "tenue": mm[base + P_ENVELOPPES + r * ENVELOPPE_PAS + 1] / 255.0,
             })
 
 
@@ -231,11 +241,32 @@ def entre(avant, courant, a):
     v.phase_temps = (m(avant.phase_temps, courant.phase_temps)
                      if courant.phase_temps >= avant.phase_temps else courant.phase_temps)
 
+    # L'INTERPOLATION PASSE AVANT L'ENVELOPPE, ET L'ORDRE N'EST PAS INDIFFERENT.
+    #
+    # Les deux se ressemblent — toutes deux lissent quelque chose — et les intervertir
+    # detruirait précisément ce qu'on vient de mesurer. La règle qui les sépare est celle
+    # qui tient déjà tout le reste du projet : un DESCRIPTEUR se mêle, un ÉVÉNEMENT jamais.
+    #
+    #   `pique` et `tenue` décrivent la NATURE d'une source. Ils se moyennent sur une
+    #   seconde et demie en amont et ne bougent pas d'une fenêtre à l'autre. Les mêler
+    #   entre deux images ne perd rien et supprime les paliers de 21 ms — donc ils passent
+    #   ici, avec le niveau.
+    #
+    #   La FRAPPE, elle, ne passe pas : elle est déjà exclue de cette fonction, et c'est
+    #   pour ça qu'elle survit. Une impulsion mêlée n'est plus une impulsion.
+    #
+    # Et l'enveloppe agit APRÈS, au moment du rendu : `pique` et `tenue` interpolés règlent
+    # la façon dont l'impulsion brute retombe. Si on inversait — enveloppe d'abord,
+    # interpolation ensuite — on mêlerait deux retombées calculées à des instants
+    # différents, ce qui arrondirait l'attaque même quand `pique` vaut un. On aurait alors
+    # dépensé un descripteur pour décrire une netteté que le rendu venait d'effacer.
     v.sources = [
         {**c,
          "niveau": m(x["niveau"], c["niveau"]),
          "hauteur": m(x["hauteur"], c["hauteur"]),
-         "nettete": m(x["nettete"], c["nettete"])}
+         "nettete": m(x["nettete"], c["nettete"]),
+         "pique": m(x["pique"], c["pique"]),
+         "tenue": m(x["tenue"], c["tenue"])}
         for x, c in zip(avant.sources, courant.sources)
     ]
     return v
@@ -254,11 +285,24 @@ class Pulse:
         self.valeur = 0.0
         self.chute = chute
 
-    def tirer(self):
-        self.valeur = 1.0
+    def tirer(self, force=1.0):
+        """Déclenche. `force` permet à une source peu piquante de ne pas claquer.
 
-    def pas(self, dt):
-        self.valeur = max(0.0, self.valeur - dt * self.chute)
+        Une source continue — un souffle, un archet — voit passer des attaques dans son
+        registre sans en être une elle-même. Lui faire produire un éclair plein serait lui
+        prêter un geste qu'elle ne fait pas.
+        """
+        self.valeur = max(self.valeur, max(0.0, min(1.0, force)))
+
+    def pas(self, dt, chute=None):
+        """Décroît. La chute peut venir du dehors : c'est la tenue de la source.
+
+        C'EST ICI QUE « UNE FRAPPE SUIVIE D'UNE ONDE COURTE OU LONGUE » PREND CORPS. La
+        frappe est l'impulsion, l'onde est sa retombée, et sa longueur est la tenue mesurée
+        sur la source elle-même. Un pizzicato retombe en un dixième de seconde, un piano en
+        une seconde, un vent ne retombe pas du tout.
+        """
+        self.valeur = max(0.0, self.valeur - dt * (self.chute if chute is None else chute))
 
 
 class Mur(QWidget):
@@ -346,8 +390,10 @@ class Mur(QWidget):
                 if p.charley:
                     self.charley.tirer()
                 for r, s in enumerate(p.sources):
+                    # L'impulsion vaut ce que la source a de piquant. Une source qui monte
+                    # doucement ne claque pas : son mouvement vient de son niveau.
                     if s["frappe"]:
-                        self.coups[r].tirer()
+                        self.coups[r].tirer(0.25 + 0.75 * s["pique"])
                 if p.coup_grave:
                     self.grave.tirer()
                 if p.nouveaute > 0.5:
@@ -377,8 +423,17 @@ class Mur(QWidget):
             if self.balayage > 1.3:
                 self.balayage = -1.0
         for imp in (self.kick, self.clap, self.charley, self.grave,
-                    self.annonce, self.rupture, *self.coups):
+                    self.annonce, self.rupture):
             imp.pas(dt)
+
+        # LA RETOMBEE DE CHAQUE SOURCE SUIT SA TENUE, ET C'EST TOUT L'INTERET DU
+        # DESCRIPTEUR. Une chute commune donnait le meme geste a un pizzicato et a un
+        # souffle. De huit par seconde — un huitieme de seconde de vie — a moins d'un,
+        # c'est-a-dire une onde qui ne retombe plus.
+        src = self.paquet.sources if self.paquet else None
+        for r, imp in enumerate(self.coups):
+            tenue = src[r]["tenue"] if src else 0.0
+            imp.pas(dt, chute=0.7 + 8.0 * (1.0 - tenue))
         self.update()
 
     # ------------------------------------------------------------------ dessin
@@ -493,7 +548,17 @@ class Mur(QWidget):
 
             nom = formes.NOMS.get(s["forme"], formes.NOMS[(r % 6) + 1])
             d.setPen(GRIS_TEXTE)
+            # DIRE LA NATURE DE LA SOURCE, PUISQUE C'EST ELLE QUI COMMANDE LE GESTE. Sans
+            # cela, on voit un mouvement sans savoir s'il decrit un instrument qui frappe ou
+            # un qui souffle — et un ecran qui montre autre chose que ce qui decide est pire
+            # qu'aucun ecran.
+            nature = ("pincé" if s["pique"] > 0.5 and s["tenue"] < 0.45 else
+                      "frappé" if s["pique"] > 0.5 else
+                      "tenu" if s["tenue"] > 0.6 else
+                      "")
             titre = f"{r + 1}·{s['nom']}  {nom}" if s["nom"] else f"{r + 1}  {nom}"
+            if nature:
+                titre += f"  {nature}"
             d.drawText(int(cx) + 8, int(cy) + 16, titre)
             # LE TITRE PORTE LA MATURITE DE LA SOURCE, EN QUATRE CRANS.
             #
@@ -526,7 +591,8 @@ class Mur(QWidget):
             avance = QFontMetricsF(police).horizontalAdvance("M")
             g = formes.Grille(cx, cy, larg, haut, lignes=9, avance=avance)
             lignes, force = formes.rendu(nom, g, s["niveau"], s["hauteur"],
-                                         self.coups[r].valeur, self.tempo)
+                                         self.coups[r].valeur, self.tempo,
+                                         s["pique"], s["tenue"])
 
             # ET L'ON DECOUPE, PAR-DESSUS TOUT LE RESTE. Les controles servent a comprendre,
             # le decoupage garantit : ce qui depasse n'est pas dessine, quelle qu'en soit la
