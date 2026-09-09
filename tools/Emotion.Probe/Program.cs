@@ -256,6 +256,12 @@ var hatAt = new List<long>();
 // opposes. On note l'instant ou sa phase repasse par zero : c'est la qu'il place le temps.
 var repliAt = new List<long>();
 var repliPrec = -1f;
+
+// Combien de fois chaque source s'est declaree absente, et a quel niveau elle joue.
+var absentes = new int[Voices.Registers];
+var niveaux = new List<float>[Voices.Registers];
+for (var i = 0; i < Voices.Registers; i++) niveaux[i] = new List<float>(4096);
+var cadres = 0;
 var dernierBeat = -2;
 var fluxE = new List<float>();
 var fluxC = new List<float>();
@@ -358,6 +364,14 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
         repliAt.Add(f.T - (long)(phRepli * 60_000f / Math.Max(1f, analyzer.Bpm ?? 87f)));
     repliPrec = phRepli;
 
+    cadres++;
+    for (var src = 0; src < Voices.Registers; src++)
+    {
+        var voie = f.Voices.LaneAt(src);
+        if (voie.Retrait > 0.4f) absentes[src]++;
+        niveaux[src].Add(voie.Level);
+    }
+
     if (f.Hits.Clap) { claps++; clapAt.Add(f.T); }
     if (f.Hits.Hat) { hats++; hatAt.Add(f.T); }
     if (f.Voices.LowHit) vLow++;
@@ -439,6 +453,29 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     slopes.Add(MathF.Abs(sb) + MathF.Abs(sa) + MathF.Abs(su));
     beatHisto[s.Beat + 1]++;
 }
+
+// LE RETRAIT DE CHAQUE SOURCE, PAR LA SONDE ET NON PAR LE SERVEUR.
+//
+// Mesurer cela demandait jusqu'ici de lancer le moteur web et d'ouvrir un port. La sonde
+// fait tourner exactement le meme analyseur sans rien ouvrir : c'est elle qu'il faut
+// interroger, et l'oublier a coute des ports laisses ouverts.
+Console.Write("sources, part du temps absentes  ");
+for (var i = 0; i < Voices.Registers; i++)
+    Console.Write($"{i + 1}:{100.0 * absentes[i] / Math.Max(1, cadres):F0}% ");
+Console.WriteLine();
+// LA MEDIANE NE DIT PAS SI UNE CASE S'ALLUME. Une source qui joue une fois par mesure passe
+// l'essentiel du temps a zero et sa mediane vaut zero, qu'elle soit visible ou invisible. Ce
+// qui decide de ce qu'on voit est le HAUT de sa distribution.
+Console.Write("           mediane / q90         ");
+for (var i = 0; i < Voices.Registers; i++)
+{
+    niveaux[i].Sort();
+    var n = niveaux[i].Count;
+    var med = n > 0 ? niveaux[i][n / 2] : 0f;
+    var q90 = n > 0 ? niveaux[i][(int)(0.9 * (n - 1))] : 0f;
+    Console.Write($"{i + 1}:{med:F2}/{q90:F2} ");
+}
+Console.WriteLine();
 
 Console.WriteLine($"\nlatence d'analyse   {analyzer.LatencyMs:F0} ms");
 Console.WriteLine($"tempo detecte sur   {tempos.Count * 100 / Math.Max(1, changes.Count)} % des fenetres" +

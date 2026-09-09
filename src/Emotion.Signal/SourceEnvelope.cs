@@ -93,12 +93,32 @@ public sealed class SourceEnvelope
     }
 
     /// <summary>
-    /// En dessous, la source ne joue pas.
+    /// En dessous de cette fraction de SA PROPRE CRETE, la source ne joue pas.
     ///
-    /// Deux pour cent du plein : assez bas pour qu'une note tenue doucement compte encore,
-    /// assez haut pour qu'un fond de bande ne soit pas pris pour un instrument.
+    /// UNE FRACTION D'ELLE-MEME, ET NON UN SEUIL ABSOLU. Le niveau d'une source est
+    /// normalise par le maximum des six : il dit « par rapport a la plus forte », pas
+    /// « en soi ». Un seuil absolu de deux pour cent revenait donc a demander a chaque
+    /// source d'atteindre deux pour cent de la source dominante — ce qu'une source
+    /// discrete ne fait jamais.
+    ///
+    /// Mesure sur un morceau du bac : le niveau median des six sources valait <b>0,000</b>,
+    /// elles passaient de 53 a 82 pour cent du temps sous ce seuil, et se declaraient
+    /// absentes une moitie du temps. Une source qui s'eteignait avait « de la peine a se
+    /// rallumer », selon le mot du DJ — et pour cause : pour revenir, il lui fallait
+    /// rivaliser avec celle qui dominait.
+    ///
+    /// Rapportee a sa propre crete, la question redevient la bonne : joue-t-elle, elle,
+    /// par rapport a ce qu'elle joue d'habitude.
     /// </summary>
     public const float Silence = 0.02f;
+
+    /// <summary>
+    /// Plancher absolu, pour ne pas prendre du bruit numerique pour une source.
+    ///
+    /// Sans lui, une source dont la crete a decru jusqu'a rien verrait son seuil decroitre
+    /// avec elle et se croirait presente sur son propre souffle.
+    /// </summary>
+    public const float SilencePlancher = 0.002f;
 
     /// <summary>
     /// Combien de temps de silence avant de considerer que la source a quitte l'arrangement.
@@ -115,10 +135,31 @@ public sealed class SourceEnvelope
     ///
     /// La duree les separe. Une seconde et demie porte deux temps du repertoire : aucune
     /// note n'y laisse un blanc aussi long, et un creux d'arrangement les depasse toujours.
-    /// C'est la meme fenetre que l'observation, et ce n'est pas un hasard — au-dela, ce
-    /// qu'on continuerait d'accumuler ne decrirait plus rien de ce qui joue.
+    /// SEULEMENT, UNE SECONDE ET DEMIE N'EST PAS UNE DUREE MUSICALE. Mesure sur un morceau
+    /// du bac : les six sources se declaraient absentes de quatorze a soixante pour cent du
+    /// temps. Les activations de la separation sont tres piquees — mediane a zero, neuvieme
+    /// decile entre 0,26 et 0,56 — donc une source joue par bouffees et se tait entre.
+    ///
+    /// « Etre en retrait » n'est pas une propriete physique mais musicale : c'est n'avoir
+    /// rien joue PENDANT DEUX MESURES. Le seuil suit donc le tempo, et vaut 5,5 s a 87 BPM
+    /// contre 2,8 s a 170. Sans tempo connu, on retombe sur la fenetre d'observation.
     /// </summary>
-    public const float RetraitS = FenetreS;
+    public float RetraitS =>
+        _tempsMs > 0f ? _tempsMs * MesuresDeRetrait * TempsParMesure / 1000f : FenetreS;
+
+    /// <summary>Mesures de silence avant de parler de retrait.</summary>
+    public const int MesuresDeRetrait = 2;
+
+    /// <summary>Temps par mesure. Le repertoire est en quatre.</summary>
+    public const int TempsParMesure = 4;
+
+    private float _tempsMs;
+
+    /// <summary>Duree d'un temps, en millisecondes. Zero tant qu'on ne la connait pas.</summary>
+    public void Tempo(float? bpm)
+    {
+        if (bpm is { } b && b > 20f && b < 400f) _tempsMs = 60_000f / b;
+    }
 
     /// <summary>Une fenetre d'analyse, pour une source.</summary>
     public void Feed(int rang, float niveau)
@@ -136,7 +177,8 @@ public sealed class SourceEnvelope
         // Un retrait gele donc la mesure. Voir <see cref="RetraitS"/> pour pourquoi il faut
         // une duree et non un simple seuil : le silence entre deux notes, lui, doit
         // continuer de compter.
-        if (niveau >= Silence)
+        var seuil = MathF.Max(SilencePlancher, Silence * _crete[rang]);
+        if (niveau >= seuil)
         {
             // Elle joue : on repart de zero, et l'on garde cet etat au cas ou le prochain
             // silence serait un retrait.

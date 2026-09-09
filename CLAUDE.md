@@ -997,6 +997,39 @@ fort.
 paquet brut il avancerait par paliers de 21 ms au lieu de suivre l'écran — c'est-à-dire
 qu'il produirait le hoquet qu'il est censé supprimer.
 
+## « Absente » ne peut pas se décider sur les activations de la séparation
+
+Le DJ observe qu'« à un moment, quelque chose qui se désactive a de la peine à se
+rallumer ». Le diagnostic a trouvé une faute de principe, et trois corrections n'ont rien
+changé au chiffre.
+
+**La faute de principe, elle, est réelle.** `act[i]` était l'activation divisée par le
+**maximum de l'instant** parmi les six : les sources se battaient image par image, et une
+source discrète ne pouvait pas exister à côté d'une source dominante. C'est l'inverse de ce
+qu'il faut — « chaque source agit sur elle-même, elle se sert des autres pour s'informer,
+jamais pour se mesurer ». Elle est désormais rapportée à sa propre crête.
+
+| ce qui a été essayé | part du temps « absente », six sources |
+|---|---|
+| départ | 41 – 61 % |
+| seuil de silence rapporté à la source elle-même | 37 – 61 % |
+| niveau rapporté à la crête propre, non au maximum des six | 26 – 72 % |
+| retrait compté en **mesures** et non en secondes (5,5 s au lieu de 1,5) | 34 – 72 % |
+
+**Aucune ne bouge le chiffre, et le neuvième décile dit pourquoi** : médiane 0,00, q90 entre
+0,12 et 0,57. Les activations de la séparation sont **si piquées** qu'une source est à zéro
+plus d'une image sur deux, quelle que soit l'échelle qu'on lui donne. Le problème est en
+amont du seuil : « cette source joue-t-elle » n'a pas de réponse stable sur cette grandeur.
+
+> **On a arrêté à trois.** La seule hypothèse qui reste est d'une autre nature — juger la
+> présence sur une activation **lissée sur deux mesures** plutôt que sur l'instantanée,
+> comme on juge déjà toutes les grandeurs continues. Elle n'a pas été essayée, et elle ne le
+> sera qu'avec un critère fixé d'avance.
+
+Les deux corrections de principe sont gardées — la concurrence entre sources était un
+défaut réel, et un retrait se compte en mesures. Mais **le drapeau « absente » reste peu
+fiable**, et il faut le savoir avant de fonder quoi que ce soit dessus.
+
 ## La mémoire de motif : mesurée hors ligne, et elle tient — dans UNE bande
 
 > « Souvent on a un coup de piano qui n'est que quelques notes, genre huit notes ; ces huit

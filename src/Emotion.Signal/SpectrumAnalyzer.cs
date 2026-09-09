@@ -628,6 +628,21 @@ public sealed class SpectrumAnalyzer
     // bandes d'aigus et une seule pour tout le grave.
     private readonly int[] _edges;
     private readonly PhaseFold _repli = new();
+
+    /// <summary>
+    /// Crete propre a chaque source. Elle monte tout de suite et oublie lentement.
+    ///
+    /// Un maximum brut serait fixe par le premier accident venu et vaudrait pour toute la
+    /// soiree — le projet a deja paye ce piege ailleurs. Le retour vaut 0,9995 par fenetre,
+    /// soit une demi-vie d'environ trente secondes : assez long pour qu'une source garde son
+    /// echelle a travers un couplet, assez court pour qu'un changement de disque la refasse.
+    /// </summary>
+    private readonly float[] _creteSource = new float[SourceSeparator.Sources];
+
+    private const float CreteRetour = 0.9995f;
+
+    /// <summary>Plancher, pour qu'une source silencieuse ne soit pas amplifiee en bruit.</summary>
+    private const float CretePlancher = 1e-3f;
     private SourceEnvelope? _enveloppes;
 
     private readonly float[] _prevMag = new float[Window / 2];
@@ -853,13 +868,30 @@ public sealed class SpectrumAnalyzer
             var haut = _hautPool[_sepTurn];
             _sepTurn ^= 1;
 
-            var max = 1e-4f;
-            for (var i = 0; i < SourceSeparator.Sources; i++)
-                max = MathF.Max(max, _separation.ActivationOrdonnee(i));
-
+            // CHAQUE SOURCE SUR SA PROPRE ECHELLE, ET NON EN CONCURRENCE AVEC LES AUTRES.
+            //
+            // Le niveau publie etait l'activation divisee par le MAXIMUM DE L'INSTANT parmi
+            // les six. Les sources se battaient donc image par image : celle qui dominait
+            // valait un, les autres tombaient vers zero — et une source discrete ne pouvait
+            // exister a cote d'une source forte.
+            //
+            // Mesure sur un morceau du bac : le niveau median des six valait 0,000, et
+            // chacune se declarait absente entre quarante et soixante pour cent du temps.
+            // Le DJ l'a dit autrement : « quelque chose qui se desactive a de la peine a se
+            // rallumer ». Pour revenir, il lui fallait rivaliser avec la dominante.
+            //
+            // C'est une faute de principe et pas un seuil mal regle. Chaque source agit sur
+            // elle-meme ; elle se sert des autres pour s'informer, jamais pour se mesurer.
+            // Elle est donc rapportee a SA PROPRE CRETE, qui suit ce qu'elle monte et
+            // oublie lentement ce qu'elle ne fait plus — la meme mecanique que ContourRange
+            // emploie deja pour l'etendue melodique, et pour la meme raison.
             for (var i = 0; i < SourceSeparator.Sources; i++)
             {
-                act[i] = Clamp01(_separation.ActivationOrdonnee(i) / max);
+                var brute = _separation.ActivationOrdonnee(i);
+                _creteSource[i] = brute > _creteSource[i]
+                    ? brute
+                    : _creteSource[i] * CreteRetour;
+                act[i] = Clamp01(brute / MathF.Max(CretePlancher, _creteSource[i]));
                 // La hauteur mesuree porte sur huit octaves ; ce qu'on affiche, c'est la
                 // place de la source dans l'etendue qu'elle parcourt vraiment. Voir
                 // ContourRange : sans cela, une source qui ne couvre qu'une octave et
@@ -884,6 +916,7 @@ public sealed class SpectrumAnalyzer
                 // autre chose que ce que l'ecran montre. Une source qui se separe bien mais
                 // dont la bande d'octave est partagee aurait recu l'enveloppe de sa voisine.
                 _enveloppes ??= new SourceEnvelope(SourceSeparator.Sources, _frameSeconds);
+                _enveloppes.Tempo(_tempo.Bpm);
                 _enveloppes.Feed(i, act[i]);
 
                 etats[i] = brut with

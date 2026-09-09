@@ -249,7 +249,7 @@ public class RetraitTests
         // Huit secondes de creux, soit bien plus que la fenetre d'observation.
         for (var i = 0; i < (int)(8f / Frame); i++) e.Feed(0, 0f);
 
-        Assert.True(e.Muet(0) > SourceEnvelope.RetraitS, "le retrait n'a pas ete constate");
+        Assert.True(e.Muet(0) > e.RetraitS, "le retrait n'a pas ete constate");
         Assert.True(e.Pique(0) > 0.5f,
             $"pique {e.Pique(0):F2} apres huit secondes de creux : elle a oublie qu'elle pincait");
         Assert.True(e.Tenue(0) < 0.45f,
