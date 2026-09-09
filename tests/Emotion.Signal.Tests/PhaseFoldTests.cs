@@ -196,3 +196,63 @@ public class SourceEnvelopeTests
         Assert.Equal((byte)0, p.ReadSource(2).Level);
     }
 }
+
+/// <summary>
+/// Une absence n'est pas un changement.
+///
+/// « Le seul changement qui justifierait de recheck le beat est un changement, pas un mute
+/// du kick. » La regle vaut pour toutes les sources : un violon qui se tait reste un
+/// violon, et le rendu ne doit pas lui donner le geste d'un souffle a son retour.
+/// </summary>
+public class RetraitTests
+{
+    private const float Frame = 0.0213f;
+
+    /// <summary>
+    /// LE SILENCE ENTRE DEUX NOTES DOIT CONTINUER DE COMPTER, et c'est ce qui rend la
+    /// distinction delicate : c'est lui qui fait la tenue d'un pizzicato. Une premiere
+    /// version gelait des le premier echantillon silencieux et mesurait donc un pizzicato
+    /// comme un souffle.
+    /// </summary>
+    [Fact]
+    public void Le_silence_entre_deux_notes_compte_toujours()
+    {
+        var e = new SourceEnvelope(1, Frame);
+        for (var i = 0; i < 400; i++)
+        {
+            var depuis = i % 32;                       // une note tous les deux tiers de seconde
+            e.Feed(0, depuis == 0 ? 1f : MathF.Max(0f, 1f - depuis * 0.5f));
+        }
+        Assert.True(e.Tenue(0) < 0.45f,
+            $"tenue {e.Tenue(0):F2} : le blanc entre les notes n'a pas ete compte");
+        Assert.True(e.Pique(0) > 0.5f, $"pique {e.Pique(0):F2}");
+    }
+
+    /// <summary>
+    /// Une source qui quitte l'arrangement garde ce qu'elle etait. C'est le creux du
+    /// morceau, celui ou il ne reste qu'une melodie.
+    /// </summary>
+    [Fact]
+    public void Un_retrait_ne_fait_pas_oublier_ce_qu_on_savait()
+    {
+        var e = new SourceEnvelope(1, Frame);
+        for (var i = 0; i < 400; i++)
+        {
+            var depuis = i % 32;
+            e.Feed(0, depuis == 0 ? 1f : MathF.Max(0f, 1f - depuis * 0.5f));
+        }
+        // ON TESTE LA PROPRIETE, PAS LE CHIFFRE. Le pique oscille a l'interieur du cycle
+        // d'une note — haut juste apres l'attaque, plus bas entre deux — donc comparer une
+        // valeur prise a un instant quelconque du cycle a celle gelee ne veut rien dire.
+        // Ce qui compte est que la source reste RECONNUE comme pincee.
+
+        // Huit secondes de creux, soit bien plus que la fenetre d'observation.
+        for (var i = 0; i < (int)(8f / Frame); i++) e.Feed(0, 0f);
+
+        Assert.True(e.Muet(0) > SourceEnvelope.RetraitS, "le retrait n'a pas ete constate");
+        Assert.True(e.Pique(0) > 0.5f,
+            $"pique {e.Pique(0):F2} apres huit secondes de creux : elle a oublie qu'elle pincait");
+        Assert.True(e.Tenue(0) < 0.45f,
+            $"tenue {e.Tenue(0):F2} apres huit secondes de creux : elle se croit continue");
+    }
+}

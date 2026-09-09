@@ -997,6 +997,36 @@ fort.
 paquet brut il avancerait par paliers de 21 ms au lieu de suivre l'écran — c'est-à-dire
 qu'il produirait le hoquet qu'il est censé supprimer.
 
+## Une absence n'est pas un changement
+
+> « Le seul changement qui justifierait de recheck le beat est un changement, pas un mute
+> du kick. »
+
+Le principe est juste et il s'applique partout. Ce qui se tait n'a rien démenti : il faut
+**tenir** ce qu'on savait, et ne se raviser que devant une contradiction.
+
+| | Avant | Après |
+|---|---|---|
+| `BeatGrid` | la phase s'accumule seule | déjà juste |
+| `GridAgreement` | fenêtre glissante de 64 frappes, sans horloge | déjà juste — par construction plus que par intention |
+| verrouillage de l'horloge | un seuil sur la valeur de l'instant | **hystérésis** : on s'accroche à 0,5, on ne lâche qu'à 0,25 |
+| `SourceEnvelope` | décroît pendant le silence | **gelée** après un retrait |
+
+### Deux silences, et les confondre casse la mesure
+
+C'est le piège de cette correction, et la première version y est tombée.
+
+- Le silence **entre deux notes** est ce qui fait la tenue d'un pizzicato : c'est lui qui
+  abaisse la moyenne sous la crête. Le geler mesurerait un pizzicato comme un souffle,
+  c'est-à-dire détruirait le descripteur qu'on venait de construire.
+- Le silence d'un **retrait** est autre chose : la source ne joue plus pendant des mesures.
+  Celui-là doit geler, sans quoi le violon oublie qu'il était un violon pendant le creux.
+
+**Seule la durée les sépare, et elle n'est connue qu'après coup.** On continue donc de
+mesurer pendant le silence — indispensable au pizzicato — mais on garde de quoi revenir en
+arrière : si le silence dure plus d'une seconde et demie, on restaure l'état de la dernière
+note, sans la décroissance subie pour rien.
+
 **Le rendu est en caractères** parce qu'il doit rester léger — il n'y a pas de GPU sous la
 main, et un remplissage de texte coûte une fraction d'un dégradé. Ils donnent en prime une
 identité que des polygones translucides n'avaient pas : celle d'un terminal, ce qui va bien

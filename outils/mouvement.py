@@ -72,6 +72,21 @@ class Horloge:
     # 0,20, jamais au-dessus de 0,45.
     SEUIL = 0.5
 
+    # EN DESSOUS, L'ACCORD NE DIT PLUS QU'ON SE TROMPE : IL DIT QU'ON NE SAIT PAS.
+    #
+    # Un seul seuil traitait ces deux cas de la même façon. Or ils appellent des réponses
+    # opposées : quand les frappes contredisent la période, il faut lâcher la grille ; quand
+    # il n'y a plus de frappes du tout — un creux, une mélodie seule, un souffle sans
+    # batterie — il ne s'est rien passé qui justifie de tout remettre en cause.
+    #
+    #   « le seul changement qui justifierait de recheck le beat est un changement,
+    #     pas un mute du kick »
+    #
+    # D'où deux seuils au lieu d'un. On s'accroche à 0,5, on ne lâche qu'en dessous de
+    # 0,25 — et entre les deux, on tient. C'est de l'hystérésis, et c'est exactement la
+    # règle du projet : atténuer plutôt qu'effacer.
+    LACHER = 0.25
+
     def __init__(self):
         self.phase = 0.0
         self.temps_ms = 690.0
@@ -151,7 +166,13 @@ class Horloge:
         self.phase %= 1.0
 
         self.fiabilite = max(0.0, min(1.0, accord))
-        self.verrouille = self.fiabilite > self.SEUIL
+        if self.fiabilite > self.SEUIL:
+            self.verrouille = True
+        elif self.fiabilite < self.LACHER:
+            self.verrouille = False
+        # Entre les deux, on garde ce qu'on avait : l'absence de preuve n'est pas une
+        # preuve d'absence, et un battement qui s'arrete pendant un creux est plus
+        # trompeur qu'un battement predit.
 
     def perdre(self):
         """Perd le verrouillage : changement de disque, ou silence."""

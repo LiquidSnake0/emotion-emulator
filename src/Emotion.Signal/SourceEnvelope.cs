@@ -57,6 +57,20 @@ public sealed class SourceEnvelope
     private readonly float[] _moyenne;
     private readonly float[] _precedent;
     private readonly float[] _pique;
+    private readonly float[] _muet;      // depuis combien de secondes la source se tait
+
+    // L'ETAT AU MOMENT OU LE SILENCE COMMENCE.
+    //
+    // On ne sait pas encore s'il s'agit d'un blanc entre deux notes ou d'un retrait : la
+    // duree seule les separe, et elle n'est connue qu'apres coup. On continue donc de
+    // mesurer — c'est indispensable au pizzicato — mais on garde de quoi revenir en
+    // arriere. Si le silence dure, on restaure : la source retrouve exactement ce qu'elle
+    // etait a sa derniere note, sans la seconde et demie de decroissance qu'elle vient de
+    // subir pour rien.
+    private readonly float[] _creteGardee;
+    private readonly float[] _moyenneGardee;
+    private readonly float[] _piqueGarde;
+    private readonly bool[] _restaure;
     private readonly float _oubli;
 
     public SourceEnvelope(int sources, float frameSeconds)
@@ -66,6 +80,11 @@ public sealed class SourceEnvelope
         _moyenne = new float[sources];
         _precedent = new float[sources];
         _pique = new float[sources];
+        _muet = new float[sources];
+        _creteGardee = new float[sources];
+        _moyenneGardee = new float[sources];
+        _piqueGarde = new float[sources];
+        _restaure = new bool[sources];
 
         // L'oubli est exprime en fenetres pour ne pas dependre du taux d'echantillonnage :
         // une constante en fenetres ferait glisser la mesure de huit pour cent entre 44,1
@@ -73,11 +92,78 @@ public sealed class SourceEnvelope
         _oubli = MathF.Exp(-_frameS / FenetreS);
     }
 
+    /// <summary>
+    /// En dessous, la source ne joue pas.
+    ///
+    /// Deux pour cent du plein : assez bas pour qu'une note tenue doucement compte encore,
+    /// assez haut pour qu'un fond de bande ne soit pas pris pour un instrument.
+    /// </summary>
+    public const float Silence = 0.02f;
+
+    /// <summary>
+    /// Combien de temps de silence avant de considerer que la source a quitte l'arrangement.
+    ///
+    /// IL FAUT DEUX SILENCES DIFFERENTS, ET LES CONFONDRE CASSE LA MESURE.
+    ///
+    /// Le silence ENTRE DEUX NOTES est ce qui fait la tenue d'un pizzicato : c'est lui qui
+    /// abaisse la moyenne sous la crete. Le geler reviendrait a mesurer un pizzicato comme
+    /// un souffle, c'est-a-dire a detruire le descripteur qu'on vient de construire.
+    ///
+    /// Le silence d'un RETRAIT est autre chose : la source ne joue plus du tout pendant des
+    /// mesures. C'est celui-la qu'il faut geler, sans quoi le violon oublie qu'il etait un
+    /// violon pendant le creux et le rendu lui donne le geste d'un souffle a son retour.
+    ///
+    /// La duree les separe. Une seconde et demie porte deux temps du repertoire : aucune
+    /// note n'y laisse un blanc aussi long, et un creux d'arrangement les depasse toujours.
+    /// C'est la meme fenetre que l'observation, et ce n'est pas un hasard — au-dela, ce
+    /// qu'on continuerait d'accumuler ne decrirait plus rien de ce qui joue.
+    /// </summary>
+    public const float RetraitS = FenetreS;
+
     /// <summary>Une fenetre d'analyse, pour une source.</summary>
     public void Feed(int rang, float niveau)
     {
         if ((uint)rang >= (uint)_crete.Length) return;
         niveau = Math.Clamp(niveau, 0f, 1f);
+
+        // UNE ABSENCE N'EST PAS UN CHANGEMENT, ET LES CONFONDRE FAIT OUBLIER CE QU'ON SAIT.
+        //
+        // Un violon qui se tait reste un violon. La mesure, elle, decroissait pendant son
+        // silence : au bout d'une seconde et demie de creux — ce qui arrive chaque fois que
+        // le morceau se vide et laisse une melodie seule — la source avait oublie qu'elle
+        // etait pincee, et le rendu lui rendait le geste d'un souffle a son retour.
+        //
+        // Un retrait gele donc la mesure. Voir <see cref="RetraitS"/> pour pourquoi il faut
+        // une duree et non un simple seuil : le silence entre deux notes, lui, doit
+        // continuer de compter.
+        if (niveau >= Silence)
+        {
+            // Elle joue : on repart de zero, et l'on garde cet etat au cas ou le prochain
+            // silence serait un retrait.
+            _muet[rang] = 0f;
+            _restaure[rang] = false;
+            _creteGardee[rang] = _crete[rang];
+            _moyenneGardee[rang] = _moyenne[rang];
+            _piqueGarde[rang] = _pique[rang];
+        }
+        else
+        {
+            _muet[rang] += _frameS;
+            if (_muet[rang] >= RetraitS)
+            {
+                // Retrait confirme. On rend a la source ce qu'elle etait a sa derniere
+                // note, et l'on cesse de mesurer un silence qui ne dit rien d'elle.
+                if (!_restaure[rang])
+                {
+                    _crete[rang] = _creteGardee[rang];
+                    _moyenne[rang] = _moyenneGardee[rang];
+                    _pique[rang] = _piqueGarde[rang];
+                    _restaure[rang] = true;
+                }
+                _precedent[rang] = niveau;
+                return;
+            }
+        }
 
         // LA CRETE DECROIT, ELLE NE SE FIGE PAS. Un maximum brut serait fixe par le premier
         // accident venu et vaudrait pour toute la soiree — c'est un piege que ce projet a
@@ -135,5 +221,14 @@ public sealed class SourceEnvelope
         Array.Clear(_moyenne);
         Array.Clear(_precedent);
         Array.Clear(_pique);
+        Array.Clear(_muet);
+        Array.Clear(_creteGardee);
+        Array.Clear(_moyenneGardee);
+        Array.Clear(_piqueGarde);
+        Array.Clear(_restaure);
     }
+
+    /// <summary>Depuis combien de secondes la source s'est retiree. Zero si elle joue.</summary>
+    public float Muet(int rang) =>
+        (uint)rang < (uint)_muet.Length ? _muet[rang] : 0f;
 }
