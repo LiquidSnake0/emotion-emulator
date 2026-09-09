@@ -29,7 +29,7 @@ import math
 
 from PySide6.QtGui import QFontMetricsF
 
-NOMS = {1: "anneau", 2: "onde", 3: "orbe", 4: "losange",
+NOMS = {1: "barres", 2: "onde", 3: "orbe", 4: "comete",
         5: "etoile", 6: "grain", 7: "vague"}
 
 # Tous les caractères employés. Ils doivent tous avoir la même chasse, sans quoi une ligne
@@ -94,45 +94,73 @@ def _repere(g):
 def rendu(nom, g, niveau, contour, frappe, tempo):
     """Rend la forme comme une liste de lignes de caractères.
 
-    CHAQUE CASE EXPOSE SA SOURCE À SA FAÇON, et ce n'est pas de la décoration : six motifs
-    qui se ressemblent obligent à lire l'étiquette pour savoir ce qu'on regarde, et l'œil
-    perd alors le temps qu'un visuel est censé lui faire gagner.
+    CHAQUE CASE EXPOSE SA SOURCE À SA FAÇON, ET AUCUNE DEUX FOIS.
 
-      anneau   un cercle creux qui respire            centré, en creux
-      onde     une sinusoïde lente qui traverse       une ligne, de bord à bord
-      orbe     un disque plein qui enfle et retombe   centré, plein
-      losange  des arêtes droites qui pulsent         centré, anguleux
-      etoile   un éclat qui scintille sur l'attaque   centré, ponctuel
-      grain    un semis                               réparti partout
-      vague    des crêtes serrées qui déferlent       rempli depuis le bas
+    Six motifs qui se ressemblent obligent à lire l'étiquette pour savoir ce qu'on regarde,
+    et l'œil perd alors le temps qu'un visuel est censé lui faire gagner. Le DJ l'a dit
+    autrement : « trois sources sont affichées de la même manière, ils ressemblent à des
+    anneaux lumineux qui clignotent, et ça n'aide pas ».
+
+    LA FAUTE ÉTAIT DE COMPOSER TOUS LES MOTIFS PAREIL. Anneau, losange, étoile étaient
+    trois dessins différents, mais tous centrés, tous en contour, tous de la même taille —
+    donc trois taches identiques à un mètre. Ce qui distingue vraiment deux motifs dans une
+    grille de caractères n'est pas leur tracé, c'est leur COMPOSITION : où la matière se
+    trouve dans la case, et comment elle bouge.
+
+      barres   des colonnes, depuis le bas          remplit par le bas, discret
+      onde     une sinusoïde qui traverse           une ligne, de bord à bord
+      orbe     un disque plein qui enfle            centré, massif
+      comete   une masse qui glisse et traîne       se DÉPLACE horizontalement
+      etoile   un éclat ponctuel                    centré, minuscule et vif
+      grain    un semis                             réparti partout
+      vague    des crêtes serrées qui déferlent     remplit par le bas, continu
+
+    Aucun anneau parmi les sources : la case GRAVE en porte un, et c'est la seule forme que
+    le DJ ait dite bonne. La garder unique est ce qui la rend lisible.
     """
     force = min(1.0, niveau + frappe * 0.6)
-    fonction = _FORMES.get(nom, orbe)
-    return fonction(g, force, contour, frappe, tempo), force
+    return _FORMES.get(nom, orbe)(g, force, contour, frappe, tempo), force
 
 
-def anneau(g, force, contour, frappe, tempo):
-    """Un cercle creux qui respire. Il enfle avec le niveau, s'épaissit sur la frappe."""
-    cx, cy, unite = _repere(g)
-    r = 0.22 + force * 0.72
-    ep = 0.08 + frappe * 0.10
-    lignes = []
-    for l in range(g.lignes):
-        ligne = []
-        for c in range(g.cols):
-            d = math.hypot((c - cx) * g.cw / unite, (l - cy) * g.ch / unite)
-            e = abs(d - r)
-            ligne.append("●" if e < ep else ("·" if e < ep + 0.14 else " "))
-        lignes.append("".join(ligne))
-    return lignes
+def barres(g, force, contour, frappe, tempo):
+    """Des colonnes depuis le bas, espacées. La lecture d'un égaliseur.
+
+    Espacées, et c'est ce qui les distingue de la vague : celle-ci est un front continu,
+    celles-ci sont des objets séparés qu'on peut compter. Le contour désigne la colonne qui
+    ressort — c'est là que la source se tient dans son étendue.
+    """
+    haut = g.lignes
+    pas = 3
+    vive = int(contour * (g.cols - 1))
+    lignes = [[" "] * g.cols for _ in range(g.lignes)]
+    for c in range(0, g.cols, pas):
+        # Chaque colonne a sa propre hauteur : sans cela le motif serait un rectangle, et
+        # un rectangle ne dit rien de plus qu'une jauge.
+        onde = 0.72 + 0.28 * math.sin(c * 0.7 + tempo * 1.1)
+        h = max(1, int(haut * (0.12 + force * 0.88) * onde))
+
+        # LE CORPS EST PLEIN, ET C'EST CE QUI FAIT UNE BARRE. Un remplissage en petits
+        # carres rend une trame de points regulierement espaces — l'oeil y lit un semis, et
+        # l'on retombe sur le motif du grain. Une colonne se reconnait a sa masse continue.
+        for l in range(haut - h, haut):
+            lignes[l][c] = "█"
+        if h < haut:
+            lignes[haut - h - 1][c] = "▪"
+
+        # La colonne du contour porte une hampe : c'est le seul endroit ou la source dit ou
+        # elle se tient dans son etendue, et il faut pouvoir la trouver sans compter.
+        if abs(c - vive) <= pas // 2:
+            for l in range(max(0, haut - h - 3), haut - h):
+                lignes[l][c] = "│"
+    return ["".join(l) for l in lignes]
 
 
 def onde(g, force, contour, frappe, tempo):
     """UNE seule sinusoïde lente qui traverse la case de bord à bord.
 
-    Elle se distingue de la vague par sa longueur d'onde : ici deux crêtes au plus sur
-    toute la largeur, là une dizaine. Le contour la fait monter et descendre, le niveau
-    lui donne son amplitude.
+    Elle se distingue de la vague par sa longueur d'onde : ici une crête et demie sur toute
+    la largeur, là une dizaine. Le contour la fait monter et descendre, le niveau lui donne
+    son amplitude.
     """
     cy = (g.lignes - 1) / 2
     marge = (g.lignes - 1) / 2 * 0.85
@@ -156,14 +184,16 @@ def orbe(g, force, contour, frappe, tempo):
 
     La bouche voulait dire « ce qui chante » et ne disait rien : deux rangées de filets
     qu'aucun œil ne lisait comme une bouche. Une masse qui enfle et retombe se lit sans
-    apprentissage, et c'est déjà ce que le DJ avait retenu de la case GRAVE.
+    apprentissage.
 
-    Plein et non creux : c'est ce qui le distingue de l'anneau au premier coup d'œil, et
-    les deux peuvent alors cohabiter dans la même matrice.
+    IL EST GRAND MEME AU REPOS, et c'est délibéré. Un disque qui ne se remplit qu'aux
+    niveaux forts passe la plupart du temps à ressembler à un petit point centré — c'est-à-
+    dire à tous les autres petits motifs centrés. Sa masse minimale est donc la moitié de
+    la case : ce qui varie est son enflure, pas son existence.
     """
     cx, cy, unite = _repere(g)
     marge = (g.lignes - 1) / 2 * g.ch / unite
-    r = 0.18 + force * 0.78
+    r = 0.50 + force * 0.55
     libre = max(0.0, marge - r)
     centre = cy + (0.5 - contour) * 2 * libre * unite / g.ch
 
@@ -176,13 +206,13 @@ def orbe(g, force, contour, frappe, tempo):
             # un rectangle : chaque cellule est un pavé, et l'œil ne voit que leur contour
             # commun. Trois densités décroissantes vers le bord dessinent la courbe que la
             # grille de caractères ne peut pas tracer.
-            if d < r * 0.52:
+            if d < r * 0.55:
                 ligne.append("█")
-            elif d < r * 0.78:
+            elif d < r * 0.80:
                 ligne.append("▪")
             elif d < r:
                 ligne.append("●")
-            elif d < r + 0.18:
+            elif d < r + 0.20:
                 ligne.append("·")
             else:
                 ligne.append(" ")
@@ -190,19 +220,34 @@ def orbe(g, force, contour, frappe, tempo):
     return lignes
 
 
-def losange(g, force, contour, frappe, tempo):
-    """Des arêtes droites qui pulsent. Le seul motif anguleux de la matrice."""
-    cx, cy, unite = _repere(g)
-    r = 0.25 + force * 0.75
+def comete(g, force, contour, frappe, tempo):
+    """Une masse qui GLISSE horizontalement, avec une traînée derrière elle.
+
+    Le seul motif de la matrice qui se déplace de gauche à droite : c'est ce déplacement
+    qui le rend reconnaissable du coin de l'œil, bien avant son dessin. Le contour dit où
+    elle se tient, le niveau la grossit, la frappe rallonge la traînée.
+    """
+    cy = (g.lignes - 1) / 2
+    tete = contour * (g.cols - 1)
+    epaisseur = 0.6 + force * 2.6
+    traine = (4 + force * 14 + frappe * 12) * g.ch / max(0.001, g.cw)
+
     lignes = []
     for l in range(g.lignes):
         ligne = []
         for c in range(g.cols):
-            d = abs((c - cx) * g.cw / unite) + abs((l - cy) * g.ch / unite)
-            if abs(d - r) < 0.11:
-                ligne.append("⬥")
-            elif d < r and frappe > 0.25:
-                ligne.append("⬦")
+            dy = abs(l - cy) / max(0.3, epaisseur)
+            derriere = tete - c
+            if dy > 1.0:
+                ligne.append(" ")
+            elif derriere < -0.5:
+                ligne.append(" ")
+            elif derriere < 1.0:
+                ligne.append("█")
+            elif derriere < traine * (1 - dy * 0.7):
+                # La traînée s'amincit à mesure qu'on s'éloigne de la tête.
+                part = derriere / max(1.0, traine)
+                ligne.append("▪" if part < 0.35 else ("●" if part < 0.7 else "·"))
             else:
                 ligne.append(" ")
         lignes.append("".join(ligne))
@@ -210,9 +255,14 @@ def losange(g, force, contour, frappe, tempo):
 
 
 def etoile(g, force, contour, frappe, tempo):
-    """Un éclat qui scintille sur l'attaque ; ses branches tournent avec le contour."""
+    """Un éclat ponctuel qui scintille sur l'attaque. Le plus petit motif de la matrice.
+
+    Petit, et c'est ce qui le distingue : là où l'orbe occupe la case, l'étoile n'en prend
+    que le centre et disparaît presque entre deux frappes. La différence de TAILLE fait
+    autant que la différence de tracé.
+    """
     cx, cy, unite = _repere(g)
-    r = 0.25 + force * 0.75
+    r = 0.10 + force * 0.30 + frappe * 0.25
     lignes = []
     for l in range(g.lignes):
         ligne = []
@@ -220,14 +270,13 @@ def etoile(g, force, contour, frappe, tempo):
             dx = (c - cx) * g.cw / unite
             dy = (l - cy) * g.ch / unite
             d = math.hypot(dx, dy)
-            if d > r + 0.08:
+            if d > r + 0.05:
                 ligne.append(" ")
                 continue
             ang = math.atan2(dy, dx) + contour * 3.14
-            branche = abs(math.cos(ang * 3))
-            if d < 0.12:
+            if d < 0.08:
                 ligne.append("⁕")
-            elif branche > 0.86:
+            elif abs(math.cos(ang * 3)) > 0.82:
                 ligne.append("⁎")
             else:
                 ligne.append(" ")
@@ -241,8 +290,8 @@ def vague(g, force, contour, frappe, tempo):
     L'aigu n'a pas de contour franc : ni attaque nette ni hauteur stable, seulement une
     agitation. Un motif centré lui va mal — il lui faut quelque chose qui bouge partout à
     la fois. D'où le train de vagues : une dizaine de crêtes, deux fréquences qui se
-    battent pour que le motif ne se répète jamais à l'identique, et un remplissage par le
-    bas qui donne le niveau d'un coup d'œil.
+    battent pour que le motif ne se répète jamais à l'identique, et un front CONTINU, ce
+    qui le distingue des barres, qui sont des objets séparés.
     """
     haut = g.lignes - 1
     base = haut * (1.0 - (0.12 + force * 0.80))
@@ -288,7 +337,7 @@ def grain_source(g, force, contour, frappe, tempo):
 
 
 _FORMES = {
-    "anneau": anneau, "onde": onde, "orbe": orbe, "losange": losange,
+    "barres": barres, "onde": onde, "orbe": orbe, "comete": comete,
     "etoile": etoile, "grain": grain_source, "vague": vague,
 }
 

@@ -733,12 +733,42 @@ Le repli seul gagnait trois points de moyenne de plus et *effondrait* le pire ca
 usage live c'est le pire cas qui compte — un passage où le système ne sait pas se voit,
 trois passages moyens non.
 
+### La vérité terrain a une limite, et elle a failli faire condamner le moteur
+
+`t04` semblait le pire morceau : 333 ms d'écart. En cherchant pourquoi, on a trouvé que
+**les frappes du moteur y sont fortement concentrées — R 0,54 — et tombent à 0,48 temps de
+la vérité.** Un train serré ne se décale pas d'un demi-temps par accident : c'est la vérité
+qui se pose au mauvais endroit, pas le moteur. Idem `t06` (−0,45). Partout ailleurs l'écart
+est sous 0,08.
+
+La cause est la même que celle qu'on venait de corriger dans le moteur : le repli
+d'énergie a deux sommets qui se ressemblent, et la basse de ce répertoire tombe souvent
+*après* le kick.
+
+**Une correction a été essayée et retirée.** Départager les deux sommets par l'énergie
+d'attaque du grave en réparait deux et en cassait trois. Continuer à régler ce départage
+jusqu'à ce qu'il donne raison au moteur aurait été exactement la circularité que cet outil
+existe pour rompre.
+
+`noter_detecteur` rend donc **deux chiffres** : l'écart brut, qui inclut l'ambiguïté, et
+l'écart replié sur un demi-temps, qui mesure la précision sans elle.
+
+| | brut (hasard 0,25) | replié (hasard 0,125) |
+|---|---|---|
+| frappes seules | 0,252 | 0,119 |
+| repli | 0,187 | 0,094 |
+| repli + kick | **0,178** | **0,088** |
+
+Le gain tient dans les deux colonnes, donc il ne vient pas de l'ambiguïté.
+
+> **Lever le demi-temps demande une oreille.** Celle du DJ : il sait où est le « 1 ». Deux
+> ou trois morceaux tapés à la main donneraient la seule vérité qui tranche vraiment.
+
 ### Ce qui reste
 
-Deux morceaux régressent encore (t04, t08). Le repli ne dit pas non plus **quel** temps est
-le « 1 » — c'est une autre question, et `DownbeatProfile` la traite. Et le plafond mesuré
-reste loin : une sélection parfaite sur le même flux atteint 0,675 de concentration là où
-le détecteur fait 0,286.
+Le repli ne dit pas **quel** temps est le « 1 » — c'est une autre question, et
+`DownbeatProfile` la traite. Et le plafond mesuré reste loin : une sélection parfaite sur le
+même flux atteint 0,675 de concentration là où le détecteur fait 0,286.
 
 **Deux erreurs de mesure commises et corrigées en chemin**, toutes deux dans le sens
 flatteur : une tolérance relative à l'unité testée, qui rendait les croches *moins*
@@ -821,15 +851,30 @@ alors le temps qu'un visuel est censé lui faire gagner.
 
 | Forme | Ce qu'elle fait | Sa composition |
 |---|---|---|
-| `anneau` | respire | un cercle **creux**, centré |
+| `barres` | monte | des colonnes **espacées**, depuis le bas |
 | `onde` | ondule | **une** sinusoïde lente, de bord à bord |
-| `orbe` | enfle et retombe | un disque **plein**, centré |
-| `losange` | pulse | le seul motif **anguleux** |
-| `etoile` | éclate sur l'attaque | centré, **ponctuel** |
+| `orbe` | enfle et retombe | un disque **plein**, centré, grand même au repos |
+| `comete` | glisse | une masse qui **se déplace** horizontalement, avec sa traînée |
+| `etoile` | éclate sur l'attaque | centré, **minuscule** |
 | `grain` | scintille | **réparti** partout |
-| `vague` | déferle | des crêtes serrées, **remplies depuis le bas** |
+| `vague` | déferle | des crêtes serrées, front **continu** depuis le bas |
 
-Ordre par défaut, du grave à l'aigu : anneau, onde, orbe, losange, **vague**, grain.
+Ordre par défaut, du grave à l'aigu : barres, onde, orbe, comete, **vague**, grain.
+
+**CE QUI DISTINGUE DEUX MOTIFS N'EST PAS LEUR TRACÉ, C'EST LEUR COMPOSITION.** Anneau,
+losange et étoile étaient trois dessins différents — et tous centrés, tous en contour, tous
+de la même taille : trois taches identiques à un mètre. « Ils ressemblent à des anneaux
+lumineux qui clignotent, et ça n'aide pas. » Ce qui les sépare désormais est *où* la matière
+se trouve dans la case et *comment elle bouge* : par le bas, de bord à bord, au centre, en
+déplacement, partout.
+
+**Aucun anneau parmi les sources.** La case GRAVE en porte un, et c'est la seule forme que
+le DJ ait dite bonne — la garder unique est ce qui la rend lisible.
+
+**Et aucune information deux fois.** La case GRAIN du bas montrait un semis nourri des
+registres aigus, c'est-à-dire exactement ce que la source 6 montre déjà, avec le même
+dessin. Elle porte maintenant le **timbre** — brillance, ouverture du filtre, densité —
+qui n'était montré nulle part alors qu'il décide de ce qu'on voit.
 
 **TOUTE FORME RONDE SE MESURE EN PIXELS, ET C'EST LA CORRECTION QUI LES A DÉSEMBROUILLÉES.**
 Une case fait trois fois et demie sa hauteur en largeur ; un cercle calculé en cellules y

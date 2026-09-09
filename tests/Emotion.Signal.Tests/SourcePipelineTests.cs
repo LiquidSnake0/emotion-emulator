@@ -505,10 +505,10 @@ public class FormeDeLaFicheTests
     [Fact]
     public void La_fiche_impose_la_forme_de_chaque_source()
     {
-        var fiche = Fiche(formes: [SourceShape.Orbe, SourceShape.Anneau, 0, 0, 0, 0]);
+        var fiche = Fiche(formes: [SourceShape.Orbe, SourceShape.Barres, 0, 0, 0, 0]);
 
         Assert.Equal(SourceShape.Orbe, fiche.ShapeOf(0));
-        Assert.Equal(SourceShape.Anneau, fiche.ShapeOf(1));
+        Assert.Equal(SourceShape.Barres, fiche.ShapeOf(1));
 
         // Un zero laisse la forme par defaut du rang : la fiche n'a rien dit de celle-la.
         Assert.Equal(SourceShape.Default(2), fiche.ShapeOf(2));

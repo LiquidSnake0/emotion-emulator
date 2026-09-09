@@ -16,11 +16,11 @@ namespace Emotion.Signal;
 /// </summary>
 public static class SourceShape
 {
-    public const byte Anneau = 1;   // respire — un cercle CREUX qui enfle et retombe
+    public const byte Barres = 1;   // monte — des colonnes espacees, depuis le bas
     public const byte Onde = 2;     // ondule — UNE sinusoide lente qui traverse
     public const byte Orbe = 3;     // enfle — un disque PLEIN qui grandit et rapetisse
-    public const byte Losange = 4;  // pulse — des aretes droites, le seul motif anguleux
-    public const byte Etoile = 5;   // eclate — scintille sur l'attaque
+    public const byte Comete = 4;   // glisse — une masse qui traverse, avec sa trainee
+    public const byte Etoile = 5;   // eclate — un eclat PONCTUEL sur l'attaque
     public const byte Grain = 6;    // scintille — un semis, pour ce qui n'a pas de contour
     public const byte Vague = 7;    // deferle — des cretes serrees, remplies depuis le bas
 
@@ -51,19 +51,19 @@ public static class SourceShape
     /// agitation : un motif centre lui va mal, il lui faut quelque chose qui bouge partout
     /// a la fois.
     /// </summary>
-    private static readonly byte[] ParRang = [Anneau, Onde, Orbe, Losange, Vague, Grain];
+    private static readonly byte[] ParRang = [Barres, Onde, Orbe, Comete, Vague, Grain];
 
     /// <summary>La forme d'un rang, faute d'indication dans la fiche.</summary>
     public static byte Default(int rank) =>
-        (byte)(rank >= 0 && rank < ParRang.Length ? ParRang[rank] : Anneau);
+        (byte)(rank >= 0 && rank < ParRang.Length ? ParRang[rank] : Orbe);
 
     /// <summary>Le nom d'une forme, pour les ecrans de reglage. Jamais projete.</summary>
     public static string Nommer(byte shape) => shape switch
     {
-        Anneau => "anneau",
+        Barres => "barres",
         Onde => "onde",
         Orbe => "orbe",
-        Losange => "losange",
+        Comete => "comete",
         Etoile => "etoile",
         Grain => "grain",
         Vague => "vague",

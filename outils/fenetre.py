@@ -585,17 +585,19 @@ class Mur(QWidget):
                    formes.grave(formes.Grille(x, y, larg, haut, 7), v),
                    VERT, 0.30 + v * 0.6)
 
-        # `coupe` est l'ouverture du filtre portee a la puissance 1,5 : c'est par elle que
-        # le filtre agit, DANS la case, depuis qu'il ne deplace plus le cadre. Filtre ferme,
-        # le grain s'eteint — ce qui est exactement ce que le geste fait au son.
-        coupe = p.ouverture ** 1.5
-        fond = (p.sources[4]["niveau"] + p.sources[5]["niveau"]) * 0.5
-        vh = max(fond * 0.7, self.charley.valeur)
+        # LE TIMBRE, LA OU LE GRAIN FAISAIT DOUBLON.
+        #
+        # Cette case montrait un semis nourri des registres aigus — c'est-a-dire exactement
+        # ce que la source 6 montre deja, avec le meme dessin. Deux cases pour une seule
+        # information, et le DJ l'a dit : « la source du grain est presentee deux fois ».
+        #
+        # Le timbre, lui, n'etait montre nulle part alors qu'il decide de choses visibles :
+        # `ouverture` eteint le grain quand le filtre se ferme, `centroide` dit la couleur
+        # du son, `densite` dit s'il est plein ou clairseme. On les montre donc, en jauges
+        # couchees comme le spectre, puisque c'est la meme lecture — trois grandeurs qu'on
+        # compare d'un coup d'oeil.
         cx = x + larg + 14
-        self._case(d, cx, y, larg, haut, "GRAIN",
-                   formes.grain(formes.Grille(cx, y, larg, haut, 7), fond, self.charley.valeur)
-                   if vh > 0.01 and coupe > 0.05 else None,
-                   GRIS_CLAIR, 0.25 + vh * 0.7)
+        self.timbre(d, p, cx, y, larg, haut)
 
         # DOUZE JAUGES COUCHEES, UNE PAR BANDE, REMPLIES DEPUIS LA GAUCHE.
         #
@@ -625,6 +627,39 @@ class Mur(QWidget):
         d.restore()
         d.setFont(self.mono)
         return y + haut
+
+    def timbre(self, d, p, x, y, larg, haut):
+        """Trois jauges : la couleur du son, l'ouverture du filtre, la densite."""
+        g = formes.Grille(x, y, larg, haut, 6)
+        police = QFont(self.mono)
+        police.setPixelSize(max(5, int(g.taille)))
+        avance = QFontMetricsF(police).horizontalAdvance("M")
+        g = formes.Grille(x, y, larg, haut, 6, avance=avance)
+
+        d.setPen(QPen(GRIS_CADRE, 1))
+        d.drawRect(int(x), int(y), int(larg), int(haut))
+        d.setPen(GRIS_TEXTE)
+        d.drawText(int(x) + 8, int(y) + 16, "TIMBRE")
+
+        d.save()
+        d.setClipRect(int(x) + 1, int(y) + 1, int(larg) - 2, int(haut) - 2)
+        for i, (nom, v) in enumerate((("clair", p.brillance),
+                                      ("ouvert", p.ouverture),
+                                      ("dense", p.densite))):
+            ligne = 2 * i + 1
+            d.setFont(self.mono)
+            d.setPen(GRIS_CADRE)
+            d.drawText(int(g.x0), int(g.y0 + ligne * g.ch), f"{nom:6s}")
+            d.setFont(police)
+            c = QColor(VERT)
+            c.setAlphaF(min(1.0, 0.20 + v * 0.7))
+            d.setPen(c)
+            largeur_nom = QFontMetricsF(self.mono).horizontalAdvance("xxxxxxx")
+            reste = formes.Grille(x + largeur_nom, y, larg - largeur_nom, haut, 6,
+                                  avance=avance)
+            d.drawText(int(reste.x0), int(g.y0 + ligne * g.ch), formes.jauge(reste, v))
+        d.restore()
+        d.setFont(self.mono)
 
     def piste_frappes(self, d, p, x, y, largeur):
         """La mesure, sur toute la largeur : le kick s'ecarte du centre, les claps allument

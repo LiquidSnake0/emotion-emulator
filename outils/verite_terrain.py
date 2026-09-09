@@ -153,9 +153,25 @@ def enveloppe_sans_retard(x, rate):
     return np.maximum(np.diff(lisse, prepend=lisse[0]), 0)
 
 
-def affiner(x, rate, periode, phase):
+def energie_a(env, rate, periode, phase):
+    """Ce que l'enveloppe du grave accumule à une phase donnée, sur tout le morceau."""
+    largeur = max(1, int(0.03 * rate))          # ±30 ms autour du temps
+    total = 0.0
+    k = 0
+    while True:
+        i = int((phase + k * periode) * rate)
+        if i + largeur >= len(env):
+            break
+        if i - largeur >= 0:
+            total += float(env[i - largeur:i + largeur].sum())
+        k += 1
+    return total
+
+
+def affiner(x, rate, periode, phase, env=None):
     """Resserre la phase grossière sur l'enveloppe à résolution d'échantillon."""
-    env = enveloppe_sans_retard(x, rate)
+    if env is None:
+        env = enveloppe_sans_retard(x, rate)
     demi = RAFFINEMENT * periode
     pas = 1 / rate
     cases = int(2 * demi / pas)
@@ -203,6 +219,24 @@ def grille(chemin, bpm):
     # se voir sur une mesure de justesse à plus ou moins 60.
     phase = ((int(profil.argmax()) + 0.5) / CASES * periode
              + retard_du_flux(rate)) % periode
+
+    # L'AMBIGUITE DU DEMI-TEMPS N'EST PAS LEVEE, ET ON NE PRETEND PAS LE FAIRE.
+    #
+    # Le profil a deux sommets qui se ressemblent : ce répertoire pose autant de matière
+    # entre les temps que dessus, et la basse tombe souvent APRÈS le kick. Sur deux
+    # morceaux du bac, cette grille se pose donc exactement à un demi-temps du vrai temps.
+    # On le sait parce que les frappes du moteur, fortement concentrées, y tombent à 0,48
+    # temps : un train serré ne se décale pas d'un demi-temps par accident.
+    #
+    # UNE TENTATIVE A ETE FAITE ET RETIREE. Départager les deux sommets par l'énergie
+    # d'attaque du grave — le temps est là où frappe la grosse caisse — en réparait deux et
+    # en cassait trois. Continuer à régler ce départage jusqu'à ce qu'il donne raison au
+    # moteur aurait été exactement la circularité que ce fichier existe pour rompre.
+    #
+    # Ce qui reste vrai malgré tout : la PÉRIODE est juste, et la phase est juste À UN DEMI-
+    # TEMPS PRÈS. `noter_detecteur` rend donc les deux chiffres — l'écart brut, qui inclut
+    # cette ambiguïté, et l'écart replié sur un demi-temps, qui mesure la précision sans
+    # elle. Lever l'ambiguïté demande une oreille : celle du DJ, qui sait où est le « 1 ».
     phase = affiner(x, rate, periode, phase) % periode
     n = int((duree - phase) / periode)
     return [phase + k * periode for k in range(max(0, n) + 1)], relief, periode
