@@ -17,7 +17,7 @@ enceintes.
 Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données du bac
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
-`.NET 10` · `ASP.NET Core` · `SignalR` · `Canvas 2D` · `PulseAudio` · `xUnit` ·
+`.NET 10` · `ASP.NET Core` · `mémoire partagée` · `PulseAudio` · `xUnit` · `Python` · `Qt` ·
 **128 tests** · **zéro dépendance tierce dans le cœur** · **48 ms du son au paquet**
 
 ---
@@ -99,10 +99,11 @@ flowchart LR
         ac["<b>analyseur CUE</b><br/>attaques · tempo · harmonie"]
         blend["<b>BlendEstimator</b><br/>corrélation des dynamiques"]
         worker["<b>SignalWorker</b><br/>BackgroundService"]
-        hub["<b>VisualHub</b><br/>SignalR"]
+        bus["<b>FrameBus</b><br/>file bornée"]
+        gpu["<b>GpuSink</b><br/>anneau /dev/shm"]
     end
 
-    render["<b>Rendu projeté</b><br/>Canvas 2D · clips"]
+    render["<b>Unité de rendu</b><br/>256 octets par image"]
 
     crate -->|"POST /deck/cue<br/>commandes rares"| deck
     master_out -->|PCM| am
@@ -110,9 +111,8 @@ flowchart LR
     ac -.->|s'abonne| blend
     am --> blend
     ac ==>|"relais à mi-fondu<br/>amorce du tempo"| am
-    deck --> hub
-    am --> worker --> hub
-    hub -->|"WebSocket · ~47 img/s"| render
+    am --> worker --> bus --> gpu
+    gpu -->|"mémoire partagée · ~47 img/s<br/>PCIe ou USB-C avec un eGPU"| render
 
     style crate fill:#1a3a5c,stroke:#4a90d9,color:#fff
     style am fill:#2d4a2d,stroke:#5a9c5a,color:#fff
@@ -121,13 +121,18 @@ flowchart LR
     style render fill:#1a1a2e,stroke:#666,color:#fff
 ```
 
-### Deux canaux, et ce n'est pas un doublon
+### Deux canaux, et un seul est un réseau
 
-Pourquoi les commandes passent-elles par **HTTP** alors qu'une connexion **SignalR** est
-déjà ouverte ? Parce que ce sont deux besoins opposés, et les mélanger dégraderait les
-deux :
+Les commandes passent par **HTTP**, les images par un **anneau en mémoire partagée**. Ce
+ne sont pas deux fois le même canal par négligence : ce sont deux besoins opposés, et les
+mélanger dégraderait les deux.
 
-| | Commande `/deck/cue` | Événement `frame` |
+Il y a eu un temps une connexion SignalR, parce que le rendu était une page servie par ce
+processus. Elle est partie avec elle. **Le rendu ne traversera jamais un réseau** : l'unité
+de rendu lit les 256 octets là où ils sont écrits, aujourd'hui une fenêtre Qt sur la même
+machine, demain un eGPU sur PCIe ou USB-C.
+
+| | Commande `/deck/cue` | Image publiée |
 |---|---|---|
 | Fréquence | quelques dizaines par set | ~47 par seconde |
 | Réponse attendue | oui, l'état résultant | aucune |
@@ -1429,12 +1434,11 @@ défaut structurel.
 ### Le bus de diffusion
 
 Dès qu'il y a deux consommateurs, un seul chemin ne tient plus : le plus lent dicterait
-la cadence du plus rapide, et une unité GPU occupée ferait sauter le visuel web.
+la cadence du plus rapide, et une unité occupée ferait sauter les autres.
 
 ```mermaid
 flowchart LR
     src["analyseur"] --> bus["<b>FrameBus</b><br/>fan-out"]
-    bus -->|"file bornée"| web["SignalR<br/>renderer web"]
     bus -->|"file bornée"| gpu["<b>GPU sink</b><br/>mémoire partagée"]
     bus -.->|"plus tard"| rec["enregistreur<br/>rejouer un set"]
 
@@ -1537,10 +1541,16 @@ sont deux besoins opposés, donc deux canaux.
 
 ### emotion-renderer — ce qui viendra derrière
 
-Le rendu tourne aujourd'hui en Canvas 2D dans un navigateur, entièrement en caractères
-monospace : une chaîne par ligne, un remplissage par chaîne. Ce n'est pas un pis-aller, c'est
-une décision de mesure — réduit à du texte, le rendu devient trop rapide pour qu'un retard
-perçu puisse venir de lui, et ce qui reste se mesure ailleurs.
+Le rendu tourne aujourd'hui dans une fenêtre Qt, entièrement en caractères monospace : une
+chaîne par ligne, un remplissage par chaîne. Ce n'est pas un pis-aller, c'est une décision de
+mesure — réduit à du texte, le rendu devient trop rapide pour qu'un retard perçu puisse venir
+de lui, et ce qui reste se mesure ailleurs.
+
+Il a tourné un an dans un navigateur, et **le navigateur a été retiré**. Non pas parce qu'il
+rendait mal, mais parce qu'il imposait un réseau là où il n'en faut aucun : la page recevait
+par WebSocket ce que l'unité de rendu lira sur PCIe. Tant que ce maillon existait, la latence
+mesurée n'était pas celle du système visé. La fenêtre Qt lit exactement les 256 octets que
+l'eGPU lira — c'est le même contrat, et c'est pour cela qu'elle mesure quelque chose.
 
 C'est aussi ce qui prépare l'unité externe. Un GPU qui affiche une grille de caractères n'a
 rien à réimplémenter : il lit une matrice et l'affiche. Le contrat est déjà écrit et déjà
@@ -1608,8 +1618,9 @@ inerte et la géométrie tourne seule.
 | Projet | Rôle | Dépendances |
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources | **aucune** — ni web, ni paquet tiers |
-| `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 128 tests | xUnit |
+| `Emotion.Server` | endpoints du crate, boucle d'analyse | ASP.NET Core |
+| `Emotion.Signal.Tests` | 170 tests | xUnit |
+| `outils/` | le GPU simulé et sa mesure | Python, PySide6 |
 
 Le cœur ne dépend de rien : la FFT, la détection d'attaques, l'estimation de tempo,
 l'analyse harmonique, la mesure de fondu et le modèle des platines se testent **sans

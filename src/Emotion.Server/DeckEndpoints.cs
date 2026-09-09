@@ -1,17 +1,15 @@
 using Emotion.Signal;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Emotion.Server;
 
 /// <summary>
 /// Les commandes venues du telephone. Quatre verbes, un par geste reel aux platines.
 ///
-/// Le choix de fond : <b>les commandes passent par HTTP, les evenements par SignalR</b>.
-/// Ce ne sont pas deux fois le meme canal par negligence, ce sont deux besoins opposes.
-/// Une commande est rare, doit etre acquittee et peut echouer ; un evenement est
-/// continu, sans reponse, et sa perte est sans consequence puisque le suivant arrive
-/// dans seize millisecondes. Les separer permet aussi a Crate de commander avec un
-/// simple <c>fetch</c>, sans embarquer un client temps reel dans la PWA.
+/// <b>C'EST LE SEUL RESEAU LEGITIME DU SYSTEME.</b> Une commande est rare, doit etre
+/// acquittee et peut echouer : HTTP lui convient, et Crate la passe d'un simple
+/// <c>fetch</c> sans embarquer de client temps reel dans la PWA. Les images, elles, ne
+/// passent par aucune socket — elles sont publiees dans l'anneau partage, que l'unite de
+/// rendu lit directement et lira sur PCIe ou USB-C le jour de l'eGPU.
 /// </summary>
 public static class DeckEndpoints
 {
@@ -19,8 +17,7 @@ public static class DeckEndpoints
     {
         // Cale une face au casque. N'a aucun effet sur la projection : le public ne
         // doit pas voir le beatmatch commencer.
-        app.MapPost("/deck/cue", async (TrackContext track, DeckState deck,
-                                        IHubContext<VisualHub> hub, IAudioSource source,
+        app.MapPost("/deck/cue", async (TrackContext track, DeckState deck, IAudioSource source,
                                         TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Cue(track));
@@ -29,13 +26,12 @@ public static class DeckEndpoints
             // pour verifier le tempo — rien n'est remis a zero : ce passage vient s'ajouter
             // aux precedents, et c'est la que le systeme apprend le plus.
             if (Cue(source) is { } casque) memory.Cue(track, casque);
-            await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
         // La transition est faite : ce qui etait cale devient ce qui joue. C'est le
         // seul geste qui change la projection.
-        app.MapPost("/deck/take", async (DeckState deck, IHubContext<VisualHub> hub,
+        app.MapPost("/deck/take", async (DeckState deck,
                                          IAudioSource source, TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Take());
@@ -68,12 +64,11 @@ public static class DeckEndpoints
             // transition est un geste ; rien de ceci ne tourne pendant l'analyse.
             if (Master(source) is { } platine) memory.Handover(next.Playing, platine, Cue(source));
 
-            await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
         // Renoncement : la face calee est abandonnee.
-        app.MapPost("/deck/drop", async (DeckState deck, IHubContext<VisualHub> hub,
+        app.MapPost("/deck/drop", async (DeckState deck,
                                          IAudioSource source, TrackMemory memory) =>
         {
             var next = deck.Apply(d => d.Drop());
@@ -81,46 +76,37 @@ public static class DeckEndpoints
             // Le vinyle est range : ce qu'on savait de lui part avec. Le garder ne servirait
             // qu'a occuper de la place pour une face qui ne reviendra pas ce soir.
             memory.Forget(cue: true, Cue(source));
-            await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
         // Pose directement ce qui joue, sans passer par le casque. Sert au demarrage
         // d'un set et aux essais.
-        app.MapPost("/deck/play", async (TrackContext track, DeckState deck,
-                                         IHubContext<VisualHub> hub, IAudioSource source,
+        app.MapPost("/deck/play", async (TrackContext track, DeckState deck, IAudioSource source,
                                          TrackMemory memory) =>
         {
             var next = deck.Apply(_ => new Deck(track, null));
             source.NewTrack();
             if (Master(source) is { } platine) memory.Play(track, platine);
-            await hub.Clients.All.SendAsync("deck", next);
             return Results.Ok(next);
         });
 
-        // LE CALAGE SE FAIT DEPUIS LA PISTE, PAS DEPUIS LA TABLE.
+        // L'AVANCE DU VISUEL N'EST PLUS UNE COMMANDE DU MOTEUR, ET C'EST JUSTE.
         //
-        // L'avance a donner au visuel depend d'ou l'on ecoute : le son met 5,8 ms pour
-        // atteindre celui qui regle a la table, et 29 pour le public a dix metres. Regler
-        // depuis la table revient donc a faire preceder le mur de vingt-trois
-        // millisecondes pour tout le monde d'autre — un ecart plus grand que tout ce que
-        // l'analyse a gagne en une soiree de mesures.
+        // Elle a longtemps ete un POST /lead, parce que le renderer etait une page servie
+        // par ce processus. Le moteur ne l'appliquait pourtant jamais : il relayait le
+        // chiffre au navigateur, qui seul le portait. Une commande qui traverse le reseau
+        // pour ne rien faire ici est une commande de trop.
         //
-        // Le reglage passe donc par le telephone : on se place ou sera le public, on
-        // regarde le mur, et l'on corrige jusqu'a ce que la forme tombe avec la frappe.
-        // C'est le seul endroit d'ou le jugement soit juste.
-        app.MapPost("/lead", async (LeadRequest r, IHubContext<VisualHub> hub) =>
-        {
-            var ms = Math.Clamp(r.Ms, 0, 200);
-            await hub.Clients.All.SendAsync("lead", ms);
-            return Results.Ok(new { ms });
-        });
+        // Le calage se fait toujours depuis la piste et jamais depuis la table — le son
+        // met 5,8 ms pour atteindre celui qui regle a la table et 29 pour le public a dix
+        // metres, et regler de la revient a faire preceder le mur de vingt-trois
+        // millisecondes pour tout le monde d'autre, un ecart plus grand que tout ce que
+        // l'analyse a gagne en une soiree de mesures. Mais le reglage appartient
+        // desormais a l'unite de rendu, qui est la seule a pouvoir l'appliquer : dans la
+        // fenetre Qt, les touches + et - ; sur l'eGPU, son propre parametre.
 
         app.MapGet("/deck", (DeckState deck) => Results.Ok(deck.Current));
     }
-
-    /// <summary>L'avance demandee au visuel, en millisecondes.</summary>
-    public sealed record LeadRequest(float Ms);
 
     /// <summary>La face qui joue, si elle sait apprendre.</summary>
     private static ILearnsTracks? Master(IAudioSource source) => source switch

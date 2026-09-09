@@ -42,7 +42,8 @@ ENCOMBREMENT = {
 # Tous les caractères employés. Ils doivent tous avoir la même chasse, sans quoi une ligne
 # entière dérive — le renderer web s'y est fait prendre : ◆ avançait de 18 px sur une
 # grille réglée à 9, et la case débordait de 213 px chez sa voisine.
-PALETTE = "·˙~≈─│╭╮╯╰●⬥⬦⁕⁎ "
+# █ ▪ ▔ ▬ viennent des trois cases du bas, portees apres les six formes.
+PALETTE = "·˙~≈─│╭╮╯╰●⬥⬦⁕⁎█▪▔▬ "
 
 
 def verifier_chasse(police):
@@ -184,3 +185,99 @@ def _cellule(nom, dx, dy, l, c, cy, cxg, ratio, rmax, force, frappe, contour, te
         return "˙" if eclat > 0.18 else " "
 
     return " "
+
+
+# ---------------------------------------------------------------- les trois cases du bas
+#
+# Elles ne portent pas de source : elles disent ce que le morceau fait dans son ensemble.
+# GRAVE respire avec la basse, GRAIN scintille avec les aigus, FRAPPES montre la mesure.
+
+
+def grave(g, niveau):
+    """Un anneau de caracteres qui respire. La seule forme que le DJ ait dite bonne.
+
+    MESURE EN PIXELS, ET NON EN CELLULES. Une normalisation par le nombre de cellules
+    donnait deux rangees de points au lieu d'un anneau : les cases sont trois fois plus
+    larges que hautes, donc un cercle compte en cellules y devient une bande.
+    """
+    cxg = (g.cols - 1) / 2
+    cyg = (g.lignes - 1) / 2
+    unite = max(1.0, min(cxg * g.cw, cyg * g.ch))
+    r = 0.25 + niveau * 0.70
+
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            dx = (c - cxg) * g.cw / unite
+            dy = (l - cyg) * g.ch / unite
+            e = abs(math.hypot(dx, dy) - r)
+            ligne.append("●" if e < 0.16 else ("·" if e < 0.32 else " "))
+        lignes.append("".join(ligne))
+    return lignes
+
+
+def grain(g, fond, charley):
+    """Un semis qui scintille.
+
+    Il ne montrait rien tant qu'il ne dependait que d'une impulsion : celle-ci retombe en
+    moins d'un sixieme de temps, donc invisible entre deux frappes. Le fond suit desormais
+    les registres aigus en continu, et l'impulsion ne fait que l'aviver.
+    """
+    lignes = []
+    for l in range(g.lignes):
+        ligne = []
+        for c in range(g.cols):
+            i = l * g.cols + c
+            phase = (i * 0.618) % 1
+            eclat = max(0.0, 1 - abs(((charley * 0.7 + fond * 0.3 + phase) % 1) - 0.5) * 2.6)
+            if eclat > 0.62:
+                ligne.append("⁕")
+            elif eclat > 0.42:
+                ligne.append("·")
+            else:
+                ligne.append("˙" if eclat > 0.25 else " ")
+        lignes.append("".join(ligne))
+    return lignes
+
+
+def frappes(g, kick, clap, sur_le_un, tension):
+    """La mesure : le kick s'ecarte du centre, les claps allument les bords.
+
+    Le premier temps porte un accent plus large — c'est le seul endroit ou le rang du temps
+    se voit directement, et il ne se voit que si l'on sait ou il est. On reste neutre tant
+    que la grille n'a pas tranche, plutot que d'accentuer un temps au hasard.
+    """
+    centre = (g.cols - 1) / 2
+    d = (1 - kick) * centre
+    bord = round(clap * g.cols * 0.12)
+
+    ligne = []
+    for c in range(g.cols):
+        dist = abs(c - centre)
+        if kick > 0.02 and abs(dist - d) < 0.8 + sur_le_un:
+            ligne.append("█")
+        elif clap > 0.02 and (c < bord or c >= g.cols - bord):
+            ligne.append("▪")
+        elif kick > 0.02 and sur_le_un > 0.9 and dist < 0.7:
+            ligne.append("│")
+        else:
+            ligne.append("·")
+
+    sous = None
+    if tension > 0.03:
+        n = round(tension * g.cols)
+        sous = "".join("▔" if c < n else " " for c in range(g.cols))
+    return "".join(ligne), sous
+
+
+def jauge(g, valeur):
+    """Une bande remplie depuis la gauche, sur une ligne.
+
+    Douze de ces lignes forment la case SPECTRE. Des colonnes de blocs empilees avaient
+    ete essayees et rejetees : illisibles. Couchees, c'est la lecture d'un mixeur, et
+    l'oeil suit une bande sans effort.
+    """
+    utiles = max(1, g.cols - 2)
+    n = round(max(0.0, min(1.0, valeur)) * utiles)
+    return "".join("\u25ac" if c < n else "\u00b7" for c in range(utiles))

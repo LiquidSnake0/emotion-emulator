@@ -15,7 +15,7 @@ Sources lues : le code de `bonk~` dans `pure-data/extra`, les 22 objets de parti
 |---|---|---|
 | Analyse | objets `~` cadences par blocs de 64 echantillons | `SpectrumAnalyzer`, fenetres de 1024 |
 | Passage au visuel | **messages asynchrones**, entre deux blocs audio | `VisualFrame`, puis un anneau partage |
-| Rendu | `gemhead` → chaine d'objets → OpenGL, a sa propre cadence | canvas 2D a 60 Hz, CUDA plus tard |
+| Rendu | `gemhead` → chaine d'objets → OpenGL, a sa propre cadence | fenetre Qt en caracteres a 60 Hz, CUDA plus tard |
 | Processus | **un seul** | deux, separes par de la memoire partagee |
 
 La difference de fond tient en une ligne : **Pd separe le signal du controle, nous

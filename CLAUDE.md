@@ -583,16 +583,23 @@ algorithme.**
 | Projet | Rôle | Dépendances |
 |---|---|---|
 | `Emotion.Signal` | modèle, analyse, sources, transport | **aucune** |
-| `Emotion.Server` | hub, endpoints, rendu servi en statique | ASP.NET Core, SignalR |
-| `Emotion.Signal.Tests` | 108 tests | xUnit |
+| `Emotion.Server` | endpoints du crate, boucle d'analyse | ASP.NET Core |
+| `Emotion.Signal.Tests` | 170 tests | xUnit |
 | `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
+| `Emotion.Pulse` | la mesure de pulsation, par Rayleigh | — |
+| `outils/` | le GPU simulé (`fenetre.py`) et sa mesure (`fenetre_reference.py`) | Python, PySide6 |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**
 
 ## Faire tourner
 
 ```sh
+./outils/voir.sh [dossier-des-précalculs]   # tout : le moteur, le GPU simulé, la mesure
+```
+
+```sh
 dotnet run --project src/Emotion.Server                      # signal fabriqué
+dotnet run --project src/Emotion.Server -- --sans-reseau     # aucun port ouvert
 Signal__Source=pulse Signal__Device=…monitor dotnet run …    # écoute réelle
 Signal__CueDevice=alsa_input.…                               # seconde entrée
 Signal__Separate=false                                       # couper HPSS, pour comparer
@@ -605,11 +612,12 @@ dotnet run -c Release --project tools/Emotion.Probe -- <set.wav> [début_s] [dur
 Regarder l'écran renseigne sur ce qu'on voit, jamais sur ce qui décide. La sonde a
 corrigé quatre constantes devinées dès sa première exécution.
 
-`/ready` donne l'état de préparation du disque en cours ; le feu vert part aussi une fois
-par le hub, vers le téléphone. Voir `docs/systeme.md`.
+`/ready` donne l'état de préparation du disque en cours, `/health` l'état des tuyaux,
+`/deck/*` les commandes du crate. **C'est tout ce que le port sert désormais** : plus
+aucune page, plus aucun hub, et `--sans-reseau` n'en ouvre même pas un.
 
-`http://localhost:5099` · `S` cycle visuel / superposé / signaux · `D` diagnostic ·
-`H` masque · `F` plein écran · `/health` pour l'état des tuyaux.
+Dans la fenêtre : `Q` ferme, `+` et `-` règlent l'avance du visuel. Le réglage appartient
+à ce qui affiche, et à lui seul — c'est la seule pièce de la chaîne qui puisse l'appliquer.
 
 Le port vient de `launchSettings.json` et vaut **5099** — pas 5299, qui a traîné ici et
 m'a fait diagnostiquer à côté une collision de ports.
@@ -692,12 +700,41 @@ niveau et les douze bandes ; il l'est désormais sur tout ce qui est continu.
 Côté rendu, `Lue` remplace `Spring` partout où l'amortissement est descendu : elle porte la
 valeur sans la retoucher. Garder les deux amortirait deux fois et rendrait tout mou.
 
-## Front
+## Le rendu : plus une seule ligne de JavaScript
 
-Le renderer est en canvas 2D sans cadriciel : 60 images par seconde, aucun DOM, aucun
-état. Angular ou React n'y apporteraient rien et coûteraient sur un chemin où l'on veut
-zéro surcoût. **En revanche le futur panneau de contrôle DJ** — listes, formulaires,
-état — est un bon candidat Angular, et le DJ souhaite en avoir au dossier.
+```
+crate  --HTTP REST-->  C#                       le seul réseau légitime
+C#     --/dev/shm-->   outils/fenetre.py        le GPU simulé : il reçoit
+C#     --/dev/shm-->   outils/fenetre_reference.py   la mesure : est-ce juste
+```
+
+Le rendu a tourné un an dans un navigateur. Il en est sorti pour une seule raison : **il
+imposait un réseau là où il n'en faut aucun.** La page recevait par WebSocket ce que
+l'unité de rendu lira sur PCIe ou USB-C avec un eGPU. Tant que ce maillon existait, la
+latence mesurée n'était pas celle du système visé.
+
+`outils/fenetre.py` lit exactement les 256 octets de `GpuPacket` — même contrat, même
+décalages, aucune traduction. C'est ce qui en fait une mesure et non une illustration.
+
+**Deux pièces vivent encore côté rendu, et deux seulement** (`outils/mouvement.py`), parce
+qu'elles dépendent de la cadence de l'écran et non de celle du signal :
+
+| | Ce qu'elle fait | Mesuré |
+|---|---|---|
+| `Horloge` | attend le kick au lieu de le constater | verrouille en ~6 temps, intervalle à 0,2 % ; avance demandée 30 ms → réelle 39 |
+| `Interpolation` | comble les paliers de 21 ms entre deux images | — |
+
+**Il faut les deux, et les confondre coûte cher.** Amortir donne sa masse au mouvement,
+interpoler comble les trous. Le ressort du renderer web masquait les paliers *par
+accident* ; le retirer sans brancher l'interpolation a fait apparaître une saccade que
+personne n'avait introduite — elle avait toujours été là, cachée.
+
+Une impulsion se consomme **une fois par image d'analyse**, jamais par image de rendu :
+47 images par seconde côté signal contre 60 côté écran, donc chaque frappe serait lue une
+à deux fois de trop, et le recalage rappelé sur la même frappe épinglerait la phase.
+
+**Le panneau de contrôle DJ** — listes, formulaires, état — reste un bon candidat Angular
+si le DJ en veut un au dossier. Ce serait une application à part, jamais le rendu.
 
 ## Façon de travailler
 

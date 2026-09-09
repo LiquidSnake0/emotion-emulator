@@ -8,6 +8,22 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!--
+      CE PROCESSUS NE SERT AUCUN FICHIER, ET IL FAUT LE DIRE AU SDK.
+
+      Il a servi une page, le temps que le rendu passe par un navigateur. Le rendu lit
+      desormais l'anneau partage — la fenetre Qt aujourd'hui, un eGPU sur PCIe ou USB-C
+      demain — et il ne reste ouvert que l'API que le crate appelle.
+
+      Le SDK web genere pourtant un manifeste d'avoirs statiques au moment de la
+      compilation, et l'hote le charge AVANT la premiere ligne du programme. Un manifeste
+      restant d'une compilation precedente pointait encore sur wwwroot : le demarrage
+      levait une DirectoryNotFoundException que rien dans le code ne pouvait expliquer, et
+      qu'une compilation verte ne pouvait pas voir. Le couper est la seule facon de dire au
+      SDK ce qui est vrai plutot que de le contourner.
+    -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
 </Project>

@@ -38,5 +38,5 @@ case "${1:-mock}" in
          export Signal__Device="$1" ;;
 esac
 
-echo "http://localhost:$PORT  ·  source : ${Signal__Device:-signal fabrique}"
+echo "api sur :$PORT (crate)  ·  rendu : python3 outils/fenetre.py  ·  source : ${Signal__Device:-signal fabrique}"
 exec dotnet run -c Release --project src/Emotion.Server
