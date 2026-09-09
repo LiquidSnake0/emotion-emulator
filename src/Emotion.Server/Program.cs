@@ -4,6 +4,32 @@ using Microsoft.AspNetCore.SignalR;
 using Emotion.Server;
 using Emotion.Signal;
 
+// SANS RESEAU, ET C'EST LE CAS NOMINAL.
+//
+// Le moteur etait un serveur web, et il ne l'etait que pour le navigateur. L'analyse, elle,
+// n'a jamais eu besoin d'un port : elle capture le son, l'analyse, et publie 256 octets dans
+// /dev/shm. L'unite de rendu lira ces octets sur PCIe ou USB-C, pas sur une socket ; les
+// fenetres de reglage les lisent deja de la meme facon.
+//
+//   dotnet run --project src/Emotion.Server -- --sans-reseau
+//
+// Rien n'est ouvert, rien n'est negocie, rien ne peut echouer faute de port libre. Le
+// chemin web subsiste tant qu'un navigateur regarde, et disparaitra avec lui.
+if (args.Contains("--sans-reseau"))
+{
+    var moteur = Host.CreateApplicationBuilder(args);
+    moteur.Services.AddSingleton<DeckState>();
+    moteur.Services.AddSingleton<TrackMemory>();
+    moteur.Services.AddSingleton<FrameBus>();
+    moteur.Services.AddSingleton<IDiffusion, DiffusionMuette>();
+    moteur.Services.AddSingleton<IAudioSource>(SourceDuSignal);
+    moteur.Services.AddSingleton<GpuSink>();
+    moteur.Services.AddHostedService(sp => sp.GetRequiredService<GpuSink>());
+    moteur.Services.AddHostedService<SignalWorker>();
+    moteur.Build().Run();
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Les enums partent par leur nom, pas par leur rang. Le renderer teste `Waves` et non
@@ -33,49 +59,7 @@ builder.Services.AddSingleton<FrameBus>();
 // La source se choisit par configuration. Aujourd'hui il n'y en a qu'une, mais le
 // jour ou la table est branchee, seule cette ligne change : ni le worker, ni le hub,
 // ni le renderer ne savent d'ou vient le signal.
-builder.Services.AddSingleton<IAudioSource>(sp =>
-{
-    var cfg = sp.GetRequiredService<IConfiguration>();
-
-    // LE JOURNAL DE LA SOURCE N'ETAIT BRANCHE SUR RIEN, ET CELA A COUTE UNE MESURE.
-    //
-    // PulseAudioSource accepte une action de journalisation et s'en sert pour dire ce que
-    // parec ecrit sur sa sortie d'erreur, quand il s'arrete, et quand une fenetre met trop
-    // longtemps a venir. Elle n'etait pas passee : `_log` restait nul et tous ces messages
-    // partaient au neant. En cherchant d'ou venait un trou de deux secondes, l'absence de
-    // ligne « capture lente » a d'abord ete lue comme une preuve que la capture allait
-    // bien. Elle ne prouvait rien du tout.
-    var journal = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Signal.Capture");
-    void Dire(string m) => journal.LogWarning("{Message}", m);
-
-    // "mock" fabrique un signal a partir d'un tempo, sans carte son.
-    // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
-    // materiel, l'entree ligne le jour ou la table est branchee.
-    IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
-    {
-        "pulse" => new PulseAudioSource(cfg["Signal:Device"],
-                                        separate: cfg.GetValue("Signal:Separate", false),
-                                        log: Dire),
-        // « fichier » rejoue un enregistrement AU RYTHME REEL, dans toute la chaine. Ce
-        // n'est pas la sonde : celle-ci court-circuite le serveur et avale les fenetres
-        // aussi vite qu'elle peut. Ici tout est identique au direct — cadence, horodatage
-        // a l'horloge murale, hub, anneau — sauf qu'aucune fenetre ne peut manquer.
-        // C'est la seule facon de separer « le son arrive mal » de « le moteur le traite
-        // mal ».
-        "fichier" => new WavAudioSource(cfg["Signal:Device"] ?? "",
-                                        separate: cfg.GetValue("Signal:Separate", false)),
-        _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
-    };
-
-    // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme
-    // fonctionne exactement comme avant et la transition reste commandee a la main.
-    var cueDevice = cfg["Signal:CueDevice"];
-    if (string.IsNullOrWhiteSpace(cueDevice)) return master;
-
-    return new DualAudioSource(master,
-        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", false),
-                             log: Dire));
-});
+builder.Services.AddSingleton<IAudioSource>(SourceDuSignal);
 
 builder.Services.AddHostedService<SignalWorker>();
 
@@ -233,3 +217,53 @@ app.MapGet("/health", (FrameBus bus, GpuSink gpu) =>
 });
 
 app.Run();
+
+
+// LA FABRIQUE DE LA SOURCE, PARTAGEE PAR LES DEUX CHEMINS.
+//
+// Elle etait une lambda dans l'enregistrement du service, donc inaccessible au mode sans
+// reseau. Une fonction nommee : les deux hotes construisent la meme source, et il n'y a
+// aucun risque qu'ils divergent un jour sans qu'on s'en apercoive.
+static IAudioSource SourceDuSignal(IServiceProvider sp)
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+
+    // LE JOURNAL DE LA SOURCE N'ETAIT BRANCHE SUR RIEN, ET CELA A COUTE UNE MESURE.
+    //
+    // PulseAudioSource accepte une action de journalisation et s'en sert pour dire ce que
+    // parec ecrit sur sa sortie d'erreur, quand il s'arrete, et quand une fenetre met trop
+    // longtemps a venir. Elle n'etait pas passee : `_log` restait nul et tous ces messages
+    // partaient au neant. En cherchant d'ou venait un trou de deux secondes, l'absence de
+    // ligne « capture lente » a d'abord ete lue comme une preuve que la capture allait
+    // bien. Elle ne prouvait rien du tout.
+    var journal = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Signal.Capture");
+    void Dire(string m) => journal.LogWarning("{Message}", m);
+
+    // "mock" fabrique un signal a partir d'un tempo, sans carte son.
+    // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
+    // materiel, l'entree ligne le jour ou la table est branchee.
+    IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
+    {
+        "pulse" => new PulseAudioSource(cfg["Signal:Device"],
+                                        separate: cfg.GetValue("Signal:Separate", false),
+                                        log: Dire),
+        // « fichier » rejoue un enregistrement AU RYTHME REEL, dans toute la chaine. Ce
+        // n'est pas la sonde : celle-ci court-circuite le serveur et avale les fenetres
+        // aussi vite qu'elle peut. Ici tout est identique au direct — cadence, horodatage
+        // a l'horloge murale, hub, anneau — sauf qu'aucune fenetre ne peut manquer.
+        // C'est la seule facon de separer « le son arrive mal » de « le moteur le traite
+        // mal ».
+        "fichier" => new WavAudioSource(cfg["Signal:Device"] ?? "",
+                                        separate: cfg.GetValue("Signal:Separate", false)),
+        _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
+    };
+
+    // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme
+    // fonctionne exactement comme avant et la transition reste commandee a la main.
+    var cueDevice = cfg["Signal:CueDevice"];
+    if (string.IsNullOrWhiteSpace(cueDevice)) return master;
+
+    return new DualAudioSource(master,
+        new PulseAudioSource(cueDevice, separate: cfg.GetValue("Signal:Separate", false),
+                             log: Dire));
+}

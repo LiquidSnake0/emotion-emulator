@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""Fenêtre de rendu native, lisant directement l'anneau partagé.
+"""Simulation de l'unité de rendu : elle reçoit, elle ne demande rien.
+
+CE QUE CE FICHIER EST, ET CE QU'IL N'EST PAS.
+
+Ce n'est pas une interface. C'est le **mock du GPU** : le jour où l'eGPU sera branché en
+PCIe ou en USB-C, il lira exactement ces 256 octets dans `/dev/shm`, de la même façon, avec
+les mêmes contraintes. Ce fichier se comporte donc comme lui — lecture seule, jamais
+bloquant, et il vide l'anneau jusqu'au plus récent sans se plaindre de ce qu'il a manqué.
+Une image en retard n'a aucune valeur : c'est la règle du projet et elle vaut aussi ici.
+
+LE PARTAGE DES ROLES, TEL QUE LE DJ L'A POSE.
+
+    crate  --HTTP REST-->  C#              le seul reseau legitime : la fiche arrive par la
+    C#     --/dev/shm-->   cette fenetre   le GPU simule : il recoit
+    C#     --/dev/shm-->   fenetre_reference.py   la mesure : est-ce juste
+
+Le navigateur ne figure nulle part la-dedans, et c'est pour cela qu'il s'en va.
 
 POURQUOI CE FICHIER EXISTE.
 

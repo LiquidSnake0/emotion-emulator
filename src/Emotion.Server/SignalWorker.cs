@@ -1,5 +1,4 @@
 using Emotion.Signal;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Emotion.Server;
 
@@ -14,15 +13,19 @@ namespace Emotion.Server;
 public sealed class SignalWorker : BackgroundService
 {
     private readonly IAudioSource _source;
-    private readonly IHubContext<VisualHub> _hub;
+    /// <summary>
+    /// Ou pousser les images, s'il y a quelqu'un. La boucle ne connait plus SignalR : elle
+    /// peut tourner sans hote web et sans port ouvert. Voir <see cref="IDiffusion"/>.
+    /// </summary>
+    private readonly IDiffusion _diffusion;
     private readonly FrameBus _bus;
     private readonly ILogger<SignalWorker> _log;
 
-    public SignalWorker(IAudioSource source, IHubContext<VisualHub> hub,
+    public SignalWorker(IAudioSource source, IDiffusion diffusion,
                         FrameBus bus, ILogger<SignalWorker> log)
     {
         _source = source;
-        _hub = hub;
+        _diffusion = diffusion;
         _bus = bus;
         _log = log;
     }
@@ -64,7 +67,7 @@ public sealed class SignalWorker : BackgroundService
             // un bandeau de preparation, pas une animation. Le debit du master reste
             // entier.
             if (dual is not null && ++tick % 10 == 0)
-                await _hub.Clients.All.SendAsync("cue", dual.CueFrame, ct);
+                await _diffusion.Casque(dual.CueFrame, ct);
 
             // LE FEU VERT, UNE FOIS ET UNE SEULE.
             //
@@ -79,7 +82,7 @@ public sealed class SignalWorker : BackgroundService
                 announced = true;
                 _log.LogInformation(
                     "Pret sur ce disque par {Reason}", frame.Readiness.Reason);
-                await _hub.Clients.All.SendAsync("ready", frame.Readiness, ct);
+                await _diffusion.Pret(frame.Readiness, ct);
             }
 
             // Le bus d'abord, et sans attendre : c'est lui qui alimente l'unite de
@@ -92,7 +95,7 @@ public sealed class SignalWorker : BackgroundService
             // la suivante arrive dans vingt-et-une millisecondes. Mieux vaut sauter que
             // prendre du retard sur le son.
             var t1 = chrono.Elapsed.TotalMilliseconds;
-            await _hub.Clients.All.SendAsync("frame", frame, ct);
+            await _diffusion.Image(frame, ct);
             envoi = chrono.Elapsed.TotalMilliseconds - t1;
 
             // Un tour de boucle qui depasse quatre pas d'analyse est un trou, pas une
