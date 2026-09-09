@@ -220,6 +220,85 @@ def tempo_par_correlation(flux, taux):
     return float(candidats[0][1]), float(candidats[0][2])
 
 
+def bandes_douze(rate):
+    """Les douze bornes de bandes du moteur, reproduites a l'identique.
+
+    Trente hertz a seize kilohertz, reparties en octaves. On copie ces bornes-la et non
+    d'autres : une reference qui decoupe le spectre autrement ne pourrait pas etre
+    confrontee bande par bande, et c'est justement ce qu'on veut pouvoir faire.
+    """
+    bas, haut, n = 30.0, 16000.0, 12
+    return [bas * (haut / bas) ** (i / n) for i in range(n + 1)]
+
+
+def descripteurs(x, rate):
+    """Tout ce qu'on peut dire du signal, seconde par seconde, sans rien emprunter au moteur.
+
+    CE N'EST PAS QUE LE TEMPO. Le paquet transporte une quarantaine de grandeurs et le DJ a
+    raison de le rappeler : verifier le seul tempo laisserait passer tout le reste — la
+    brillance, la densite, les registres qui s'allument et s'eteignent quand un instrument
+    entre ou sort. Chacune de celles calculees ici l'est a partir du seul signal.
+
+    CE QUI EST UN PROXY EST DIT COMME TEL. « voix » et « graves » sont des tranches de
+    spectre, pas une separation de sources : elles disent qu'il se passe quelque chose dans
+    ce registre, pas qu'un saxophone joue. La separation par timbre, elle, demanderait de
+    refaire la factorisation, ce qui reviendrait a reecrire le moteur pour le verifier.
+    """
+    fenetre = np.hanning(NFFT).astype(np.float32)
+    n = 1 + (len(x) - NFFT) // HOP
+    trames = np.lib.stride_tricks.sliding_window_view(x, NFFT)[::HOP][:n]
+    spectres = np.abs(np.fft.rfft(trames * fenetre, axis=1))
+    freqs = np.fft.rfftfreq(NFFT, 1.0 / rate)
+
+    bornes = bandes_douze(rate)
+    idx = [np.searchsorted(freqs, b) for b in bornes]
+
+    # Les douze bandes, en crete plutot qu'en moyenne : sur une bande large, une moyenne
+    # noie une pointe unique, or c'est la pointe qui s'entend.
+    bandes = np.zeros((n, 12), np.float32)
+    for b in range(12):
+        lo, hi = idx[b], max(idx[b] + 1, idx[b + 1])
+        bandes[:, b] = spectres[:, lo:hi].max(axis=1)
+
+    # Centre de gravite spectral, en octaves depuis 40 Hz : la brillance telle qu'on
+    # l'entend, et non une fraction de la bande analysee.
+    poids = spectres.sum(axis=1) + 1e-9
+    centre_hz = (spectres * freqs).sum(axis=1) / poids
+    brillance = np.clip(np.log2(np.maximum(centre_hz, 40.0) / 40.0) / 8.0, 0, 1)
+
+    # Le flux, pour compter les attaques.
+    d = np.diff(np.log1p(spectres * 8.0), axis=0)
+    flux = np.maximum(d, 0).sum(axis=1)
+
+    taux = rate / HOP
+    par_sec = int(round(taux))
+    secondes = n // par_sec
+
+    seuil = np.median(flux) * 2.0 if len(flux) else 0.0
+    sortie = []
+    for s in range(secondes):
+        a, b = s * par_sec, (s + 1) * par_sec
+        tranche = bandes[a:b]
+        pic = tranche.max(axis=0)
+        # Normalisation sur la crete du morceau : ce sont des proportions, pas des volts.
+        sortie.append({
+            "t": s,
+            "rms": float(np.sqrt(np.mean(x[a * HOP:b * HOP] ** 2))) if b * HOP <= len(x) else 0.0,
+            "bandes": pic.tolist(),
+            "brillance": float(brillance[a:b].mean()),
+            "attaques": int(np.sum(flux[a:min(b, len(flux))] > seuil)),
+        })
+
+    # On rapporte les bandes a la plus forte du morceau, une fois tout lu.
+    plafond = max((max(p["bandes"]) for p in sortie), default=1.0) or 1.0
+    for p in sortie:
+        p["bandes"] = [round(v / plafond, 3) for v in p["bandes"]]
+        p["rms"] = round(p["rms"], 4)
+        p["brillance"] = round(p["brillance"], 3)
+
+    return sortie
+
+
 def analyser(chemin):
     """Lit le morceau de bout en bout et rend son évolution, pas seulement un résumé.
 
@@ -254,11 +333,9 @@ def analyser(chemin):
     med = float(np.median(t))
     proche = float(100.0 * np.mean(np.abs(t - med) / med < 0.02))
 
-    # L'énergie par seconde : elle dit où le morceau change de section, donc où le moteur
-    # a le droit d'hésiter et où il ne l'a pas.
-    par_sec = int(rate)
-    niveaux = [round(float(np.sqrt(np.mean(x[i:i + par_sec] ** 2))), 4)
-               for i in range(0, len(x) - par_sec + 1, par_sec)]
+    # Tout le reste, seconde par seconde : energie, douze bandes, brillance, attaques.
+    # C'est ce qui permet de verifier autre chose que le tempo.
+    secondes = descripteurs(x, rate)
 
     return {
         "fichier": chemin.split("/")[-1],
@@ -270,7 +347,7 @@ def analyser(chemin):
         "max": round(float(t.max()), 2),
         "stable_2pc": round(proche, 1),
         "trace": trace,
-        "niveau_par_seconde": niveaux,
+        "secondes": secondes,
     }
 
 

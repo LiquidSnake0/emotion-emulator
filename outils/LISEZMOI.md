@@ -89,3 +89,36 @@ rester d'accord — c'est tout le contrat.
 
 `tools/Emotion.Ascii` fait la même chose dans un terminal, en C#, sans dépendance. Les deux
 valident le même contrat depuis deux langages.
+
+## `fenetre_reference.py` — la seconde fenêtre
+
+La première montre ce que le moteur dit ; elle ne peut pas dire s'il a raison. Celle-ci pose
+la question que l'autre ne peut pas poser : **ce qui s'affiche correspond-il à ce que le
+disque fait ?**
+
+```
+python3 outils/tempo_reference.py morceau.wav rapport=reference/
+./run.sh pulse                                    # dans un terminal
+./outils/deux-fenetres.sh reference/morceau.json 63.5
+```
+
+Le second argument est le tempo du crate. **Une octave n'est pas une erreur de lecture** :
+annoncer 127,8 quand la fiche dit 63,50, c'est avoir trouvé le bon pouls et l'avoir compté
+un niveau plus haut. La fenêtre le nomme — « le double », « la moitié » — au lieu d'afficher
+cent pour cent d'écart.
+
+Ce qu'elle compare : le tempo, l'énergie, la brillance, la densité d'attaques et les douze
+bandes, dont les bornes sont exactement celles du moteur pour que la comparaison ait un sens.
+
+Ce qu'elle ne compare pas, et il faut le dire : la séparation en six sources par timbre.
+La contrôler demanderait de réécrire la factorisation, donc de vérifier le moteur avec le
+moteur. Les registres grave, médium et aigu sont des tranches de spectre, pas des
+instruments.
+
+## Le partage des rôles
+
+**Python précalcule et vérifie. C# rend en temps réel.** Aucun des deux ne se vérifie
+lui-même, et c'est tout l'intérêt : les indicateurs internes du moteur comparent les frappes
+à une grille calée sur ces mêmes frappes, donc un défaut commun aux deux leur est invisible.
+Il a fallu un métronome fabriqué, une implémentation écrite dans un autre langage, et les
+tempos que le DJ a calés lui-même, pour voir ce que le moteur ne pouvait pas voir seul.

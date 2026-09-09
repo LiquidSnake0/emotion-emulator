@@ -46,7 +46,10 @@ P_SEQUENCE, P_TEMPS = 4, 8
 P_NIVEAU, P_BPM, P_PHASE = 16, 20, 24
 P_FRAPPES = 40
 P_BANDES = 48          # douze octets
+P_CENTROIDE, P_OUVERTURE, P_DENSITE = 100, 101, 102
 P_BEAT = 103
+P_VOIX_BAS, P_VOIX_MED, P_VOIX_HAUT = 96, 97, 98
+P_BPM_ATTENDU = 192
 P_SOURCES = 128        # huit mots de huit octets
 SOURCE_PAS = 8
 S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NETTETE = 0, 1, 2, 5
@@ -117,6 +120,13 @@ class Paquet:
         self.clap = bool(frappes & 2)
         self.charley = bool(frappes & 4)
         self.beat = mm[base + P_BEAT]
+        self.brillance = mm[base + P_CENTROIDE] / 255.0
+        self.ouverture = mm[base + P_OUVERTURE] / 255.0
+        self.densite = mm[base + P_DENSITE] / 255.0
+        self.voix = (mm[base + P_VOIX_BAS] / 255.0,
+                     mm[base + P_VOIX_MED] / 255.0,
+                     mm[base + P_VOIX_HAUT] / 255.0)
+        self.bpm_attendu = struct.unpack_from("<f", mm, base + P_BPM_ATTENDU)[0]
         self.bandes = [mm[base + P_BANDES + i] / 255.0 for i in range(12)]
         self.sources = []
         for r in range(6):
