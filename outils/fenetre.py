@@ -39,6 +39,7 @@ LA CHARTE EST CELLE DU DJ : du gris, un seul accent vert, aucun rouge.
 """
 
 import copy
+import json
 import math
 import mmap
 import os
@@ -413,6 +414,27 @@ class Mur(QWidget):
         # tour après tour. Il dépendait du rôle, et le rôle a été retiré faute de se
         # mesurer sur cette matière.
 
+        # ISOLER UNE SOURCE, ET DIRE CE QU'ON ENTEND.
+        #
+        # « J'isole en cliquant sur la source que je veux, et je regarde si ça suit bien ce
+        # qu'il dit. Si ça suit, je le laisse ; sinon je veux pouvoir montrer, à travers la
+        # touche espace, moi ce que j'entends. »
+        #
+        # C'est la seule mesure du projet qui vienne de l'extérieur du programme. Tout le
+        # reste se juge contre des grandeurs que le moteur calcule lui-même : un décalage
+        # commun au juge et au jugé leur est invisible par construction. Une oreille, non.
+        #
+        # ON N'AFFICHE AUCUN VERDICT, ET C'EST VOULU. Ce qui est tapé part dans un journal
+        # qu'on analyse après coup, avec les instants que le moteur publiait au même
+        # moment. Calculer un accord à l'écran obligerait à trancher tout de suite ce qu'on
+        # ne sait pas encore trancher — à commencer par la latence de la main.
+        self.isolee = None
+        self.cases = []                  # rectangles des six cases, pour le clic
+        self.marques = []                # (source, geste, debut, fin)
+        self.tenue = None                # (source, instant d'enfoncement)
+        self.journal = []               # ce que le moteur publiait, image par image
+        self.morceau = (sys.argv[1] if len(sys.argv) > 1 else "sans-nom")
+
         self.mono = QFont("monospace", 10)
         self.mono.setStyleHint(QFont.StyleHint.Monospace)
 
@@ -434,6 +456,7 @@ class Mur(QWidget):
             if p.sequence != self.derniere_sequence:
                 self.derniere_sequence = p.sequence
                 self.entre_images.pousser(p, maintenant)
+                self.journaliser(p)
 
                 # L'HORLOGE SE CALE SUR LA GRILLE DU MOTEUR, PLUS SUR LES FRAPPES.
                 #
@@ -569,7 +592,27 @@ class Mur(QWidget):
         y = self.trois_cases(d, p, marge, y + 18, w - 2 * marge)
         self.piste_frappes(d, p, marge, y + 18, w - 2 * marge)
         self.balayer(d, w, h)
+        self.aide(d, marge, h)
         d.restore()
+
+    def aide(self, d, x, h):
+        """Une ligne en bas, et elle se pose depuis le BAS de la fenetre.
+
+        Tout le reste de cet ecran se pose en cascade, chaque bloc rendant le y du suivant.
+        Cette ligne-la n'appartient a aucune cascade : elle vit dans la place qui reste, et
+        la calculer depuis le haut la ferait bouger a chaque fois qu'un bloc au-dessus
+        change de hauteur.
+        """
+        d.setPen(GRIS_CADRE)
+        if self.isolee is None:
+            d.drawText(x, h - 26,
+                       "clic ou 1-6 : isoler une source   ·   "
+                       "espace : marquer ce que tu entends   ·   Q : enregistrer et fermer")
+        else:
+            d.drawText(x, h - 26,
+                       f"source {self.isolee + 1} isolee   ·   "
+                       "espace : maintenir = presence, taper = instants   ·   "
+                       "retour arriere : defaire   ·   Q : enregistrer et fermer")
 
     def bandeau(self, d, p, x, y, largeur):
         d.setPen(GRIS_CLAIR)
@@ -664,11 +707,22 @@ class Mur(QWidget):
         cols, rangs = 3, 2
         larg = (largeur - 2 * 14) / cols
         haut = 132
+        self.cases = []
         for r, s in enumerate(p.sources):
             cx = x + (r % cols) * (larg + 14)
             cy = y + (r // cols) * (haut + 12)
+            self.cases.append((cx, cy, larg, haut))
 
-            d.setPen(QPen(GRIS_CADRE, 1))
+            # ISOLER, C'EST ETEINDRE LES AUTRES — PAS LES EFFACER.
+            #
+            # Elles gardent leur place et leur mouvement, en sourdine : on veut pouvoir
+            # verifier du coin de l'oeil qu'une voisine ne fait pas exactement la meme chose
+            # que celle qu'on ecoute. C'est meme la question du moment, puisque deux sources
+            # sur six portent presque le meme son.
+            eteinte = self.isolee is not None and r != self.isolee
+            choisie = self.isolee == r
+
+            d.setPen(QPen(VERT if choisie else GRIS_CADRE, 1))
             d.drawRect(int(cx), int(cy), int(larg), haut)
 
             nom = formes.NOMS.get(s["forme"], formes.NOMS[(r % 6) + 1])
@@ -694,7 +748,8 @@ class Mur(QWidget):
             if absente:
                 titre += f"  ⌁ absent {max(1, math.ceil(s['retrait']))} s"
 
-            d.setPen(GRIS_CADRE if absente else GRIS_TEXTE)
+            d.setPen(GRIS_CADRE if (absente or eteinte) else
+                     GRIS_CLAIR if choisie else GRIS_TEXTE)
             d.drawText(int(cx) + 8, int(cy) + 16, titre)
             # LE TITRE PORTE LA MATURITE DE LA SOURCE, EN QUATRE CRANS.
             #
@@ -710,8 +765,25 @@ class Mur(QWidget):
                 verdict, vif = "◐ mêlée", False
             else:
                 verdict, vif = "○ partagée", False
-            d.setPen(GRIS_CLAIR if vif else GRIS_CADRE)
-            d.drawText(int(cx + larg) - 72, int(cy) + 16, verdict)
+            # SUR LA CASE ISOLEE, LE COMPTE DES MARQUES PREND LA PLACE DU VERDICT.
+            #
+            # La place est deja reservee, donc rien ne bouge dans la geometrie — et pendant
+            # qu'on annote, savoir que la touche est bien prise compte plus que de relire
+            # « nette ». C'est le SEUL retour a l'ecran : on n'affiche aucun accord calcule,
+            # parce que le trancher tout de suite obligerait a decider de la latence de la
+            # main, qui n'est pas connue.
+            if choisie:
+                n = sum(1 for m in self.marques if m[0] == r)
+                verdict = "tenue" if self.tenue else f"marques {n}"
+                vif = True
+
+            # ET LA POSITION SE MESURE, ELLE NE SE DEVINE PAS. Le decalage de 72 px etait
+            # taille pour « ○ partagée » ; « marques 12 » est plus long et touchait le bord
+            # de la case. C'est la QUATRIEME fois dans ce fichier qu'une largeur supposee
+            # coute un debordement — on la mesure, comme partout ailleurs.
+            d.setPen(GRIS_CADRE if eteinte else (GRIS_CLAIR if vif else GRIS_CADRE))
+            large = QFontMetricsF(self.mono).horizontalAdvance(verdict)
+            d.drawText(int(cx + larg - 8 - large), int(cy) + 16, verdict)
 
             # LA TAILLE SE DONNE EN PIXELS, PAS EN POINTS. setPointSizeF prend des
             # points ; a 96 points par pouce un point vaut 1,33 pixel, donc une taille
@@ -748,8 +820,9 @@ class Mur(QWidget):
             d.setClipRect(int(cx) + 1, int(cy) + 1, int(larg) - 2, haut - 2)
             d.setFont(police)
             teinte = QColor(GRIS_CADRE if absente else VERT)
-            teinte.setAlphaF(min(1.0, (0.35 + force * 0.45) if absente
-                                 else (0.22 + force * 0.70)))
+            alpha = min(1.0, (0.35 + force * 0.45) if absente
+                        else (0.22 + force * 0.70))
+            teinte.setAlphaF(alpha * 0.30 if eteinte else alpha)
             d.setPen(teinte)
             for i, ligne in enumerate(lignes):
                 d.drawText(int(g.x0), int(g.y0 + (i + 1) * g.ch), ligne)
@@ -954,6 +1027,110 @@ class Mur(QWidget):
         g.setColorAt(1.0, bord)
         d.fillRect(int(x - w * 0.10), 0, int(w * 0.20), h, g)
 
+    # ------------------------------------------------------------------ annoter
+    def journaliser(self, p):
+        """Ce que le moteur publiait, image d'analyse par image d'analyse.
+
+        SANS LUI, LE JOURNAL DES TOUCHES NE VAUDRAIT RIEN. Comparer ce que l'oreille marque
+        a ce que la source fait suppose de connaitre les deux SUR LA MEME HORLOGE. Rejouer
+        le morceau apres coup pour retrouver les frappes du moteur donnerait un alignement
+        approximatif — et c'est justement l'alignement qu'on mesure.
+
+        On n'enregistre que pendant qu'une source est isolee : le reste du temps il n'y a
+        rien a confronter, et un journal de cinq minutes d'ecoute passive ne servirait qu'a
+        peser.
+        """
+        if self.isolee is None:
+            return
+        s = p.sources[self.isolee]
+        self.journal.append({
+            "t": round(p.temps / 1000.0, 4),
+            "niveau": round(s["niveau"], 3),
+            "frappe": bool(s["frappe"]),
+            "retrait": round(s["retrait"], 2),
+            "pique": round(s["pique"], 3),
+            "tenue": round(s["tenue"], 3),
+            "bpm": round(p.bpm, 2),
+            "phase_temps": round(p.phase_temps, 3),
+            "kick": bool(p.kick),
+        })
+
+    def instant(self):
+        """Ou l'on en est dans le morceau, en secondes. L'horloge du moteur, et elle seule.
+
+        Un decalage entre deux horloges est le genre de defaut qui survit des semaines sans
+        se voir. Il n'y en a qu'une ici, donc la question ne se pose pas.
+        """
+        return self.paquet.temps / 1000.0 if self.paquet else 0.0
+
+    def isoler(self, r):
+        """Choisir une source, ou revenir a la vue d'ensemble en la rechoisissant."""
+        avant = self.isolee
+        self.isolee = None if self.isolee == r else r
+        if self.isolee != avant:
+            self.tenue = None
+
+    def marquer(self, appuye):
+        """Espace enfonce, espace relache. On garde LES DEUX, toujours.
+
+        DEUX GESTES, UN SEUL MECANISME. Maintenir une touche tant qu'on entend l'instrument
+        donne un intervalle de presence, a confronter au niveau et au retrait ; taper en
+        rythme donne des instants, a confronter aux frappes. Decider ici lequel des deux on
+        vient de faire perdrait de l'information qu'on ne pourrait plus retrouver — seule la
+        duree les separe, et elle n'est connue qu'apres le relachement.
+        """
+        if self.isolee is None:
+            return
+        if appuye:
+            if self.tenue is None:
+                self.tenue = (self.isolee, self.instant())
+        elif self.tenue is not None:
+            source, debut = self.tenue
+            self.tenue = None
+            self.marques.append((source, debut, self.instant()))
+
+    def enregistrer(self):
+        """Le rapport, hors du depot : il contient une oeuvre en creux.
+
+        Les instants sont BRUTS, sans correction de latence. Une main tape apres avoir
+        entendu, de cinquante a cent cinquante millisecondes selon la personne et le jour.
+        Corriger ici enfouirait une hypothese dans une donnee, et une donnee corrigee par
+        une hypothese fausse ne se repare plus. Le decalage se lit a l'analyse, ou il reste
+        visible — et s'il est constant, c'est la main ; s'il part dans tous les sens, c'est
+        le moteur.
+        """
+        if not self.marques and not self.journal:
+            return
+        dossier = os.path.expanduser("~/Documents/emotion-sources/rapports")
+        os.makedirs(dossier, exist_ok=True)
+        nom = f"{self.morceau}-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        chemin = os.path.join(dossier, nom)
+        with open(chemin, "w", encoding="utf-8") as fh:
+            json.dump({
+                "morceau": self.morceau,
+                "brut": True,
+                "marques": [{"source": r + 1, "debut": round(d, 3), "fin": round(f, 3)}
+                            for r, d, f in self.marques],
+                "moteur": self.journal,
+            }, fh, ensure_ascii=False)
+        print(f"{len(self.marques)} marques et {len(self.journal)} images dans {chemin}")
+
+    # ------------------------------------------------------------------ souris
+    def mousePressEvent(self, e):
+        pos = e.position() if hasattr(e, "position") else e.pos()
+        for r, (cx, cy, larg, haut) in enumerate(self.cases):
+            if cx <= pos.x() <= cx + larg and cy <= pos.y() <= cy + haut:
+                self.isoler(r)
+                return
+
+    def closeEvent(self, e):
+        self.enregistrer()
+        e.accept()
+
+    def keyReleaseEvent(self, e):
+        if e.key() == Qt.Key.Key_Space and not e.isAutoRepeat():
+            self.marquer(False)
+
     def keyPressEvent(self, e):
         """Q ferme, + et - reglent l'avance du visuel.
 
@@ -970,6 +1147,19 @@ class Mur(QWidget):
             self.avance_ms = min(200.0, self.avance_ms + 5.0)
         elif e.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
             self.avance_ms = max(0.0, self.avance_ms - 5.0)
+        # LES TOUCHES 1 A 6 FONT CE QUE FAIT LE CLIC. On a rarement la souris en main quand
+        # on ecoute, et changer de source ne doit pas couter un geste.
+        elif Qt.Key.Key_1 <= e.key() <= Qt.Key.Key_6:
+            self.isoler(e.key() - Qt.Key.Key_1)
+        elif e.key() == Qt.Key.Key_Space and not e.isAutoRepeat():
+            # L'AUTOREPEAT EST IGNORE. Le clavier renvoie l'enfoncement des dizaines de fois
+            # par seconde tant qu'on tient la touche ; en tenir compte hacherait un souffle
+            # en centaines de marques minuscules.
+            self.marquer(True)
+        elif e.key() == Qt.Key.Key_Backspace and self.marques:
+            # ON PEUT SE REPRENDRE. Une marque fausse laissee dans le rapport vaut moins que
+            # pas de marque du tout : elle s'y presente comme une verite et n'en est pas une.
+            self.marques.pop()
 
 
 def main():

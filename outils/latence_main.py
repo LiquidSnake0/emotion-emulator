@@ -14,7 +14,7 @@ On tape sur `etalon-kick.wav` : des grosses caisses seules, dont les clics sont 
 fichier et se relèvent à l'échantillon près, sans détecteur ni seuil. L'écart médian entre
 la main et les clics EST la latence. Quatre-vingt-dix secondes suffisent.
 
-    python3 outils/taper.py etalon.json        (en jouant etalon-kick.wav)
+    ./outils/voir.sh etalon-kick.wav            puis on isole une source et l'on tape
     python3 outils/latence_main.py etalon.json <chemin>/etalon-kick.wav
 
 ON REND AUSSI LA DISPERSION, et elle compte autant que la médiane. Une main régulière à dix
@@ -53,7 +53,11 @@ def clics(chemin):
 
 def mesurer(chemin_notes, chemin_wav):
     with open(chemin_notes, encoding="utf-8") as fh:
-        notes = json.load(fh)["notes"]
+        rapport = json.load(fh)
+    # LE RAPPORT VIENT DE LA FENETRE, qui ecrit ses marques sous « marques ». L'ancien outil
+    # separe les ecrivait sous « notes » ; on lit les deux plutot que de casser les fichiers
+    # deja enregistres, qui sont des mesures et ne se refont pas.
+    notes = rapport.get("marques") or rapport.get("notes") or []
     vrais = clics(chemin_wav)
     if len(vrais) < 8:
         print("pas de clics nets dans ce fichier")

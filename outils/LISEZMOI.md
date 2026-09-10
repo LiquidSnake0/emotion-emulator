@@ -90,45 +90,61 @@ rester d'accord — c'est tout le contrat.
 `tools/Emotion.Ascii` fait la même chose dans un terminal, en C#, sans dépendance. Les deux
 valident le même contrat depuis deux langages.
 
-## `fenetre_reference.py` — la seconde fenêtre
+## Isoler une source, et marquer ce qu'on entend
 
-La première montre ce que le moteur dit ; elle ne peut pas dire s'il a raison. Celle-ci pose
-la question que l'autre ne peut pas poser : **ce qui s'affiche correspond-il à ce que le
-disque fait ?**
+```sh
+./outils/voir.sh                      # ecoute la sortie systeme
+./outils/voir.sh morceau.wav 90.92    # rejoue un morceau, fiche comprise
+```
+
+| | |
+|---|---|
+| **clic sur une case, ou 1 à 6** | isole une source — les cinq autres s'éteignent sans disparaître |
+| **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
+| **espace tapé** | des instants, à confronter aux frappes et à la grille |
+| **retour arrière** | défaire la dernière marque |
+| **Q** | écrit le rapport et ferme |
+
+C'est la seule mesure du projet qui vienne de l'extérieur du programme. Tout le reste se juge
+contre des grandeurs que le moteur calcule lui-même — un décalage commun au juge et au jugé
+leur est invisible par construction. Une oreille, non.
+
+Le rapport part dans `~/Documents/emotion-sources/rapports/`, et il porte **les deux côtés** :
+les marques, et ce que le moteur publiait au même instant pour la source isolée. Sans le
+second, comparer serait impossible : il faudrait rejouer le morceau pour retrouver ses
+frappes, et l'alignement obtenu serait approximatif — or c'est justement l'alignement qu'on
+mesure. Environ 145 ko par minute.
+
+**Aucun verdict n'est calculé à l'écran.** Le trancher en direct obligerait à décider tout de
+suite de la latence de la main, qui n'est pas connue. Elle se lit à l'analyse : si le décalage
+est constant, c'est la main ; s'il part dans tous les sens, c'est le moteur.
+
+## `fenetre_reference.py` — retirée du flux, gardée pour les mesures
+
+Elle confrontait le paquet du moteur à un rapport Python précalculé **sur un fichier** — le
+tempo, l'énergie, la brillance, la densité d'attaques et les douze bandes, aux bornes exactes
+du moteur. En écoute directe, les deux ne parlaient pas du même instant, et elle ne pouvait
+rien dire. Elle ne se lance donc plus ; `deux-fenetres.sh` a été supprimé.
+
+Pour une mesure hors ligne sur un fichier, elle garde tout son sens :
 
 ```
 python3 outils/tempo_reference.py morceau.wav rapport=reference/
-./run.sh pulse                                    # dans un terminal
-./outils/deux-fenetres.sh reference/morceau.json 63.5
+./run.sh fichier morceau.wav 63.5
+python3 outils/fenetre_reference.py reference/morceau.json 63.5
 ```
 
-Le second argument est le tempo du crate. **Une octave n'est pas une erreur de lecture** :
-annoncer 127,8 quand la fiche dit 63,50, c'est avoir trouvé le bon pouls et l'avoir compté
-un niveau plus haut. La fenêtre le nomme — « le double », « la moitié » — au lieu d'afficher
-cent pour cent d'écart.
+**Une octave n'est pas une erreur de lecture** : annoncer 127,8 quand la fiche dit 63,50,
+c'est avoir trouvé le bon pouls et l'avoir compté un niveau plus haut. Elle le nomme — « le
+double », « la moitié » — au lieu d'afficher cent pour cent d'écart.
 
-Ce qu'elle compare : le tempo, l'énergie, la brillance, la densité d'attaques et les douze
-bandes, dont les bornes sont exactement celles du moteur pour que la comparaison ait un sens.
+Ce qu'elle ne compare pas, et il faut le dire : la séparation en six sources par timbre. La
+contrôler demanderait de réécrire la factorisation, donc de vérifier le moteur avec le
+moteur. Les registres grave, médium et aigu sont des tranches de spectre, pas des instruments.
 
-Ce qu'elle ne compare pas, et il faut le dire : la séparation en six sources par timbre.
-La contrôler demanderait de réécrire la factorisation, donc de vérifier le moteur avec le
-moteur. Les registres grave, médium et aigu sont des tranches de spectre, pas des
-instruments.
-
-## Le sélecteur de faces
-
-La fenêtre de mesure liste les 245 faces du crate qui portent un tempo, avec un filtre par
-titre, album ou BPM. Choisir une face fait deux choses : elle **envoie la fiche au moteur**
-par l'API REST, et elle **charge le précalcul** de cette face s'il a été produit.
-
-```
-python3 outils/tempo_reference.py morceau.wav rapport=reference/
-./run.sh pulse                       # le moteur, qui ecrit l'anneau
-./outils/deux-fenetres.sh reference/ # le GPU simule + la mesure
-```
-
-Le moteur amorce alors son tempo sur la fiche sans jamais s'y verrouiller — un disque poussé
-au fader est suivi malgré elle.
+**La fiche ne passe plus par un sélecteur, mais par le lancement** — `./run.sh fichier
+morceau.wav 90.92`. Le moteur amorce son tempo dessus sans jamais s'y verrouiller : un disque
+poussé au fader est suivi malgré elle.
 
 ## `ecouter.sh` — entendre ce que chaque source entend
 

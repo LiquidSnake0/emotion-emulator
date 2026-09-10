@@ -807,14 +807,15 @@ algorithme.**
 | `Emotion.Signal.Tests` | 170 tests | xUnit |
 | `Emotion.Probe` | sonde hors ligne : un WAV entre, des chiffres sortent | — |
 | `Emotion.Pulse` | la mesure de pulsation, par Rayleigh | — |
-| `outils/` | le GPU simulé (`fenetre.py`) et sa mesure (`fenetre_reference.py`) | Python, PySide6 |
+| `outils/` | le GPU simulé et l'oreille (`fenetre.py`), les mesures hors ligne | Python, PySide6 |
 
 Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder ainsi.**
 
 ## Faire tourner
 
 ```sh
-./outils/voir.sh [dossier-des-précalculs]   # tout : le moteur, le GPU simulé, la mesure
+./outils/voir.sh                      # le moteur + la fenetre, sur la sortie systeme
+./outils/voir.sh morceau.wav 90.92    # le moteur + la fenetre, en rejeu, fiche comprise
 ```
 
 ```sh
@@ -1260,7 +1261,7 @@ valeur sans la retoucher. Garder les deux amortirait deux fois et rendrait tout 
 ```
 crate  --HTTP REST-->  C#                       le seul réseau légitime
 C#     --/dev/shm-->   outils/fenetre.py        le GPU simulé : il reçoit
-C#     --/dev/shm-->   outils/fenetre_reference.py   la mesure : est-ce juste
+C#     --/dev/shm-->   outils/fenetre_reference.py   la mesure hors ligne, sur fichier
 ```
 
 Le rendu a tourné un an dans un navigateur. Il en est sorti pour une seule raison : **il
@@ -1368,38 +1369,71 @@ mesure.
 isolée porte une information qu'on peut nommer. Si elle n'en porte pas — et deux mesures
 laissent craindre que non — la corrélation entre sources n'aura rien à corréler.
 
-### La vérité de l'oreille : `outils/taper.py`
+### La vérité de l'oreille : une seule fenêtre, et l'on y marque ce qu'on entend
 
-L'idée est du DJ, et elle vaut mieux que ce qu'on lui demandait — on ne demandait que
-« où est le temps », il propose de dire **quelle source fait quoi, et quand** :
+L'idée est du DJ, et elle vaut mieux que ce qu'on lui demandait — on ne demandait que « où
+est le temps », il propose de dire **quelle source fait quoi, et quand** :
 
-> « J'appuie une touche quand j'entends un souffle ; si c'est un pizzicato, je taperai en
-> rythme, et on comparera ça pour être sûr que chaque cellule cadre bien. »
+> « J'isole en cliquant sur la source que je veux, et je regarde si ça suit bien ce qu'il
+> dit. Si ça suit, je le laisse ; sinon je veux pouvoir montrer, à travers la touche espace,
+> moi ce que j'entends. »
 
-**Deux gestes, un seul mécanisme.** Maintenir une touche donne des intervalles de présence,
-à confronter au niveau et au retrait qu'une source publie ; taper donne des instants, à
-confronter aux frappes et à la grille. On enregistre toujours l'enfoncement **et** le
-relâchement, et c'est l'analyse qui décide de les lire comme l'un ou comme l'autre — décider
-à l'enregistrement perdrait ce qu'on ne pourrait plus retrouver.
+```sh
+./outils/voir.sh                      # ecoute la sortie systeme
+./outils/voir.sh morceau.wav 90.92    # rejoue un morceau, fiche comprise
+```
 
-**L'horloge est celle du morceau.** Chaque touche est datée sur le temps publié dans
-l'anneau, le même que celui de toutes les autres mesures. Un décalage entre deux horloges est
-le genre de défaut qui survit des semaines sans se voir ; il n'y en a qu'une, donc la
-question ne se pose pas.
+| | |
+|---|---|
+| **clic sur une case, ou 1 à 6** | isole une source — les cinq autres s'éteignent sans disparaître |
+| **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
+| **espace tapé** | des instants, à confronter aux frappes et à la grille |
+| **retour arrière** | défaire la dernière marque |
+| **Q** | écrit le rapport et ferme |
 
-**Et la latence de la main se mesure** — `outils/latence_main.py`. Une main tape *après*
-avoir entendu, de cinquante à cent cinquante millisecondes selon la personne et le jour. Ce
-retard ne gêne pas une mesure de période, où il s'annule, mais il fausse entièrement une
-mesure de phase — et c'est la phase qui manque. Quatre-vingt-dix secondes tapées sur
-`etalon-kick.wav`, dont les clics sont dans le fichier, donnent le chiffre exact.
+**Deux gestes, un seul mécanisme.** On enregistre toujours l'enfoncement *et* le
+relâchement, et c'est l'analyse qui décide de les lire comme un intervalle ou comme un
+instant. Décider à l'enregistrement perdrait ce qu'on ne pourrait plus retrouver — seule la
+durée les sépare, et elle n'est connue qu'après coup.
 
-> **Les instants sont enregistrés bruts, sans correction.** Corriger à l'enregistrement
-> enfouirait une hypothèse dans une donnée, et une donnée corrigée par une hypothèse fausse
-> ne se répare plus. La latence se retranche à l'analyse, où elle reste visible.
+**Les autres s'éteignent, elles ne disparaissent pas.** Elles gardent leur place et leur
+mouvement, en sourdine : deux sources sur six portent presque le même son, et il faut
+pouvoir vérifier du coin de l'œil qu'une voisine ne fait pas exactement la même chose.
 
-La dispersion compte autant que la médiane : une main régulière à dix millisecondes près
-donne une vérité de phase ; une main qui varie de cent ne dira jamais où tombe un temps,
-quelle que soit la correction.
+### Le rapport contient les deux côtés, et c'est ce qui le rend analysable
+
+`~/Documents/emotion-sources/rapports/<morceau>-<horodatage>.json` porte les marques **et**
+ce que le moteur publiait au même instant — niveau, frappe, retrait, piqué, tenue, tempo,
+phase — image d'analyse par image d'analyse, pour la seule source isolée.
+
+> **Sans ce second côté, le journal des touches ne vaudrait rien.** Comparer ce que l'oreille
+> marque à ce que la source fait suppose de connaître les deux **sur la même horloge**.
+> Rejouer le morceau après coup pour retrouver les frappes du moteur donnerait un alignement
+> approximatif — et c'est justement l'alignement qu'on mesure.
+
+Environ 145 ko par minute d'annotation. Le journal ne tourne **que pendant qu'une source est
+isolée** : le reste du temps il n'y a rien à confronter.
+
+**Aucun verdict n'est affiché, et c'est voulu.** Le seul retour à l'écran est le nombre de
+marques, à la place du verdict de netteté sur la case isolée. Calculer un accord en direct
+obligerait à trancher tout de suite la latence de la main, qui n'est pas connue — et une
+donnée corrigée par une hypothèse fausse ne se répare plus.
+
+> **Les instants sont enregistrés bruts.** Une main tape *après* avoir entendu, de cinquante
+> à cent cinquante millisecondes selon la personne et le jour. Le décalage se lit à
+> l'analyse, où il reste visible : **s'il est constant, c'est la main ; s'il part dans tous
+> les sens, c'est le moteur.** C'est ce qui évite d'avoir à mesurer la latence d'avance.
+
+### La seconde fenêtre a été retirée
+
+`fenetre_reference.py` confrontait le paquet du moteur à un rapport Python précalculé **sur
+un fichier**. En écoute directe, le moteur écoute la sortie système : les deux ne parlaient
+donc pas du même instant, et elle ne pouvait rien dire. Le DJ l'a vu avant nous — « elle sert
+à rien, il échantillonne 90 secondes mais lesquelles ? »
+
+Elle reste sur le disque pour les mesures hors ligne, où elle a un sens, et ne se lance plus.
+Le seul morceau utile qu'elle portait — le sélecteur de faces, qui envoie la fiche au moteur
+— est remplacé par l'argument de lancement : `./run.sh fichier morceau.wav 90.92`.
 
 ### Entendre ce que chaque source entend — `outils/ecouter.sh`
 

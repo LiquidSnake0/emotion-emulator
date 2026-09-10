@@ -41,7 +41,8 @@ publie au même instant</sub></td>
 </table>
 
 ```sh
-./outils/voir.sh [dossier-des-précalculs]
+./outils/voir.sh                      # sur la sortie systeme
+./outils/voir.sh morceau.wav 90.92    # en rejeu d'un fichier, fiche comprise
 ```
 
 Le moteur écoute la sortie système : on joue ce qu'on veut avec son lecteur habituel, il
@@ -1540,6 +1541,36 @@ remplace ne montre plus le système à lui-même : **`outils/fenetre_reference.p
 au dehors.** À gauche ce qu'une analyse hors ligne indépendante a trouvé sur le morceau, à
 droite ce que le moteur publie au même instant. Un désaccord se lit sans rien calculer.
 
+**Mais elle ne pouvait rien dire en écoute directe**, et le DJ l'a vu avant nous : son
+rapport porte sur un fichier, le moteur écoute la sortie système, donc les deux ne parlaient
+pas du même instant. Elle a été retirée du flux et ne sert plus qu'aux mesures hors ligne.
+
+### Et l'écran a reçu la seule mesure qui vienne du dehors : une oreille
+
+Tout ce que ce projet mesure se juge contre des grandeurs qu'il calcule lui-même — un
+décalage commun au juge et au jugé leur est invisible par construction, et c'est ainsi qu'un
+retard de 21 ms a survécu des semaines. La fenêtre porte donc maintenant l'avis d'un humain :
+
+> « J'isole en cliquant sur la source que je veux, et je regarde si ça suit bien ce qu'il
+> dit. Si ça suit, je le laisse ; sinon je veux pouvoir montrer, à travers la touche espace,
+> moi ce que j'entends. »
+
+Un clic — ou les touches 1 à 6 — isole une source : les cinq autres s'éteignent **sans
+disparaître**, parce que deux sources sur six portent presque le même son et qu'il faut
+pouvoir vérifier du coin de l'œil qu'une voisine ne fait pas la même chose. Espace maintenu
+donne un intervalle de présence, espace tapé donne des instants. **On enregistre toujours les
+deux** : seule la durée les sépare, et elle n'est connue qu'après le relâchement.
+
+Le rapport écrit porte **les deux côtés** — les marques, et ce que le moteur publiait au même
+instant pour cette source. Sans le second, il faudrait rejouer le morceau pour retrouver ses
+frappes, et l'alignement obtenu serait approximatif : or c'est justement l'alignement qu'on
+mesure.
+
+> **Aucun verdict n'est affiché, et c'est un choix.** Le calculer en direct obligerait à
+> trancher tout de suite la latence de la main — cinquante à cent cinquante millisecondes
+> selon la personne et le jour — qui n'est pas connue. Les instants restent bruts, et le
+> décalage se lit à l'analyse : **constant, c'est la main ; erratique, c'est le moteur.**
+
 Deux autres outils ne s'affichent pas mais tranchent :
 
 | | ce qu'il demande |
@@ -1635,7 +1666,8 @@ change d'une ligne.
 
 ```sh
 # Tout : le moteur, le GPU simulé, la mesure
-./outils/voir.sh [dossier-des-précalculs]
+./outils/voir.sh                      # sur la sortie systeme
+./outils/voir.sh morceau.wav 90.92    # en rejeu d'un fichier, fiche comprise
 
 # Signal fabriqué, aucun matériel requis
 dotnet run --project src/Emotion.Server
