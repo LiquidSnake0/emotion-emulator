@@ -71,6 +71,13 @@ public sealed class WavAudioSource : IAudioSource, ILearnsTracks, IAcceptsCue
     /// </summary>
     public void Amorcer(float bpm) => _analyzer.Amorcer(bpm);
 
+    /// <summary>
+    /// Meme contrat que l'ecoute reelle. Sans lui, un rejeu ne remettait jamais la
+    /// separation a zero — c'est le troisieme membre de cette interface qui manquait ici,
+    /// apres IAcceptsCue et ILearnsTracks, et pour la meme raison.
+    /// </summary>
+    public void NewTrack() => _analyzer.NewTrack();
+
     public async IAsyncEnumerable<VisualFrame> ReadAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {

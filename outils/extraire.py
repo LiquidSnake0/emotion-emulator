@@ -119,6 +119,22 @@ BLOC = 1024
 # tirer des flèches jusqu'à ce que l'une aille au milieu.
 LISSAGE = reglage("LISSAGE", 8, int)
 
+# COMMENT LES SIX SE PARTAGENT LE SPECTRE, ET C'EST UN CHOIX, PAS UNE EVIDENCE.
+#
+# « partage » — le masque historique. Les six masques somment a 1 sur chaque raie : la somme
+# des six EST le morceau, exactement. Mais une source qui monte PREND la part des autres, et
+# cela s'entend : mesure au moment des frappes, des sources tombent a 0,43 et 0,51 de leur
+# niveau d'avant. Le DJ l'a decrit ainsi : « ils sont tous affectes par le kick, le son de la
+# source est rendu muet au moment ou le kick arrive ».
+#
+# « independant » — l'idee est du DJ, et elle vient des ecouteurs a reduction de bruit :
+# « source 1 c'est le son plus l'inverse de tout le reste ». Chaque source est mise en
+# balance avec TOUT LE RESTE pris ensemble, sans contrainte de somme : elle garde ce qui lui
+# ressemble sans que personne ne le lui retire.
+#
+# On perd alors l'exactitude — la somme des six n'est plus le morceau — et c'est le prix.
+MASQUE = os.environ.get("MASQUE", "partage")
+
 EPS = 1e-9
 
 
@@ -215,7 +231,15 @@ def separer(x, wprof, nfft, hop, sources):
 
         for s in range(sources):
             masque = np.ones((i1 - i0, spectres.shape[1]))
-            masque[:, :bins] = (np.outer(wprof[:, s], h[s]) / modele).T
+            part = np.outer(wprof[:, s], h[s])
+            if MASQUE == "independant":
+                # CETTE SOURCE CONTRE TOUT LE RESTE, comme un casque met le bruit en balance
+                # avec ce qu'il veut garder. Aucune normalisation croisee : ce que la source
+                # prend ne se retire a personne.
+                reste = modele - part
+                masque[:, :bins] = (part ** 2 / (part ** 2 + reste ** 2 + EPS)).T
+            else:
+                masque[:, :bins] = (part / modele).T
             part = np.fft.irfft(spectres * masque, nfft, axis=1) * w
             cible = sorties[s]
             for k, d in enumerate(depart):
@@ -304,9 +328,28 @@ def extraire(chemin_profils, chemin_wav, dossier, chemin_bis=None):
     # garde en place : un jour ou l'autre quelqu'un changera un parametre, et il vaut mieux
     # que l'outil le dise que l'oreille.
     cadence = taux / hop
-    temoins = [temoin_fixe(x, wprof, s, taux, nfft) for s in range(sources)]
-    ecarts = [bourdonnement(sons[s], taux, cadence)
-              / max(EPS, bourdonnement(temoins[s], taux, cadence)) for s in range(sources)]
+
+    # UN TEMOIN A LA FOIS, ET C'EST UNE CORRECTION DE MEMOIRE, PAS DE STYLE.
+    #
+    # Les six etaient calcules d'un coup et gardes jusqu'a la fin. Sur un morceau de deux
+    # cent quatre-vingts secondes cela fait six copies de treize millions d'echantillons en
+    # double precision, plus les six sources deja presentes : le systeme a tue le processus
+    # (code 137) juste apres le deuxieme controle. Les morceaux courts passaient, les longs
+    # non — donc le defaut ne se voyait que sur les vrais disques.
+    #
+    # Chaque temoin sert a trois choses (le bourdonnement, l'ecart au filtre, le WAV) : on
+    # les fait toutes dans la foulee, puis on le laisse partir.
+    ecarts, proches = [], []
+    ou = os.path.join(dossier, "temoin")
+    os.makedirs(ou, exist_ok=True)
+    base_temoin = os.path.splitext(os.path.basename(chemin_wav))[0]
+    for s in range(sources):
+        t = temoin_fixe(x, wprof, s, taux, nfft)
+        ecarts.append(bourdonnement(sons[s], taux, cadence)
+                      / max(EPS, bourdonnement(t, taux, cadence)))
+        proches.append(correlation(sons[s], t))
+        ecrire_wav(os.path.join(ou, f"{base_temoin}-temoin{s + 1}.wav"), t, taux)
+        del t
     pire = max(ecarts)
     # TROIS VERDICTS, ET LE SEUIL DE DEUX N'A PAS ETE DEPLACE. Il avait ete fixe avant la
     # mesure ; il n'est pas atteint partout, et c'est ecrit tel quel. Ce que la mesure sait
@@ -343,7 +386,6 @@ def extraire(chemin_profils, chemin_wav, dossier, chemin_bis=None):
     # rien du temps, il ne fait que couper des frequences. Si une source lui ressemble a un,
     # la factorisation n'a rien trouve qu'un banc de filtres n'aurait trouve — et alors
     # « la source du piano » n'est qu'une bande de frequences a laquelle on a donne un nom.
-    proches = [correlation(sons[s], temoins[s]) for s in range(sources)]
     print(f"  au-dela d'un simple filtre   {'  '.join(f'{c:4.2f}' for c in proches)}", end="")
     print("   ok" if min(proches) < 0.95 else "   la NMF n'ajoute rien au filtrage")
 
@@ -370,11 +412,6 @@ def extraire(chemin_profils, chemin_wav, dossier, chemin_bis=None):
                        / max(EPS, wprof[:, s].sum())) * taux / nfft
         part = 100 * float(np.sum(sons[s] ** 2)) / total
         print(f"  {s + 1:7d} {centre:9.0f} Hz {part:11.1f} %   {os.path.basename(chemin)}")
-
-    ou = os.path.join(dossier, "temoin")
-    os.makedirs(ou, exist_ok=True)
-    for s in range(sources):
-        ecrire_wav(os.path.join(ou, f"{base}-temoin{s + 1}.wav"), temoins[s], taux)
 
     print()
     print("  La « couleur » est le centre de gravite du profil : elle dit dans quel registre")

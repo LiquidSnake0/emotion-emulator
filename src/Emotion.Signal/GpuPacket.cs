@@ -216,6 +216,17 @@ public struct GpuPacket
     /// </summary>
     [FieldOffset(119)] public byte GridAgreement;
 
+    /// <summary>
+    /// Combien de sources la separation publie EN CE MOMENT, de 0 a <see cref="SourceSlots"/>.
+    ///
+    /// C'est le renderer qui en a besoin : il affichait six cases quoi qu'il arrive, et
+    /// quatre d'entre elles montraient du bruit avec la meme conviction que les deux vraies.
+    /// « Des fois on en a 2, des fois 8, c'est justement ce que le programme est cense me
+    /// dire. » Zero tant que rien n'a ete appris.
+    /// </summary>
+    public const int SourceActivesOffset = 120;
+    [FieldOffset(SourceActivesOffset)] public byte SourceActives;
+
     [FieldOffset(112)] public byte Sides;
 
     /// <summary>Mode mineur, tire de la lettre Camelot. Non nul si mineur.</summary>
@@ -631,6 +642,7 @@ public struct GpuPacket
         p.BeatPhase = (byte)Math.Clamp(f.Structure.BeatPhase * 255f, 0f, 255f);
         p.GridSure = (byte)Math.Clamp(f.Structure.Confidence * 255f, 0f, 255f);
         p.GridAgreement = (byte)Math.Clamp(f.GridAgreement * 255f, 0f, 255f);
+        p.SourceActives = (byte)Math.Clamp(f.Voices.Actives, 0, SourceSlots);
         p.Sides = (byte)track.Sides;
         p.Minor = track.Minor ? (byte)1 : (byte)0;
         p.LowPitch = (byte)Math.Clamp(f.Voices.LowPitch * 255f, 0f, 255f);

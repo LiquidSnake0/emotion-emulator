@@ -668,7 +668,8 @@ public sealed class SpectrumAnalyzer
     public SpectrumAnalyzer(int sampleRate = 48_000, bool separate = false,
                             float memoireTempoS = TempoTracker.DefautMemoireS,
                             float inertieTempo = TempoTracker.DefautInertie,
-                            float tempoPrefere = 90f, float largeurPreference = 0.25f)
+                            float tempoPrefere = 90f, float largeurPreference = 0.25f,
+                            float memoireSeparationS = SourceSeparator.MemoireDefautS)
     {
         _sampleRate = sampleRate;
         _frameSeconds = Window / (float)sampleRate;
@@ -680,7 +681,10 @@ public sealed class SpectrumAnalyzer
         _edges = BuildEdges(sampleRate);
         _harmony = new HarmonicAnalyzer(sampleRate);
         _voices = new VoiceTracker(sampleRate, Window);
-        _separation = new SourceSeparator(Window / 2, sampleRate);
+        // La separation apprend sur la duree du cue — quarante secondes par defaut. Les
+        // tests, eux, la raccourcissent : ils n'ont pas quarante secondes a donner.
+        _separation = new SourceSeparator(Window / 2, sampleRate,
+            memoire: (int)MathF.Max(1f, memoireSeparationS * sampleRate / Window));
         _etendues = new ContourRange(SourceSeparator.Sources);
         _timbre = new TimbreTracker(sampleRate, Window);
         // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
@@ -713,7 +717,17 @@ public sealed class SpectrumAnalyzer
     public Readiness Readiness => _gate.Current;
 
     /// <summary>Un nouveau disque commence : tout est a reapprendre.</summary>
-    public void NewTrack() => _gate.Reset();
+    /// <summary>
+    /// Un autre disque commence. LA SEPARATION REPART DE ZERO, et elle ne le faisait pas :
+    /// `Reset` existait sans etre appele nulle part, si bien que les profils du disque
+    /// precedent servaient de point de depart au suivant. Sur quarante secondes de memoire,
+    /// cela aurait voulu dire quarante secondes a decrire le mauvais disque.
+    /// </summary>
+    public void NewTrack()
+    {
+        _gate.Reset();
+        _separation.Reset();
+    }
 
     /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
     public string LastBreak => _continuity.Reason;
@@ -940,7 +954,8 @@ public sealed class SpectrumAnalyzer
                 };
             }
 
-            voices = voices with { Levels = act, Pitches = haut, Lanes = etats };
+            voices = voices with { Levels = act, Pitches = haut, Lanes = etats,
+                                   Actives = _separation.Actives };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint

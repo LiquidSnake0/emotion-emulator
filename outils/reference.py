@@ -41,6 +41,7 @@ ensemble, ceux qui n'ont rien à voir donnent zéro.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import wave
@@ -55,13 +56,25 @@ import numpy as np
 # `aubio` vit dans le systeme — dehors.
 VENV = os.path.expanduser("~/.cache/emotion-emulator/venv-reference")
 
-# Le modele. `htdemucs` est celui par defaut : quatre pistes, et il tourne sur processeur.
-MODELE = "htdemucs"
-PISTES = ("drums", "bass", "vocals", "other")
+# LE MODELE, ET IL Y EN A UN QUI NOMME LE PIANO.
+#
+# `htdemucs` rend quatre pistes ; `htdemucs_6s` en rend six, dont **guitare et piano**. C'est
+# litteralement la question que ce projet pose depuis le debut — « la source qui s'occupe du
+# piano gere-t-elle bien le piano » — et avec ce modele-la il n'y a plus a deviner : la piste
+# s'appelle piano.
+#
+# La factorisation maison, elle, n'y arrive pas. Le DJ l'a tranche a l'oreille apres qu'on ait
+# essaye les profils du moteur PUIS ceux appris sur le morceau entier : « entre 1 et 6 il y a
+# des differences mais elles sont tellement minimes que je sais pas si c'est sur le piano ou
+# sur le synthe qu'on est ».
+MODELE = os.environ.get("DEMUCS_MODELE", "htdemucs_6s")
+PISTES = (("drums", "bass", "vocals", "other", "guitar", "piano")
+          if MODELE == "htdemucs_6s" else ("drums", "bass", "vocals", "other"))
 
 # Les noms qu'on emploie ici. « other » ne veut rien dire a l'oreille d'un DJ ; « le reste »
 # non plus, mais au moins il ne pretend pas nommer un instrument.
-NOMS = {"drums": "batterie", "bass": "basse", "vocals": "voix", "other": "le reste"}
+NOMS = {"drums": "batterie", "bass": "basse", "vocals": "voix", "other": "le reste",
+        "guitar": "guitare", "piano": "piano"}
 
 EPS = 1e-9
 
@@ -85,15 +98,32 @@ def separer(morceau, dossier, dire=print):
     base = os.path.splitext(os.path.basename(morceau))[0]
     sorties = {p: os.path.join(dossier, f"{base}-ref-{p}.wav") for p in PISTES}
     if all(os.path.exists(c) for c in sorties.values()):
-        dire("reference deja en cache")
-        return sorties
+        # LE CACHE SE VERIFIE AUSSI, et pas seulement ce qu'on vient de calculer : les
+        # fichiers deja presents peuvent venir d'une passe interrompue.
+        if appartient(morceau, sorties, dire):
+            dire("reference deja en cache")
+            return sorties
+        dire("la reference en cache n'est pas celle de ce morceau — on la refait")
 
     if not dispo():
         dire("demucs absent : pas de reference")
         return None
 
     os.makedirs(dossier, exist_ok=True)
-    brut = os.path.join(dossier, "demucs")
+
+    # UN DOSSIER NEUF POUR CHAQUE MORCEAU, ET C'EST UNE CORRECTION PAYEE CHER.
+    #
+    # `--filename "{stem}.{ext}"` fait ecrire Demucs dans `demucs/htdemucs/drums.wav`, sans
+    # sous-dossier par morceau. Quand une passe est interrompue — et elle l'a ete plusieurs
+    # fois — les fichiers du morceau PRECEDENT restent en place, et l'on recopie la batterie
+    # du precedent sous le nom du suivant. Mesure : **trois references sur onze
+    # appartenaient a un autre morceau**, dont celle qu'on ecoutait.
+    #
+    # Le DJ l'a entendu avant qu'on le mesure : « c'est le son two sided de Macroblank, genre
+    # tu te fous de ma gueule ? ». Il avait raison.
+    brut = os.path.join(dossier, f".demucs-{base}")
+    shutil.rmtree(brut, ignore_errors=True)
+
     dire("separation de reference (plusieurs minutes, une seule fois par disque)…")
     r = subprocess.run(
         [os.path.join(VENV, "bin", "python"), "-m", "demucs",
@@ -101,6 +131,7 @@ def separer(morceau, dossier, dire=print):
         capture_output=True, text=True)
     if r.returncode != 0:
         dire(f"demucs a echoue : {(r.stderr or r.stdout).strip().splitlines()[-1:]}")
+        shutil.rmtree(brut, ignore_errors=True)
         return None
 
     ou = os.path.join(brut, MODELE)
@@ -108,12 +139,60 @@ def separer(morceau, dossier, dire=print):
         src = os.path.join(ou, f"{p}.wav")
         if not os.path.exists(src):
             dire(f"piste {p} manquante")
+            shutil.rmtree(brut, ignore_errors=True)
             return None
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src,
                         "-ac", "1", "-ar", "48000", sorties[p]], check=True)
-        os.remove(src)
+    shutil.rmtree(brut, ignore_errors=True)
+
+    # ET L'ON VERIFIE QUE CE QUI SORT VIENT BIEN DE CE MORCEAU-LA.
+    #
+    # La somme des quatre pistes doit ressembler au morceau. Ce n'est pas une egalite —
+    # Demucs est un modele, il cree et detruit — mais une piste appartenant a un autre disque
+    # rend une correlation nulle, la ou le bon morceau rend au moins la moitie. Un controle
+    # qui coute deux secondes et qui aurait epargne toute une journee de fausses conclusions.
+    if not appartient(morceau, sorties, dire):
+        for c in sorties.values():
+            if os.path.exists(c):
+                os.remove(c)
+        return None
+
     dire("reference prete")
     return sorties
+
+
+def enveloppe(chemin, secondes=45):
+    """L'enveloppe d'energie, centree et normee — de quoi comparer deux signaux de loin."""
+    with wave.open(chemin) as f:
+        taux = f.getframerate()
+        n = min(f.getnframes(), int(secondes * taux))
+        x = np.frombuffer(f.readframes(n), "<i2").astype(np.float64)
+        if f.getnchannels() == 2:
+            x = x.reshape(-1, 2).mean(axis=1)
+    pas = max(1, taux // 50)
+    e = np.abs(x[:len(x) // pas * pas]).reshape(-1, pas).mean(axis=1)
+    e = e - e.mean()
+    return e / max(EPS, np.linalg.norm(e))
+
+
+def appartient(morceau, sorties, dire=print, seuil=0.35):
+    """Les quatre pistes viennent-elles bien de ce morceau ?"""
+    try:
+        a = enveloppe(morceau)
+        somme = None
+        for c in sorties.values():
+            e = enveloppe(c)
+            somme = e if somme is None else somme[:len(e)] + e[:len(somme)]
+        m = min(len(a), len(somme))
+        somme = somme[:m] / max(EPS, np.linalg.norm(somme[:m]))
+        corr = float(abs(a[:m] @ somme))
+    except (OSError, ValueError, wave.Error) as e:
+        dire(f"verification impossible : {e}")
+        return False
+    if corr < seuil:
+        dire(f"LES PISTES NE VIENNENT PAS DE CE MORCEAU (correlation {corr:.2f}) — jetees")
+        return False
+    return True
 
 
 def lire(chemin):

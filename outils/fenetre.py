@@ -106,6 +106,8 @@ ENVELOPPE_PAS = 2
 # un hasard de 0,13 a 0,25. Le classement rendait « continu » trente-six fois sur
 # trente-six.
 P_RETRAITS = 232
+# COMBIEN DE SOURCES SONT ACTIVES : le moteur le decouvre par disque, il ne l'impose plus.
+P_SOURCES_ACTIVES = 120
 
 # Ce qui se repete, et tous les combien. Trois octets : periode en mesures, certitude,
 # bande. Une periode nulle veut dire « on ne sait pas », et c'est une reponse.
@@ -236,6 +238,7 @@ class Paquet:
         coups = mm[base + P_VOIX_COUPS]
         self.coup_grave = bool(coups & 1)
         self.bandes = [mm[base + P_BANDES + i] / 255.0 for i in range(12)]
+        self.actives = mm[base + P_SOURCES_ACTIVES]
         self.sources = []
         for r in range(6):
             o = base + P_SOURCES + r * SOURCE_PAS
@@ -692,8 +695,14 @@ class Mur(QWidget):
                     "six pistes  ·  mesure du retard de la chaine audio…")
             d.drawText(x, h - 46, f"{etat}   ·   ecart courant {1000*self.ecart_horloge:+.0f} ms")
         if self.isolee is None:
+            # LE NOMBRE DE SOURCES TROUVEES SE DIT. C'est la premiere chose que le DJ
+            # demandait au programme, et tant qu'elle reste dans le paquet sans etre
+            # affichee, l'ecran montre six cases quoi qu'il arrive.
+            n = self.paquet.actives if self.paquet else 0
+            compte = (f"{n} source{'s' if n > 1 else ''} trouvee{'s' if n > 1 else ''}   ·   "
+                      if n else "la separation ecoute encore   ·   ")
             d.drawText(x, h - 26,
-                       "clic dans une case ou 1-6 : choisir une source   ·   "
+                       compte + "clic dans une case ou 1-6 : choisir une source   ·   "
                        "bord droit : doser   ·   Q : enregistrer et fermer")
         elif self.isolee is not None and not self.solo and self.correspondances:
             # LE VERDICT DU JUGE EXTERIEUR, sur la source qu'on ecoute. Il ne remplace pas

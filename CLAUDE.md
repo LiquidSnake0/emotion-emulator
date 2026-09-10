@@ -1858,6 +1858,45 @@ concordent.**
 > deux côtés est petit). On tirait des flèches — alors qu'un juge déjà validé dormait dans le
 > cache. **Avant d'inventer une mesure, regarder celles qu'on a.**
 
+## Étape 2 : la mémoire à 40 s et le nombre de sources découvert
+
+Brief du DJ, à prendre tel quel : séparation des sonorités en direct, vérifiée à l'oreille
+ou contre un juge de bout en bout ; le nombre de sources n'est jamais plafonné à 6, « c'est
+justement ce que le programme est censé me dire » ; **une chose à la fois**, et Passepartout
+comme seul terrain. Étape 1 = mesurer combien de sources a Passepartout (coude à 4). Étape 2
+= ce qui suit. Étape 3 = les faders en direct sur les sources trouvées — **pas commencée,
+attend son verdict d'oreille sur l'étape 2**.
+
+### Ce qui a changé
+
+| | |
+|---|---|
+| `SourceSeparator` | `MemoireDefautS = 40f` ; ctor `(bins, sampleRate, memoire = 0)` → `Math.Max(Provisoire, 40·rate/(2·bins))`. Provisoire à 128 images et 4 sources dès le départ, puis `TryStartChoix(_v, 2, Sources, _memoire)` une fois la mémoire pleine, puis `TryStart(…, Actives, _memoire)`. `Actives`, `Bilans`, `ChoixFait`. Tous les accesseurs ordonnés sont bornés par `Actives`. `Reset()` efface tout. |
+| `ProfileLearner` | K variable (`_k`, `_trames`), `Bilan(K, Reste, Doublon)`, balayage de kMin à kMax avec la **même graine** pour chaque K, arrêt si `rp - reste < 0.015` ou `doublon >= 0.90`. `Bilans` est une liste échangée atomiquement en fin de balayage — lire `/profils` en plein balayage rendait une liste à moitié écrite. |
+| `SpectrumAnalyzer` | paramètre `memoireSeparationS` ; **`NewTrack()` appelle enfin `_separation.Reset()`** — les profils du disque précédent servaient de point de départ au suivant. `WavAudioSource.NewTrack()` existe. |
+| `GpuPacket` | `SourceActives` à l'offset **120** (octet libre), clampé à `SourceSlots`. `Voices.Actives`. |
+| `/profils`, sonde | `actives`, `choix`, `bilans` ; l'export `profils=` s'arrête à `Actives`. |
+| `fenetre.py` | lit l'octet 120, n'allume que les cases trouvées, « N sources trouvées ». `stems.py`, `rang.py` acceptent 1 à 8 pistes. |
+| tests | `SeparationChoixTests` : trois sources fabriquées → 3, deux → 2 et non 6, rangs au-delà à zéro, `Reset` efface, le bilan montre un coude. **192 verts.** |
+
+### Ce que ça a donné sur Passepartout, en direct
+
+Choix adopté à t = 65 s (40 s de mémoire + le temps du balayage) : 2 → 11,7 % / 0,63 ;
+3 → 8,4 % / 0,63 ; 4 → 6,1 % / 0,72 ; 5 → 5,0 % / 0,82. **Quatre sources**, parts
+38,5 / 18,3 / 26,7 / 16,5 %, rang effectif 3,77 — contre 2,4 avec six imposées sur 2,7 s.
+
+**Mais** : 69 % de l'énergie sous 150 Hz, 26 % entre 150 et 500, 4 % entre 500 et 2000, et
+**ce qui frappe pèse 0,0 %**. Les quatre sont dans le grave. Le bon nombre d'objets, pas
+encore les bons objets. Les quatre pistes vérifiées par corrélation de signal contre l'album
+(0,61 à 0,86 sur Passepartout, < 0,02 sur tout autre titre) sont dans
+`~/Documents/emotion-sources/passepartout/live-1..4.wav`.
+
+> **Règles de livraison qu'il a imposées, et qui restent** : vérifier que c'est bien le bon
+> morceau avant de donner un fichier (trois livraisons sur quatre étaient un autre titre, un
+> jour) ; flusher les résidus ; une chose à la fois ; **poser les questions avant de coder**.
+> Pas de `HarmonicSeparator`, pas de Demucs dans le moteur, pas de nouvel outil « à gauche
+> à droite ».
+
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 
 ```sh
@@ -1866,7 +1905,7 @@ concordent.**
 
 **Trois fois dans la même journée, une fonctionnalité a été annoncée prête et découverte
 cassée au premier lancement** : le son qui ne sortait de nulle part, la sélection qui coupait
-le mélange, la fiche vide qui empêchait le serveur de s'ouvrir. Les 187 tests étaient verts à
+le mélange, la fiche vide qui empêchait le serveur de s'ouvrir. Les 187 tests (192 aujourd'hui) étaient verts à
 chaque fois, et les rendus hors écran aussi.
 
 > **On vérifiait le code modifié, jamais la commande tapée.** Un défaut de câblage ne vit

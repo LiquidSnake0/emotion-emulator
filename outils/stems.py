@@ -84,10 +84,18 @@ def mono48(chemin, vers):
 
 
 def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
-    """Écrit les six pistes. Rend leur liste, ou None si la session n'a rien appris."""
+    """Écrit les six pistes. Rend leur liste, ou None si la session n'a rien appris.
+
+    Le mode de masque (`MASQUE`) traverse jusqu'a `extraire` : « partage » garantit que la
+    somme des six est le morceau, « independant » supprime le creusement mutuel et perd cette
+    exactitude. Les deux jeux doivent aller dans des dossiers distincts, sinon le cache de
+    l'un sert a l'autre et les deux colonnes de la comparaison sont la meme.
+    """
     os.makedirs(dossier, exist_ok=True)
     base = os.path.splitext(os.path.basename(chemin_morceau))[0]
-    sorties = [os.path.join(dossier, f"{base}-{s + 1}.wav") for s in range(6)]
+    # AUTANT DE PISTES QUE LE MOTEUR PUBLIE DE SOURCES, et ce n'est plus six : la
+    # separation decouvre son nombre par disque. Le nombre se lit dans les profils.
+    nb = 6
 
     # DEJA FAIT, DEJA BON — mais seulement pour CETTE session. Le fichier temoin porte la
     # signature des profils employes : si le moteur a rappris entre-temps, les rangs ont pu
@@ -98,6 +106,12 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
     if p is None:
         dire("le moteur n'a rien appris : pas de pistes")
         return None
+    nb = len(p["profils"])
+    if nb < 1:
+        dire("aucune source active : le moteur n'a pas fini de choisir")
+        return None
+    sorties = [os.path.join(dossier, f"{base}-{s + 1}.wav") for s in range(nb)]
+    dire(f"{nb} sources publiees par le moteur")
 
     signature = json.dumps(p["profils"], sort_keys=True)[:2000]
     if all(os.path.exists(s) for s in sorties) and os.path.exists(marque):
@@ -124,17 +138,17 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
         dire(f"le morceau est a {taux} Hz, les profils ont ete appris a {p['taux']}")
 
     hop = max(1, nfft // extraire.RECOUVREMENT)
-    sons, _, n = extraire.separer(x, wprof, nfft, hop, 6)
+    sons, _, n = extraire.separer(x, wprof, nfft, hop, nb)
     if n < 8:
         dire("morceau trop court")
         return None
 
-    for s in range(6):
+    for s in range(nb):
         extraire.ecrire_wav(sorties[s], sons[s], taux)
     with open(marque, "w", encoding="utf-8") as fh:
         fh.write(signature)
 
-    dire(f"six pistes en {time.time() - depart:.0f} s")
+    dire(f"{nb} pistes en {time.time() - depart:.0f} s")
     comparer(chemin_morceau, dossier, sorties, dire=dire)
     return sorties
 

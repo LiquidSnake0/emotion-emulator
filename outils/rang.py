@@ -87,8 +87,16 @@ def crete(x, taux):
 
 def mesurer(dossier, base):
     """Les six pistes d'un morceau, et ce qu'elles se partagent."""
-    pistes = [os.path.join(dossier, f"{base}-{i}.wav") for i in range(1, 7)]
-    if not all(os.path.exists(c) for c in pistes):
+    # AUTANT DE PISTES QU'IL Y EN A. Le moteur publie un nombre de sources qu'il decouvre
+    # par disque ; exiger six ici renvoyait « aucune piste » sur un morceau qui en avait
+    # quatre, et l'on prenait ce vide d'outil pour un vide de moteur.
+    pistes = []
+    for i in range(1, 9):
+        c = os.path.join(dossier, f"{base}-{i}.wav")
+        if not os.path.exists(c):
+            break
+        pistes.append(c)
+    if len(pistes) < 1:
         return None
     sons = [lire(c) for c in pistes]
     taux = sons[0][1]
@@ -106,8 +114,8 @@ def mesurer(dossier, base):
 
 
 def bases(dossier):
-    return sorted({re.sub(r"-[1-6]\.wav$", "", os.path.basename(c))
-                   for c in glob.glob(os.path.join(dossier, "*-[1-6].wav"))})
+    return sorted({re.sub(r"-[1-8]\.wav$", "", os.path.basename(c))
+                   for c in glob.glob(os.path.join(dossier, "*-[1-8].wav"))})
 
 
 def main():
@@ -125,7 +133,7 @@ def main():
     print(f"{'morceau':24s} {'part de chaque source, du grave a l aigu':^47s} {'rang':>6s}")
     for r in resultats:
         print(f"{r['base'][:24]:24s} " + " ".join(f"{v:6.1f}%" for v in r["parts"])
-              + f" {r['rang']:6.2f}")
+              + f"   {len(r['parts'])} sources  rang {r['rang']:.2f}")
 
     rangs = [r["rang"] for r in resultats]
     print(f"\n  rang effectif : median {sorted(rangs)[len(rangs) // 2]:.2f}   "

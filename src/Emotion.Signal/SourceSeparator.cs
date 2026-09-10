@@ -53,7 +53,46 @@ public sealed class SourceSeparator
     public const int Sources = 6;
 
     /// <summary>Images gardees pour l'apprentissage. A 21 ms, cela fait 2,7 secondes.</summary>
-    private const int Memoire = 128;
+    /// <summary>
+    /// Combien d'images la separation regarde pour apprendre. QUARANTE SECONDES, ET C'EST
+    /// LE CUE.
+    ///
+    /// Elle en regardait 128 — deux secondes et sept dixiemes. Sur un album entier, cela
+    /// donnait des tranches de registre et jamais des instruments : une source portait
+    /// 89 % du son sur Passepartout, les rangs changeaient d'une lecture a l'autre, et ce
+    /// qui frappe pesait quatre dixiemes de pour cent. Un instrument se definit sur la
+    /// duree ; sur trois secondes, ce qui joue fort a cet instant prend tout.
+    ///
+    /// Le DJ a donne la duree qui compte : « un disque reste au casque dans les 40
+    /// secondes ». C'est le temps dont on dispose avant qu'il passe au master, et c'est
+    /// donc la fenetre d'apprentissage. Apprises sur le morceau entier, les six sources
+    /// de Passepartout se partageaient le son entre 9 et 29 % au lieu de 89 · 0,8 · 3,5…
+    /// </summary>
+    public const float MemoireDefautS = 40f;
+    private readonly int _memoire;
+
+    /// <summary>
+    /// Un premier apprentissage rapide, pour que l'ecran ne reste pas noir quarante
+    /// secondes. Il cherche un nombre de sources PROVISOIRE, et sera remplace des que la
+    /// memoire est pleine par l'apprentissage qui, lui, choisit.
+    /// </summary>
+    private const int Provisoire = 128;
+    private const int SourcesProvisoires = 4;    // le coude mesure sur Passepartout
+    private bool _provisoireFait;
+    private bool _choixFait;
+
+    /// <summary>
+    /// Combien de sources la separation publie EN CE MOMENT — decouvert, pas impose.
+    ///
+    /// « Des fois on en a 2, des fois 8, c'est justement ce que le programme est cense me
+    /// dire. » Zero tant que rien n'a ete appris ; puis le nombre retenu par le balayage.
+    /// Les rangs au-dela rendent zero partout.
+    /// </summary>
+    public int Actives { get; private set; }
+
+    /// <summary>Ce que le balayage a mesure, pour la sonde et le diagnostic.</summary>
+    public IReadOnlyList<ProfileLearner.Bilan> Bilans => _apprentissage.Bilans;
+    public bool ChoixFait => _choixFait;
 
     /// <summary>Iterations de l'apprentissage complet. Au-dela, W ne bouge plus guere.</summary>
     private const int IterationsApprentissage = 40;
@@ -100,7 +139,7 @@ public sealed class SourceSeparator
     /// </summary>
     public void ProfilOrdonne(int rang, Span<float> sortie)
     {
-        if ((uint)rang >= Sources || sortie.Length < _bins) return;
+        if ((uint)rang >= Actives || sortie.Length < _bins) return;
         var s = _ordre[rang];
         for (var b = 0; b < _bins; b++) sortie[b] = _w[b * Sources + s];
     }
@@ -142,7 +181,7 @@ public sealed class SourceSeparator
 
     /// <summary>Stabilite du profil de la source de rang donne, du grave a l'aigu.</summary>
     public float StabiliteOrdonnee(int rang) =>
-        rang >= 0 && rang < Sources ? _stabilite[_ordre[rang]] : 0f;
+        rang >= 0 && rang < Actives ? _stabilite[_ordre[rang]] : 0f;
 
     /// <summary>
     /// Combien d'images cette source a passe a jouer. C'est le pendant de la stabilite :
@@ -161,16 +200,20 @@ public sealed class SourceSeparator
     private const float Audible = 0.12f;
 
     public float EcouteOrdonnee(int rang) =>
-        rang >= 0 && rang < Sources
+        rang >= 0 && rang < Actives
             ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
             : 0f;
 
-    public SourceSeparator(int bins, int sampleRate = 48_000)
+    /// <param name="memoire">Images gardees pour apprendre ; zero = quarante secondes.</param>
+    public SourceSeparator(int bins, int sampleRate = 48_000, int memoire = 0)
     {
         _bins = bins;
         _rate = sampleRate;
+        // Une image fait 2·bins echantillons : c'est la fenetre d'analyse du moteur.
+        _memoire = memoire > 0 ? memoire
+                 : Math.Max(Provisoire, (int)(MemoireDefautS * sampleRate / (2f * bins)));
         _w = new float[bins * Sources];
-        _v = new float[bins * Memoire];
+        _v = new float[bins * _memoire];
         _fond = new float[bins];
         _courant = new float[Sources];
         _numer = new float[Sources];
@@ -181,7 +224,7 @@ public sealed class SourceSeparator
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
 
-        _apprentissage = new ProfileLearner(bins, Sources, Memoire, IterationsApprentissage);
+        _apprentissage = new ProfileLearner(bins, Sources, _memoire, IterationsApprentissage);
     }
 
     /// <summary>Une image de spectre. Rend les activations de l'image, dans l'ordre grave a aigu.</summary>
@@ -262,25 +305,43 @@ public sealed class SourceSeparator
             {
                 var reference = MathF.Max(_fond[i], plancher);
                 var gain = MathF.Pow(MathF.Max(1e-9f, reference), -Blanchiment);
-                _v[i * Memoire + col] = spectre[i] * gain;
+                _v[i * _memoire + col] = spectre[i] * gain;
             }
         }
         else
         {
-            for (var i = 0; i < n; i++) _v[i * Memoire + col] = spectre[i];
+            for (var i = 0; i < n; i++) _v[i * _memoire + col] = spectre[i];
         }
 
-        _ecrit = (_ecrit + 1) % Memoire;
-        if (_remplies < Memoire) _remplies++;
+        _ecrit = (_ecrit + 1) % _memoire;
+        if (_remplies < _memoire) _remplies++;
 
         // L'apprentissage ne tourne qu'une fois par memoire pleine : c'est lui qui coute,
         // et il n'a aucune raison d'etre refait a chaque image.
-        if (_remplies >= Memoire && ++_depuisApprentissage >= Memoire / 2)
+        // D'ABORD UN PROVISOIRE, VITE ; PUIS LE VRAI, QUAND ON A ENTENDU ASSEZ.
+        //
+        // Les quarante secondes sont le prix d'un apprentissage qui distingue des
+        // instruments. Mais quarante secondes d'ecran noir a chaque disque ne se defendent
+        // pas : on apprend donc une premiere fois des cent vingt-huit images, a un nombre de
+        // sources provisoire, et l'on remplace tout des que la memoire est pleine.
+        var provisoire = Math.Min(Provisoire, _memoire / 2);
+        if (!_provisoireFait && _remplies >= provisoire)
+        {
+            if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
+                _provisoireFait = true;
+        }
+        else if (_remplies >= _memoire && ++_depuisApprentissage >= _memoire / 2)
         {
             // On ne calcule plus ici : on demande. Si l'apprentissage precedent tourne
             // encore, la demande est refusee et l'on garde les profils actuels — sauter un
             // apprentissage ne se voit pas, bloquer treize images se voit.
-            if (_apprentissage.TryStart(_v, _w)) _depuisApprentissage = 0;
+            // Le CHOIX du nombre de sources se fait une fois par disque, quand la memoire
+            // est pleine pour la premiere fois. Ensuite on reapprend au nombre retenu :
+            // rebalayer a chaque fois couterait cinq fois plus pour redire la meme chose.
+            var lance = _choixFait
+                ? _apprentissage.TryStart(_v, _w, Actives, _memoire)
+                : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire);
+            if (lance) _depuisApprentissage = 0;
         }
 
         // Les profils fraichement appris sont repris ici, entre deux images, sur le fil
@@ -288,6 +349,13 @@ public sealed class SourceSeparator
         // tomber sur des profils a moitie ecrits.
         if (_apprentissage.TryAdopt(_w))
         {
+            var avant = Actives;
+            Actives = _apprentissage.DernierK;
+            if (_apprentissage.DernierEtaitChoix) _choixFait = true;
+            // Un nombre de sources qui change rend la stabilite par rang sans objet : les
+            // rangs ne designent plus les memes choses. On repart, plutot que de comparer
+            // le troisieme profil d'hier au troisieme d'aujourd'hui qui n'a rien a voir.
+            if (Actives != avant) _profilConnu = false;
             Ordonner();
             MesurerStabilite();
             Pret = true;
@@ -299,7 +367,7 @@ public sealed class SourceSeparator
         if (Blanchiment > 0f)
         {
             var vue = _vueBlanchie ??= new float[_bins];
-            for (var i = 0; i < n; i++) vue[i] = _v[i * Memoire + (col)];
+            for (var i = 0; i < n; i++) vue[i] = _v[i * _memoire + (col)];
             Suivre(vue, n);
         }
         else
@@ -310,8 +378,8 @@ public sealed class SourceSeparator
         // Une source ne compte comme vue que quand elle joue. Le maximum sert de reference :
         // une source discrete mais presente doit compter, une source a zero non.
         var fort = 1e-4f;
-        for (var i = 0; i < Sources; i++) fort = MathF.Max(fort, _courant[i]);
-        for (var i = 0; i < Sources; i++)
+        for (var i = 0; i < Actives; i++) fort = MathF.Max(fort, _courant[i]);
+        for (var i = 0; i < Actives; i++)
             if (_courant[i] / fort > Audible && _vues[i] < Assez) _vues[i]++;
     }
 
@@ -335,6 +403,10 @@ public sealed class SourceSeparator
         Array.Clear(_stabilite);
         _remplies = _ecrit = _depuisApprentissage = 0;
         Pret = false;
+        Actives = 0;
+        _provisoireFait = false;
+        _choixFait = false;
+        Array.Clear(_courant);
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
     }
 
@@ -344,14 +416,16 @@ public sealed class SourceSeparator
     /// </summary>
     private void Suivre(ReadOnlySpan<float> spectre, int n)
     {
-        for (var s = 0; s < Sources; s++) if (_courant[s] <= 0f) _courant[s] = 0.1f;
+        if (Actives <= 0) return;
+        for (var s = 0; s < Actives; s++) if (_courant[s] <= 0f) _courant[s] = 0.1f;
+        for (var s = Actives; s < Sources; s++) _courant[s] = 0f;
 
         for (var it = 0; it < IterationsSuivi; it++)
         {
             for (var i = 0; i < n; i++)
             {
                 float wh = 0;
-                for (var s = 0; s < Sources; s++) wh += _w[i * Sources + s] * _courant[s];
+                for (var s = 0; s < Actives; s++) wh += _w[i * Sources + s] * _courant[s];
                 _wh[i] = wh;
             }
 
@@ -362,7 +436,7 @@ public sealed class SourceSeparator
             {
                 var v = spectre[i];
                 var wh = _wh[i];
-                for (var s = 0; s < Sources; s++)
+                for (var s = 0; s < Actives; s++)
                 {
                     var w = _w[i * Sources + s];
                     _numer[s] += w * v;
@@ -370,7 +444,7 @@ public sealed class SourceSeparator
                 }
             }
 
-            for (var s = 0; s < Sources; s++)
+            for (var s = 0; s < Actives; s++)
                 _courant[s] *= _numer[s] / (_denom[s] + Eps);
         }
     }
@@ -399,7 +473,9 @@ public sealed class SourceSeparator
         }
 
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
-        Array.Sort(_ordre, (a, b) => _hauteurs[a].CompareTo(_hauteurs[b]));
+        // Seules les actives se classent du grave a l'aigu ; les rangs eteints restent
+        // derriere, ou personne ne les lit.
+        Array.Sort(_ordre, 0, Actives, Comparer<int>.Create((a, b) => _hauteurs[a].CompareTo(_hauteurs[b])));
     }
 
     /// <summary>
@@ -456,11 +532,11 @@ public sealed class SourceSeparator
 
     /// <summary>Activation de la source de rang <paramref name="rang"/>, du grave a l'aigu.</summary>
     public float ActivationOrdonnee(int rang) =>
-        rang >= 0 && rang < Sources ? _courant[_ordre[rang]] : 0f;
+        rang >= 0 && rang < Actives ? _courant[_ordre[rang]] : 0f;
 
     /// <summary>Hauteur du timbre de la source de rang donne.</summary>
     public float HauteurOrdonnee(int rang) =>
-        rang >= 0 && rang < Sources ? _hauteurs[_ordre[rang]] : 0.5f;
+        rang >= 0 && rang < Actives ? _hauteurs[_ordre[rang]] : 0.5f;
 
     /// <summary>
     /// Grave et aigu du crate, en hertz. Sept octaves, ce qui couvre du sub au cymbale.

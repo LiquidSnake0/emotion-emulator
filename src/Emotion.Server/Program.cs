@@ -132,8 +132,11 @@ app.MapGet("/profils", (IAudioSource source) =>
     var separation = analyseur.Separation;
     var bins = separation.Bins;
     var profil = new float[bins];
-    var profils = new float[SourceSeparator.Sources][];
-    for (var r = 0; r < SourceSeparator.Sources; r++)
+    // Seules les sources ACTIVES sortent. Les rangs au-dela portent des profils eteints,
+    // et les exporter ferait extraire des pistes vides qu'on prendrait pour des sources.
+    var actives = separation.Actives;
+    var profils = new float[actives][];
+    for (var r = 0; r < actives; r++)
     {
         separation.ProfilOrdonne(r, profil);
         profils[r] = (float[])profil.Clone();
@@ -146,6 +149,11 @@ app.MapGet("/profils", (IAudioSource source) =>
         // « pret » dit si quelque chose a ete appris. Faux, les profils ne decrivent que du
         // bruit et les pistes extraites ne voudraient rien dire : l'appelant doit attendre.
         pret = separation.Pret,
+        actives,
+        // Vrai une fois le balayage adopte. Avant, « actives » est le provisoire.
+        choix = separation.ChoixFait,
+        // Ce que le balayage a vu, pour comprendre pourquoi ce nombre-la.
+        bilans = separation.Bilans.Select(b => new { b.K, reste = b.Reste, doublon = b.Doublon }),
         profils,
     });
 });

@@ -747,6 +747,9 @@ chiffre.**
 
 L'intuition dit qu'en demander davantage séparerait mieux. La mesure dit l'inverse.
 
+*(Six est resté la capacité ; le nombre effectif est découvert par disque depuis « Le nombre
+de sources est découvert, pas imposé », plus bas.)*
+
 | Sources | Netteté obtenue | Coût d'un apprentissage |
 |---|---|---|
 | **6** | **0,87 – 0,99** | **167 ms** |
@@ -816,6 +819,48 @@ six centres de gravité tiennent dans une octave et demie. Avec les deux échecs
 déjà mesurés — le classement des rôles, le drapeau « absente » — cela fait quatre indices
 concordants. **C'est l'oreille qui tranchera**, et c'est exactement pour ça que l'outil
 existe.
+
+### Le nombre de sources est découvert, pas imposé
+
+Tout ce qui précède demandait six sources au séparateur. Le DJ a posé la question autrement :
+
+> « Toutes les sources d'un morceau, qui n'est jamais plafonné à 6 : des fois on en a 2, des
+> fois 8. C'est justement ce que le programme est censé me dire. »
+
+Et la mesure lui a donné raison avant qu'une ligne soit écrite. En demandant six, **tout
+semblait être dans la source 1, le reste des miettes** — rang effectif 2,4 sur six. La cause
+était dans le code, et elle tenait en un chiffre : la factorisation apprenait ses profils
+sur une fenêtre glissante de **128 images, soit 2,7 secondes**. Sur deux secondes et demie,
+ce qui joue fort monopolise le budget, deux fenêtres donnent deux jeux d'objets, et aucun
+instrument ne se définit — un instrument se définit sur la durée.
+
+**Le disque reste au casque une quarantaine de secondes**, trente-deux mesures. C'est là que
+le moteur a le temps d'écouter. La mémoire de séparation passe donc à 40 s par défaut
+(`SourceSeparator.MemoireDefautS`), et le nombre de sources est **choisi par balayage** une
+fois cette mémoire pleine : on factorise pour 2, 3, 4… jusqu'à 6, et l'on s'arrête dès que
+la source suivante n'explique plus rien de neuf (moins de 1,5 % de reste en moins) ou
+coupe une source existante en deux (cosinus ≥ 0,90 entre deux profils). Pour que le disque
+ne reste pas muet pendant quarante secondes, un apprentissage **provisoire** à quatre
+sources part dès 2,7 s ; le choix le remplace quand il tombe.
+
+Mesuré en direct sur Passepartout, choix adopté à 65 s :
+
+| sources | reste inexpliqué | pire doublon |
+|---|---|---|
+| 2 | 11,7 % | 0,63 |
+| 3 | 8,4 % | 0,63 |
+| **4** | **6,1 %** | **0,72** |
+| 5 | 5,0 % | 0,82 |
+
+**Quatre.** Le coude est là où l'oreille l'avait mis la veille, et les quatre pistes se
+partagent le son — 38, 18, 27, 16 % — au lieu d'une qui prend tout. Le paquet GPU porte ce
+nombre dans un octet libre (`SourceActives`, offset 120) ; les rangs au-delà rendent zéro
+et l'écran n'allume que les cases trouvées.
+
+> **Et il faut dire ce que le chiffre suivant dit.** Les quatre sources vivent toutes dans
+> le grave : 69 % de leur énergie sous 150 Hz, 26 % entre 150 et 500, et **ce qui frappe pèse
+> 0 %**. La séparation trouve le bon nombre d'objets ; elle ne trouve pas encore les bons
+> objets. C'est l'oreille du DJ qui tranche l'étape, pas ce tableau.
 
 ---
 

@@ -801,14 +801,15 @@ if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfi
         $"  \"bins\": {bins},",
         $"  \"fenetre\": {SpectrumAnalyzer.Window},",
         $"  \"pret\": {(separation.Pret ? "true" : "false")},",
+        $"  \"actives\": {separation.Actives},",
         "  \"profils\": [",
     };
-    for (var r = 0; r < SourceSeparator.Sources; r++)
+    for (var r = 0; r < separation.Actives; r++)
     {
         separation.ProfilOrdonne(r, profil);
         var vals = string.Join(",", profil.Select(v =>
             v.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)));
-        lignes.Add($"    [{vals}]" + (r < SourceSeparator.Sources - 1 ? "," : ""));
+        lignes.Add($"    [{vals}]" + (r < separation.Actives - 1 ? "," : ""));
     }
     lignes.Add("  ]");
     lignes.Add("}");
@@ -1054,6 +1055,11 @@ for (var r = 0; r < Voices.Registers; r++)
 var sep = analyzer.Separation;
 Console.WriteLine($"apprentissage NMF   {sep.Apprentissages} fois · moyenne {sep.ApprentissageMs:F1} ms · " +
                   $"pire {sep.ApprentissagePireMs:F1} ms  (une image dure 21 ms)");
+// COMBIEN DE SOURCES, ET POURQUOI. Le nombre n'est plus impose : on montre ce que le
+// balayage a mesure a chaque pas, pour que « 4 » se lise comme un coude et non un caprice.
+Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "  (provisoire, le balayage n'a pas encore eu lieu)"));
+foreach (var b in sep.Bilans)
+    Console.WriteLine($"   {b.K} sources  inexplique {100 * b.Reste,5:F1} %   pire doublon {b.Doublon:F2}");
 Console.WriteLine($"ruptures            {drops.Count}" +
                   (drops.Count > 0 ? "  a " + string.Join(", ", drops.Select(d => $"{d / 1000f:F0} s")) : ""));
 if (exportTo is not null)

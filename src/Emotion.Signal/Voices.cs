@@ -14,7 +14,10 @@ public readonly record struct Voices(
     bool LowHit, bool MidHit, bool HighHit,
     float LowPitch = 0.5f, float MidPitch = 0.5f, float HighPitch = 0.5f,
     float[]? Levels = null, float[]? Pitches = null, int Hits = 0,
-    LaneState[]? Lanes = null, int[]? Labels = null)
+    LaneState[]? Lanes = null, int[]? Labels = null,
+    // COMBIEN DE SOURCES SONT REELLEMENT PUBLIEES. Zero tant que la separation n'a rien
+    // appris ; ensuite le nombre qu'elle a decouvert, jamais plus que les rangs du paquet.
+    int Actives = 0)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.
