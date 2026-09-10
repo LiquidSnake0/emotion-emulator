@@ -497,10 +497,20 @@ class Mur(QWidget):
         self.minuterie.timeout.connect(self.battre)
         self.minuterie.start(16)          # environ soixante images par seconde
 
+        # DES PISTES VENUES D'AILLEURS. « Les faders d'abord, le port apres » : les pistes
+        # d'un banc hors ligne (les gabarits) se jouent ici sous les memes faders, avant que
+        # le modele soit dans le moteur. EMOTION_PISTES=<prefixe> charge <prefixe>-1.wav …
+        # <prefixe>-8.wav, et rien n'est extrait. Les formes a l'ecran restent celles du
+        # moteur : seul le son vient de ces pistes-la.
+        self.pistes_externes = self._pistes_externes(os.environ.get("EMOTION_PISTES", ""))
         if self.morceau_wav and os.path.exists(self.morceau_wav):
             self._ouvrir_lecteur([self.morceau_wav], 0.0)   # le calage le remettra en place
-            self.etat_stems = "extraction des six pistes…"
-            threading.Thread(target=self._preparer_stems, daemon=True).start()
+            if self.pistes_externes:
+                self.stems = self.pistes_externes
+                self.etat_stems = ""
+            else:
+                self.etat_stems = "extraction des pistes…"
+                threading.Thread(target=self._preparer_stems, daemon=True).start()
 
     def battre(self):
         # LES SIX PISTES PRENNENT LA PLACE DU MORCEAU, A LA MEME SECONDE.
@@ -685,14 +695,14 @@ class Mur(QWidget):
             d.setPen(VERT_SOURD)
             d.drawText(x, h - 46, f"le morceau entier joue — {self.etat_stems}")
             d.setPen(GRIS_CADRE)
-        elif self.lecteur is not None and len(self.lecteur.pistes) >= 6:
+        elif self.lecteur is not None and len(self.lecteur.pistes) > 1:
             # LE RETARD DE LA CHAINE AUDIO SE DIT. Il est mesure, pas suppose — et un
             # lecteur qui se cale en silence cacherait justement ce qu'on cherche a voir.
             d.setPen(GRIS_CADRE)
-            etat = ("six pistes  ·  son en retard de "
+            etat = (f"{len(self.lecteur.pistes)} pistes  ·  son en retard de "
                     f"{self.lecteur.retard_ms:.0f} ms, mesure et rattrape"
                     if self.lecteur.retard_mesure else
-                    "six pistes  ·  mesure du retard de la chaine audio…")
+                    f"{len(self.lecteur.pistes)} pistes  ·  mesure du retard de la chaine audio…")
             d.drawText(x, h - 46, f"{etat}   ·   ecart courant {1000*self.ecart_horloge:+.0f} ms")
         if self.isolee is None:
             # LE NOMBRE DE SOURCES TROUVEES SE DIT. C'est la premiere chose que le DJ
@@ -965,7 +975,7 @@ class Mur(QWidget):
         apparaît en cours de route se cherche ; un contrôle éteint qui s'allume se comprend.
         """
         fx, fy, fl, fh = self._fader_rect(cx, cy, larg, haut)
-        pret = self.lecteur is not None and len(self.lecteur.pistes) >= 6
+        pret = self.lecteur is not None and len(self.lecteur.pistes) > 1
         v = self.gains[r]
 
         d.setPen(QPen(QColor(34, 36, 38), 1))
@@ -1191,6 +1201,20 @@ class Mur(QWidget):
             self.lecteur.gain(r, g)
         self.lecteur.demarrer(position)
 
+    @staticmethod
+    def _pistes_externes(prefixe):
+        """Les pistes <prefixe>-1.wav … -8.wav qui existent, dans l'ordre, ou rien."""
+        if not prefixe:
+            return []
+        prefixe = os.path.expanduser(prefixe)
+        pistes = []
+        for i in range(1, 9):
+            c = f"{prefixe}-{i}.wav"
+            if not os.path.exists(c):
+                break
+            pistes.append(c)
+        return pistes
+
     def _preparer_stems(self):
         """Extrait les six pistes DANS UN AUTRE PROCESSUS, avec les profils de cette session.
 
@@ -1204,7 +1228,10 @@ class Mur(QWidget):
         l'extraction meurt, la fenetre continue de montrer le moteur.
         """
         base = os.path.splitext(os.path.basename(self.morceau_wav))[0]
-        attendus = [os.path.join(self.cache_stems, f"{base}-{i + 1}.wav") for i in range(6)]
+        # AUTANT DE PISTES QUE LE MOTEUR EN A TROUVE. Six etaient exigees ici ; depuis que le
+        # nombre de sources est decouvert par disque, un morceau a quatre sources laissait la
+        # fenetre sur « pas de pistes » avec quatre fichiers parfaitement bons a cote.
+        attendus = [os.path.join(self.cache_stems, f"{base}-{i + 1}.wav") for i in range(8)]
         # LES DEUX PISTES DE PERCUSSION, SI ELLES EXISTENT. Elles sont precalculees a part et
         # leur absence n'empeche rien : on joue alors les six sources seules.
         en_plus = [os.path.join(self.cache_stems, "reference", f"{base}-ref-drums.wav"),
@@ -1230,6 +1257,7 @@ class Mur(QWidget):
                 print(f"stems : {dernier}", flush=True)
         p.wait()
 
+        attendus = [c for c in attendus if os.path.exists(c)]
         attendus += [c for c in en_plus if os.path.exists(c)]
         verdict = os.path.join(self.cache_stems, f"{base}.correspondances.json")
         if os.path.exists(verdict):
@@ -1238,7 +1266,7 @@ class Mur(QWidget):
                     self.correspondances = json.load(fh).get("correspondances", {})
             except (OSError, ValueError):
                 pass
-        if p.returncode == 0 and all(os.path.exists(c) for c in attendus):
+        if p.returncode == 0 and len(attendus) > 1:
             # ON NE BASCULE PAS ICI. Remplacer le lecteur depuis ce fil-ci pendant que le
             # fil de dessin le lit produirait exactement la course qu'on a deja payee dans
             # l'anneau — et une deuxieme fois dans ce lecteur le meme jour.
@@ -1258,43 +1286,6 @@ class Mur(QWidget):
             self.lecteur.gain(rang, self.gains[rang])
 
     # ------------------------------------------------------------------ annoter
-    def journaliser(self, p):
-        """Ce que le moteur publiait, image d'analyse par image d'analyse.
-
-        SANS LUI, LE JOURNAL DES TOUCHES NE VAUDRAIT RIEN. Comparer ce que l'oreille marque
-        a ce que la source fait suppose de connaitre les deux SUR LA MEME HORLOGE. Rejouer
-        le morceau apres coup pour retrouver les frappes du moteur donnerait un alignement
-        approximatif — et c'est justement l'alignement qu'on mesure.
-
-        On n'enregistre que pendant qu'une source est isolee : le reste du temps il n'y a
-        rien a confronter, et un journal de cinq minutes d'ecoute passive ne servirait qu'a
-        peser.
-        """
-        # Les pistes 7 et 8 ne sont pas des sources : le paquet n'en publie rien, et il n'y
-        # aurait donc rien a confronter aux marques.
-        if self.isolee is None or self.isolee >= 6:
-            return
-        s = p.sources[self.isolee]
-        self.journal.append({
-            "t": round(p.temps / 1000.0, 4),
-            "niveau": round(s["niveau"], 3),
-            "frappe": bool(s["frappe"]),
-            "retrait": round(s["retrait"], 2),
-            "pique": round(s["pique"], 3),
-            "tenue": round(s["tenue"], 3),
-            "bpm": round(p.bpm, 2),
-            "phase_temps": round(p.phase_temps, 3),
-            "kick": bool(p.kick),
-        })
-
-    def instant(self):
-        """Ou l'on en est dans le morceau, en secondes. L'horloge du moteur, et elle seule.
-
-        Un decalage entre deux horloges est le genre de defaut qui survit des semaines sans
-        se voir. Il n'y en a qu'une ici, donc la question ne se pose pas.
-        """
-        return self.paquet.temps / 1000.0 if self.paquet else 0.0
-
     def isoler(self, r):
         """Choisir la source qu'on annote, et basculer entre « elle seule » et « tout ».
 
@@ -1341,7 +1332,7 @@ class Mur(QWidget):
                       if self.solo and self.isolee is not None else [1.0] * 8)
         if self.lecteur is None:
             return
-        if len(self.lecteur.pistes) < 6:
+        if len(self.lecteur.pistes) < 2:
             # Une seule piste : le morceau entier, pendant que l'extraction tourne. Rien a
             # soloer encore, et le couper laisserait le silence.
             self.lecteur.tous(1.0)
