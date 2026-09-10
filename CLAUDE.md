@@ -1693,6 +1693,66 @@ VOL. 4*, identifié par corrélation d'enveloppe (1,000 contre 0,304 au suivant)
 mesures est celui de Passepartout, et il a été repris par erreur. Les mesures qui s'appuient
 dessus sont à relire avec cette réserve.
 
+## Ce que l'oreille a tranché : une source prend tout, et pourquoi
+
+> « Tout semble être dans la source 1, le reste c'est des minuscules bruits. Une dissociation
+>   entre l'harmonie et les battements se fait. »
+
+Mesuré, il a raison, et le chiffre est brutal :
+
+| morceau | part d'énergie des six sources | rang effectif |
+|---|---|---|
+| Dead Internet Theory | 38,9 · 1,2 · 2,1 · 0,3 · 0,9 · **56,5 %** | **2,4 / 6** |
+| Timeline Explorer | 12,9 · 25,5 · 2,4 · 3,6 · **41,7** · 13,9 % | 4,3 / 6 |
+
+**Deux sources portent 95 % du son ; les quatre autres font 4,5 % à elles toutes.** La
+factorisation ne trouve que deux objets et demi sur les six qu'on lui demande.
+
+### Et les deux dominantes sont toutes les deux dans le grave
+
+| | 0-150 Hz | 150-500 | 500-2k | 2k+ | crête/moyenne |
+|---|---|---|---|---|---|
+| **source 1** (38,9 %) | **75,0 %** | 23,4 | 1,5 | 0,1 | 7 |
+| **source 6** (56,5 %) | **91,2 %** | 2,4 | 5,3 | 1,1 | 6 |
+| source 2 (1,2 %) | 11,3 | 10,4 | **77,5** | 0,8 | 15 |
+| source 3 (2,1 %) | 3,9 | 14,7 | **77,3** | 4,1 | 34 |
+| source 4 (0,3 %) | 1,5 | 2,2 | **95,7** | 0,5 | 34 |
+| source 5 (0,9 %) | 32,3 | **48,7** | 16,0 | 3,0 | 52 |
+
+Elles ne sont pas « l'harmonie contre les battements » : **ce sont deux tranches du même
+grave**, et leur facteur de crête de 6-7 dit qu'elles tiennent au lieu de frapper. Les
+sources qui frappent — crête 34 à 52 — pèsent 3,5 % à elles trois.
+
+> **La cause est mécanique et elle est ailleurs que dans l'algorithme.** La factorisation est
+> pilotée par l'énergie, et 76,8 % de l'énergie de ce répertoire est sous 150 Hz. Elle passe
+> donc ses composantes à découper le grave, et n'en a plus pour ce qui frappe.
+
+Cela éclaire une confusion à ne pas refaire : « six sources, c'est le maximum » portait sur la
+**netteté des profils** — se retrouvent-ils d'un apprentissage à l'autre — et non sur le
+nombre d'objets réellement portés. Deux mesures, deux questions.
+
+### Séparer harmonie et percussion d'abord : mesuré, et ça échoue
+
+La piste était la sienne et elle épousait ce qu'il entend. Elle a été mesurée avant d'être
+construite, avec un juge qu'on n'a pas écrit — le stem `drums` de Demucs.
+
+| morceau | percussif | harmonique/`drums` | percussif/`drums` |
+|---|---|---|---|
+| Dead Internet Theory | 40,1 % | **0,40** | 0,37 |
+| Timeline Explorer | 23,2 % | **0,60** | 0,53 |
+
+**Zéro sur deux.** Sur ce répertoire, l'harmonique de HPSS ressemble *plus* à la batterie que
+son percussif. Ce n'est pas une découverte : ce fichier l'écrivait déjà — « ce que la
+séparation retient comme percussif y est surtout du crépitement de bande » — et c'est
+pourquoi HPSS est coupé par défaut. **Deux mesures indépendantes, à des mois d'écart,
+concordent.**
+
+> **Trois métriques ont été écrites et jetées avant celle-là**, et il faut le noter :
+> facteur de crête (fixé par un seul échantillon, x1594 sur un signal vide), rapport de
+> centiles (rend zéro sur des impulsions espacées), aplatissement (instable dès qu'un des
+> deux côtés est petit). On tirait des flèches — alors qu'un juge déjà validé dormait dans le
+> cache. **Avant d'inventer une mesure, regarder celles qu'on a.**
+
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 
 ```sh
