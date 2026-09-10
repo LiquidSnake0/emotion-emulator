@@ -5,9 +5,14 @@
 # AddressInUseException de soixante lignes, ou le motif reel — « il y en a deja un qui
 # tourne » — n'apparait qu'a la troisieme. On a perdu trois allers-retours dessus.
 #
-#   ./run.sh            signal fabrique
-#   ./run.sh pulse      ecoute la sortie systeme
-#   ./run.sh <device>   ecoute un peripherique nomme
+#   ./run.sh                     signal fabrique
+#   ./run.sh pulse               ecoute la sortie systeme
+#   ./run.sh fichier x.wav [bpm] rejoue un morceau, sans carte son
+#   ./run.sh <device>            ecoute un peripherique nomme
+#
+# LE MODE FICHIER EST CELUI QUI SERT A REGARDER. En pulse, une case eteinte peut vouloir
+# dire deux choses — le moteur ne voit rien, ou il n'y a pas de son sur le monitor — et l'on
+# ne sait pas laquelle. En rejeu, la question ne se pose plus : le son est dans le fichier.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -34,6 +39,13 @@ case "${1:-mock}" in
   mock)  ;;
   pulse) export Signal__Source=pulse
          export Signal__Device="$(pactl get-default-sink).monitor" ;;
+  fichier)
+         [[ -f "${2:-}" ]] || { echo "usage : ./run.sh fichier <morceau.wav> [bpm]" >&2; exit 1; }
+         export Signal__Source=fichier
+         export Signal__Device="$2"
+         # LA FICHE COMPTE : sans elle le moteur cherche son tempo dans le vide — 43 % de
+         # justesse au lieu de 99 — et tout ce qu'on regarde ensuite en depend.
+         [[ -n "${3:-}" ]] && export Signal__Bpm="$3" ;;
   *)     export Signal__Source=pulse
          export Signal__Device="$1" ;;
 esac

@@ -218,6 +218,18 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 
+    // LA FICHE, QUAND ON REJOUE UN FICHIER POUR REGARDER. En direct elle vient du crate,
+    // posee par le selecteur de faces ; en rejeu il n'y a pas de crate au bout, et sans
+    // amorce le moteur cherche son tempo dans le vide — 43 % de justesse au lieu de 99.
+    // On regarderait alors l'autre systeme, celui qui se trompe, en croyant regarder
+    // celui-ci.
+    if (master is IAcceptsCue amorcable && cfg.GetValue("Signal:Bpm", 0f) is var bpm and > 0f
+        && cfg["Signal:Source"]?.ToLowerInvariant() == "fichier")
+    {
+        amorcable.Amorcer(bpm);
+        Dire($"fiche : {bpm:0.##} BPM");
+    }
+
     // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme
     // fonctionne exactement comme avant et la transition reste commandee a la main.
     var cueDevice = cfg["Signal:CueDevice"];
