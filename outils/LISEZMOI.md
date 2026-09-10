@@ -104,6 +104,7 @@ valident le même contrat depuis deux langages.
 | **le même clic à nouveau** | tout le morceau revient, **la source reste choisie** — pour marquer dedans |
 | **échap** | plus aucune source choisie |
 | **bord droit d'une case** | le fader : on tire le niveau de cette piste |
+| **7 et 8** | la batterie de référence, et ce que le moteur retient comme frappe |
 | **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
 | **espace tapé** | des instants, à confronter aux frappes et à la grille |
 | **retour arrière** | défaire la dernière marque |
@@ -134,6 +135,39 @@ morceau, masquées par le morceau entier qui joue pendant ce temps.
 **Le retard de la chaîne audio est mesuré et affiché**, pas supposé — 10 à 60 ms selon la
 machine, retranché une fois, écart résiduel ±9 ms. Un lecteur qui se cale en silence
 cacherait exactement ce qu'on cherche à voir.
+
+## `reference.py` et `frappe.py` — le pré-calcul, et il ne fait pas tourner le moteur
+
+```sh
+./outils/preparer.sh 5              la piste 5   ·   ./outils/preparer.sh --tout   l'album
+```
+
+Deux pistes en sortent, et elles se répondent :
+
+| | |
+|---|---|
+| `reference.py` | la **batterie** telle qu'un algorithme extérieur l'entend — Demucs, cinq minutes |
+| `frappe.py` | les **frappes** telles que notre détecteur les retient — la sonde, une minute |
+
+Dans la fenêtre, **7** et **8** basculent de l'une à l'autre : un kick manqué s'entend comme
+un trou, une frappe inventée comme un coup posé sur rien. Aucun chiffre ne dit ça aussi vite.
+
+`reference.py` rend aussi les **correspondances** : quelle part de chaque source du moteur
+s'explique par la batterie, la basse, la voix ou le reste. La fenêtre les affiche sans qu'on
+ait rien tapé — c'est la comparaison automatique, et la touche espace n'est plus qu'un recours
+quand le juge lui-même est douteux.
+
+**Rien de tout cela ne fait tourner le moteur.** Un set n'est pas déterminé : un bonus track
+tombe sans prévenir, `SourceSeparator` apprend ses profils en écoutant et n'a jamais besoin
+d'un pré-calcul. PyTorch vit dans un venv du cache (`~/.cache/emotion-emulator/venv-reference`),
+jamais dans les dépendances du dépôt — comme `aubio` vit dans le système, dehors.
+
+**Et le juge se contrôle avant qu'on le croie.** Sur ce répertoire, Demucs met 74 % du morceau
+dans « basse » : son premier verdict annonçait la source la plus aiguë comme une basse. Sur
+`etalon-kick.wav` en revanche, des grosses caisses seules, il met 99,9 % dans « batterie » —
+il n'est pas cassé, c'est le barber beats qui le déroute. La comparaison passe donc par une
+régression et non une corrélation : ce qui compte est ce qu'une piste explique **en plus** des
+autres.
 
 ## `fenetre_reference.py` — retirée du flux, gardée pour les mesures
 

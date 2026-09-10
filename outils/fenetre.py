@@ -455,11 +455,15 @@ class Mur(QWidget):
         # Tant que les six pistes ne sont pas prêtes, on joue le morceau entier : l'attente
         # est masquée par la musique au lieu d'être un écran qui ne fait rien.
         self.lecteur = None
-        self.gains = [1.0] * 6
+        self.gains = [1.0] * 8
         self.fader = None                # (rang, en train de tirer)
         self.solo = False                # la source choisie s'entend-elle SEULE
         self.stems = None                # les six chemins, quand ils existent
         self.etat_stems = ""
+        # CE QU'UN JUGE EXTERIEUR DIT DE CHAQUE SOURCE, quand le pre-calcul a ete fait.
+        # « Je voulais que tu analyses un son de bout en bout et que la fenetre du temps reel
+        # se compare a ce qui a ete calcule au prealable. » C'est ce fichier-la.
+        self.correspondances = {}
         self.morceau_wav = os.environ.get("EMOTION_MORCEAU", "")
         self.cache_stems = os.environ.get("EMOTION_CACHE", "")
         self.ecart_horloge = 0.0
@@ -676,10 +680,35 @@ class Mur(QWidget):
             d.drawText(x, h - 26,
                        "clic dans une case ou 1-6 : choisir une source   ·   "
                        "bord droit : doser   ·   Q : enregistrer et fermer")
-        elif self.solo:
+        elif self.isolee is not None and not self.solo and self.correspondances:
+            # LE VERDICT DU JUGE EXTERIEUR, sur la source qu'on ecoute. Il ne remplace pas
+            # l'oreille : Demucs met 74 % de ce repertoire dans « basse », et il faut le
+            # savoir avant de le croire. Mais il dit quelque chose qu'aucune de nos mesures
+            # ne sait dire, et il le dit sans qu'on ait rien tape.
+            c = self.correspondances.get(str(self.isolee + 1))
+            if c:
+                # TROISIEME LIGNE, ET PAS LA DEUXIEME. Le retard de la chaine audio occupe
+                # deja h-46 : ecrire les deux au meme endroit les superposait, illisibles.
+                # C'est la cinquieme fois dans ce fichier qu'une position supposee coute un
+                # chevauchement — celle-ci a ete vue au rendu avant d'etre livree.
+                d.setPen(VERT_SOURD)
+                d.drawText(x, h - 66,
+                           f"un juge exterieur y entend : {c['nom']} a "
+                           f"{100 * c['parts'][c['ressemble']]:.0f} %   ·   "
+                           f"{100 * c['explique']:.0f} % de cette source est expliquee"
+                           + ("" if c["marge"] > 0.05 else "   ·   verdict serre"))
+                d.setPen(GRIS_CADRE)
             d.drawText(x, h - 26,
-                       f"source {self.isolee + 1} SEULE   ·   reclique pour remettre tout "
-                       "le morceau et marquer dedans   ·   echap : relacher")
+                       f"source {self.isolee + 1} choisie, tout le morceau s'entend   ·   "
+                       "espace : maintenir = presence, taper = instants   ·   "
+                       "retour arriere : defaire")
+        elif self.solo:
+            quoi = (f"source {self.isolee + 1}" if self.isolee < 6 else
+                    "la BATTERIE de reference" if self.isolee == 6 else
+                    "ce que le moteur retient comme FRAPPE")
+            d.drawText(x, h - 26,
+                       f"{quoi} SEULE   ·   reclique pour remettre tout le morceau   ·   "
+                       "7 et 8 : batterie reelle / frappes du moteur   ·   echap : relacher")
         else:
             d.drawText(x, h - 26,
                        f"source {self.isolee + 1} choisie, tout le morceau s'entend   ·   "
@@ -1152,6 +1181,10 @@ class Mur(QWidget):
         """
         base = os.path.splitext(os.path.basename(self.morceau_wav))[0]
         attendus = [os.path.join(self.cache_stems, f"{base}-{i + 1}.wav") for i in range(6)]
+        # LES DEUX PISTES DE PERCUSSION, SI ELLES EXISTENT. Elles sont precalculees a part et
+        # leur absence n'empeche rien : on joue alors les six sources seules.
+        en_plus = [os.path.join(self.cache_stems, "reference", f"{base}-ref-drums.wav"),
+                   os.path.join(self.cache_stems, f"{base}-frappe.wav")]
         ici = os.path.dirname(os.path.abspath(__file__))
         try:
             p = subprocess.Popen(
@@ -1173,6 +1206,14 @@ class Mur(QWidget):
                 print(f"stems : {dernier}", flush=True)
         p.wait()
 
+        attendus += [c for c in en_plus if os.path.exists(c)]
+        verdict = os.path.join(self.cache_stems, f"{base}.correspondances.json")
+        if os.path.exists(verdict):
+            try:
+                with open(verdict, encoding="utf-8") as fh:
+                    self.correspondances = json.load(fh).get("correspondances", {})
+            except (OSError, ValueError):
+                pass
         if p.returncode == 0 and all(os.path.exists(c) for c in attendus):
             # ON NE BASCULE PAS ICI. Remplacer le lecteur depuis ce fil-ci pendant que le
             # fil de dessin le lit produirait exactement la course qu'on a deja payee dans
@@ -1205,7 +1246,9 @@ class Mur(QWidget):
         rien a confronter, et un journal de cinq minutes d'ecoute passive ne servirait qu'a
         peser.
         """
-        if self.isolee is None:
+        # Les pistes 7 et 8 ne sont pas des sources : le paquet n'en publie rien, et il n'y
+        # aurait donc rien a confronter aux marques.
+        if self.isolee is None or self.isolee >= 6:
             return
         s = p.sources[self.isolee]
         self.journal.append({
@@ -1269,19 +1312,55 @@ class Mur(QWidget):
         self._appliquer_gains()
 
     def _appliquer_gains(self):
-        """Le son suit l'etat : solo d'une source, ou melange complet."""
-        if self.solo and self.isolee is not None:
-            self.gains = [1.0 if i == self.isolee else 0.0 for i in range(6)]
-        else:
-            self.gains = [1.0] * 6
+        """Le son suit l'etat : une piste seule, ou le melange complet."""
+        self.gains = ([1.0 if i == self.isolee else 0.0 for i in range(8)]
+                      if self.solo and self.isolee is not None else [1.0] * 8)
         if self.lecteur is None:
             return
         if len(self.lecteur.pistes) < 6:
-            # Une seule piste : le morceau entier. Rien a soloer encore, et le couper
-            # laisserait le silence pendant l'extraction.
+            # Une seule piste : le morceau entier, pendant que l'extraction tourne. Rien a
+            # soloer encore, et le couper laisserait le silence.
             self.lecteur.tous(1.0)
         else:
             self.lecteur.solo(self.isolee if self.solo else None)
+
+    # ------------------------------------------------------------------ annoter
+    def journaliser(self, p):
+        """Ce que le moteur publiait, image d'analyse par image d'analyse.
+
+        SANS LUI, LE JOURNAL DES TOUCHES NE VAUDRAIT RIEN. Comparer ce que l'oreille marque
+        a ce que la source fait suppose de connaitre les deux SUR LA MEME HORLOGE. Rejouer
+        le morceau apres coup pour retrouver les frappes du moteur donnerait un alignement
+        approximatif — et c'est justement l'alignement qu'on mesure.
+
+        On n'enregistre que pendant qu'une source est isolee : le reste du temps il n'y a
+        rien a confronter, et un journal de cinq minutes d'ecoute passive ne servirait qu'a
+        peser.
+        """
+        # Les pistes 7 et 8 ne sont pas des sources : le paquet n'en publie rien, et il n'y
+        # aurait donc rien a confronter aux marques.
+        if self.isolee is None or self.isolee >= 6:
+            return
+        s = p.sources[self.isolee]
+        self.journal.append({
+            "t": round(p.temps / 1000.0, 4),
+            "niveau": round(s["niveau"], 3),
+            "frappe": bool(s["frappe"]),
+            "retrait": round(s["retrait"], 2),
+            "pique": round(s["pique"], 3),
+            "tenue": round(s["tenue"], 3),
+            "bpm": round(p.bpm, 2),
+            "phase_temps": round(p.phase_temps, 3),
+            "kick": bool(p.kick),
+        })
+
+    def instant(self):
+        """Ou l'on en est dans le morceau, en secondes. L'horloge du moteur, et elle seule.
+
+        Un decalage entre deux horloges est le genre de defaut qui survit des semaines sans
+        se voir. Il n'y en a qu'une ici, donc la question ne se pose pas.
+        """
+        return self.paquet.temps / 1000.0 if self.paquet else 0.0
 
     def marquer(self, appuye):
         """Espace enfonce, espace relache. On garde LES DEUX, toujours.
@@ -1387,8 +1466,17 @@ class Mur(QWidget):
             self.avance_ms = max(0.0, self.avance_ms - 5.0)
         # LES TOUCHES 1 A 6 FONT CE QUE FAIT LE CLIC. On a rarement la souris en main quand
         # on ecoute, et changer de source ne doit pas couter un geste.
-        elif Qt.Key.Key_1 <= e.key() <= Qt.Key.Key_6:
-            self.isoler(e.key() - Qt.Key.Key_1)
+        elif Qt.Key.Key_1 <= e.key() <= Qt.Key.Key_8:
+            # SEPT ET HUIT NE SONT PAS DES SOURCES, ET C'EST TOUT L'INTERET.
+            #
+            # « Pourquoi je peux isoler les sources mais pas la frappe qui fixe les BPM ? »
+            # Sept est la batterie telle qu'un algorithme exterieur l'entend ; huit est ce que
+            # NOTRE detecteur en retient. Basculer de l'une a l'autre fait entendre en dix
+            # secondes ce que le detecteur rate ou invente — aucun chiffre ne dit ca aussi
+            # vite.
+            r = e.key() - Qt.Key.Key_1
+            if self.lecteur is None or r < len(self.lecteur.pistes):
+                self.isoler(r)
         elif e.key() == Qt.Key.Key_Space and not e.isAutoRepeat():
             # L'AUTOREPEAT EST IGNORE. Le clavier renvoie l'enfoncement des dizaines de fois
             # par seconde tant qu'on tient la touche ; en tenir compte hacherait un souffle

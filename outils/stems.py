@@ -133,6 +133,24 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
     return sorties
 
 
+def toutes(chemin_morceau, dossier, url=MOTEUR, dire=print):
+    """Les six sources, PLUS les deux pistes de percussion si elles ont ete precalculees.
+
+    LES DEUX DERNIERES NE SONT PAS DES SOURCES, et elles ne se calculent pas ici. La batterie
+    de reference demande Demucs (cinq minutes) et les frappes demandent une passe de sonde sur
+    le morceau entier : c'est du pre-calcul, il se fait a part (`outils/preparer.sh`), et son
+    absence ne doit rien empecher. Un set n'est pas determine — un bonus track tombe sans
+    prevenir, et l'on joue alors les six sources sans les deux autres.
+    """
+    six = stems(chemin_morceau, dossier, url, dire)
+    if six is None:
+        return None
+    base = os.path.splitext(os.path.basename(chemin_morceau))[0]
+    en_plus = [os.path.join(dossier, "reference", f"{base}-ref-drums.wav"),
+               os.path.join(dossier, f"{base}-frappe.wav")]
+    return six + [c for c in en_plus if os.path.exists(c)]
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(__doc__)

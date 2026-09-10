@@ -1391,6 +1391,7 @@ sont extraites une fois, et la fenêtre ne fait plus que doser.
 | **le même clic à nouveau** | tout le morceau revient, **la source reste choisie** — pour marquer dedans |
 | **échap** | plus aucune source choisie |
 | **bord droit d'une case** | le fader : on tire le niveau de cette piste |
+| **7 et 8** | la batterie de référence, et ce que le moteur retient comme frappe |
 | **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
 | **espace tapé** | des instants, à confronter aux frappes et à la grille |
 | **retour arrière** | défaire la dernière marque |
@@ -1448,6 +1449,89 @@ figée comme telle : mesuré, un « retard » annoncé à 1617 ms.
 > calcul Python par blocs et se disputait le verrou global avec la boucle de dessin, soixante
 > fois par seconde. Dans un processus séparé : vingt-cinq secondes, et ses pannes n'emportent
 > plus l'écran.
+
+### Un juge extérieur qui NOMME les instruments — et il faut le vérifier avant de le croire
+
+> « Je voulais que tu analyses un son de bout en bout, que tu sépares en différentes sources,
+>   et que la fenêtre du temps réel se compare à ce qui a été calculé au préalable. »
+
+C'était la demande d'origine, et elle avait été manquée : on en avait fait un travail manuel
+à la touche espace alors qu'elle appelait une **comparaison automatique**.
+
+`outils/reference.py` sépare le morceau avec **Demucs** — un modèle entraîné, d'une famille
+d'algorithmes totalement différente, qui rend quatre pistes **nommées** : batterie, basse,
+voix, reste. C'est exactement le rôle qu'`aubioonset` joue déjà pour les attaques : un juge
+qu'on n'a pas écrit. La circularité que `LISEZMOI.md` signalait — « contrôler la séparation
+demanderait de réécrire la même factorisation » — est levée.
+
+**Ce n'est PAS une dépendance du moteur.** PyTorch vit dans un venv du cache, jamais dans le
+dépôt. Un set n'est pas déterminé : un bonus track tombe sans prévenir, `SourceSeparator`
+apprend ses profils en écoutant et n'a jamais besoin d'un pré-calcul. Ces fichiers ne servent
+qu'à **noter** ce que le moteur trouve.
+
+### Le juge se vérifie comme le reste, et il s'est fait prendre
+
+Premier verdict rendu : « source 1 basse, source 6 basse » — **alors que la source 6 est la
+plus aiguë du lot**. Deux minutes de diagnostic ont donné la cause :
+
+| stem | part du son | centre de gravité |
+|---|---|---|
+| `bass` | **74,2 %** | 452 Hz |
+| `drums` | 13,5 % | 4967 Hz |
+| `other` | 9,6 % | 1180 Hz |
+| `vocals` | 2,7 % | 4213 Hz |
+
+**Sur ce répertoire, `bass` n'est pas une basse : c'est presque tout le morceau.** Corréler
+nos sources à `bass` revenait donc à demander « ressemble-t-elle au morceau », à quoi la
+réponse est oui pour les six.
+
+**Le juge n'est pas cassé pour autant** : sur `etalon-kick.wav`, des grosses caisses seules,
+il met **99,9 % dans `drums`**. C'est le barber beats qui le déroute — un sample de soul
+ralenti et filtré ne ressemble à rien de son entraînement. *Un juge extérieur se contrôle sur
+un cas dont on connaît la réponse, exactement comme un détecteur.*
+
+**On régresse donc au lieu de corréler.** On cherche les coefficients qui reconstruisent la
+source à partir des quatre pistes, et l'on regarde ce que chacune apporte **en plus des
+autres**. Un stem qui contient tout n'y gagne rien — c'est la même correction que le relief
+dans `MotifTracker` : un rival qui ressemble à tout le monde n'est pas un rival.
+
+### Ce que ça dit des six sources, et ce n'est pas flatteur
+
+Sur « Dead Internet Theory » :
+
+| | ce que le juge y entend | part de la source expliquée |
+|---|---|---|
+| source 1 | basse, 55 % | **87 %** |
+| source 6 | basse, 62 % | **89 %** |
+| source 2 | le reste, 20 % | 24 % |
+| source 3 | le reste, 17 % | 20 % |
+| source 4 | le reste, 14 % | 14 % |
+| source 5 | le reste, 11 % | 21 % |
+
+Lu dans l'autre sens : **batterie → source 1 (26 %), basse → source 6 (62 %), voix →
+personne (3 %)**.
+
+**Deux sources sur six ont une identité**, et elles portent la même chose. Les quatre autres
+ne sont expliquées qu'à 14-24 % : le juge ne reconnaît rien dedans. C'est le quatrième indice
+concordant, après le classement des rôles, le drapeau « absente » et les rangs qui bougent.
+
+### La frappe est isolable, elle aussi
+
+> « Pourquoi je peux isoler les sources mais pas la frappe qui fixe les BPM ? »
+
+Parce qu'elle n'est pas une des six : le kick ne sort pas de la factorisation par timbre, il
+est détecté à part sur le registre grave — une **suite d'instants**, pas un timbre. Il n'avait
+donc aucune piste audio, alors que c'est la pièce dont le tempo, la grille et la phase
+dépendent toutes.
+
+`outils/frappe.py` fabrique la piste : le morceau filtré sur le registre du kick, **coupé
+partout sauf aux instants que le détecteur a retenus**. Un kick manqué s'entend comme un trou,
+une frappe inventée comme un coup posé sur rien. Mesuré sur ce morceau : **320 frappes en
+266 s, une toutes les 0,83 s pour un temps de 0,66** — le détecteur saute un temps sur quatre,
+et maintenant ça s'entend.
+
+Les touches **7** et **8** basculent entre la batterie réelle et ce que le moteur en retient.
+C'est la mesure la plus directe qu'on ait jamais eue sur le détecteur.
 
 ### Les pistes sont taillées sur les profils de CETTE session
 
