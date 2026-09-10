@@ -1731,6 +1731,48 @@ Cela éclaire une confusion à ne pas refaire : « six sources, c'est le maximum
 **netteté des profils** — se retrouvent-ils d'un apprentissage à l'autre — et non sur le
 nombre d'objets réellement portés. Deux mesures, deux questions.
 
+### Tout l'album mesuré : le rang varie, mais ce qui frappe ne pèse jamais rien
+
+| morceau | part des six sources, du grave à l'aigu | rang |
+|---|---|---|
+| 01 NeoAtlas | 36,6 · 0,4 · 10,1 · 11,1 · 0,0 · 41,7 % | 3,44 |
+| 02 Interactive WordBank | 2,5 · 4,8 · 0,1 · 0,8 · **87,1** · 4,7 % | 1,73 |
+| 03 ThinkMap Module | **52,3** · 2,2 · 4,6 · 4,4 · 15,4 · 21,1 % | 3,73 |
+| 04 Glyph Chamber | 10,6 · 24,9 · 42,9 · 1,6 · 0,6 · 19,4 % | 3,90 |
+| 05 Dead Internet Theory | 38,9 · 1,2 · 2,1 · 0,3 · 0,9 · **56,5** % | 2,43 |
+| 06 **Passepartout** | **89,0** · 0,8 · 3,5 · 1,0 · 1,2 · 4,4 % | **1,65** |
+| 07 Echoes of the Ancients | 1,1 · 0,7 · 46,0 · 2,2 · 42,2 · 7,7 % | 2,97 |
+| 08 Timeline Explorer | 12,9 · 25,5 · 2,4 · 3,6 · 41,7 · 13,9 % | 4,31 |
+| 09 Codex Sinaiticus | **76,9** · 10,6 · 9,1 · 0,6 · 2,3 · 0,5 % | 2,23 |
+| 11 Lost Cultures | 8,5 · 23,2 · 4,5 · 5,6 · 27,6 · 30,7 % | **4,79** |
+
+**Le rang effectif va de 1,65 à 4,79**, médian 3,44. C'est trop variable pour être le
+problème : sur *Lost Cultures* et *Timeline Explorer*, les six sources se partagent
+honnêtement le son.
+
+*Passepartout* est le pire cas — une source prend 89 % — et c'est **le même morceau** que ce
+fichier désigne déjà comme le plus difficile ailleurs (« Passepartout de 27 à 58 % » de tempo
+publié, le plus feutré de l'album). Deux mesures indépendantes, un seul coupable.
+
+### Et le chiffre qui, lui, ne bouge jamais
+
+| mesuré sur | ce qui FRAPPE (crête > 20) | ce qui TIENT (crête ≤ 10) |
+|---|---|---|
+| 2 morceaux | 0,6 % | 89,6 % |
+| 5 morceaux | 0,5 % | 93,2 % |
+| 8 morceaux | 0,5 % | 89,6 % |
+| **10 morceaux** | **0,4 %** | **91,3 %** |
+
+Et **70 % de l'énergie des six sources vit sous 150 Hz**, sur tout l'album.
+
+> **Le système décrit des nappes avec six cases.** Les instruments qui portent le rythme —
+> ceux dont le rendu a besoin pour tomber juste — occupent quatre dixièmes de pour cent de ce
+> qu'il regarde. C'est vrai des dix morceaux, quel que soit leur rang.
+
+**Le rang était donc le mauvais indicateur**, et le critère « rang > 4 » qu'on avait failli
+retenir n'aurait rien réglé : *Lost Cultures* a un rang de 4,79 et souffre du même mal. Ce
+qu'il faut mesurer, c'est la part de ce qui frappe.
+
 ### Séparer harmonie et percussion d'abord : mesuré, et ça échoue
 
 La piste était la sienne et elle épousait ce qu'il entend. Elle a été mesurée avant d'être

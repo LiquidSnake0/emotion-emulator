@@ -3,6 +3,26 @@
 Ce que le dépôt ne peut pas contenir — les disques — et ce qu'il doit contenir : la façon
 de les mesurer.
 
+## `rang.sh` et `rang.py` — combien d'objets la factorisation trouve vraiment
+
+```sh
+./outils/rang.sh              tout ce qui est decode dans le cache
+./outils/rang.sh 05 08        seulement ces pistes
+```
+
+Les six sources dépendent des profils de la session : mesurer l'album demande, pour chaque
+piste, d'ouvrir un moteur, d'attendre qu'il ait appris, d'extraire, de fermer. Un quart
+d'heure pour onze morceaux, et rien qui se parallélise — il n'y a qu'un anneau dans
+`/dev/shm`.
+
+**Le rang effectif** est l'exponentielle de l'entropie de la répartition d'énergie : « si ces
+six sources se partageaient le son également, combien y en aurait-il ? » Aucun seuil à
+défendre, et une nuance là où un comptage rendrait un entier.
+
+À côté, la couleur de chaque source et son facteur de crête — **pris sur l'enveloppe et non
+sur l'onde**, où un seul échantillon fixe le résultat (mesuré : 1383 sur un morceau, ce qui
+ne veut rien dire).
+
 ## `fumee.sh` — chaque point d'entrée démarre-t-il
 
 ```sh
