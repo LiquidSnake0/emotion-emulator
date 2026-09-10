@@ -814,8 +814,9 @@ Le cœur se teste sans serveur, sans carte son et sans navigateur. **Le garder a
 ## Faire tourner
 
 ```sh
-./outils/voir.sh                      # le moteur + la fenetre, sur la sortie systeme
-./outils/voir.sh morceau.wav 90.92    # le moteur + la fenetre, en rejeu, fiche comprise
+./outils/voir.sh              # une piste au hasard de l'album, jouee, ecoutee, montree
+./outils/voir.sh 5            # la piste 5   ·   ./outils/voir.sh passepartout   par le titre
+./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
 
 ```sh
@@ -1379,9 +1380,21 @@ est le temps », il propose de dire **quelle source fait quoi, et quand** :
 > moi ce que j'entends. »
 
 ```sh
-./outils/voir.sh                      # ecoute la sortie systeme
-./outils/voir.sh morceau.wav 90.92    # rejoue un morceau, fiche comprise
+./outils/voir.sh              # une piste au hasard de l'album, jouee et ecoutee
+./outils/voir.sh 5            # la piste 5
+./outils/voir.sh passepartout # par un bout de son titre
+./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
+
+**Le son sort des enceintes, et c'était le trou.** Le mode « fichier » du moteur analyse un
+WAV sans rien jouer : on regardait un écran bouger sans rien entendre, donc sans pouvoir
+marquer quoi que ce soit à l'oreille — ce qui vide de son sens tout ce qui suit. Le morceau
+passe maintenant par la carte son et le moteur écoute cette même sortie : c'est le chemin du
+direct, et il n'y a **aucune horloge en trop** entre ce qu'on entend et ce qu'on voit.
+
+**La fiche vient du crate, elle ne se devine pas.** `voir.sh` lit `seed.json`, apparie sur le
+titre et la passe au moteur, qui l'amorce sans s'y verrouiller. Sans elle : 43 % de justesse
+au lieu de 99.
 
 | | |
 |---|---|
@@ -1526,6 +1539,29 @@ passé dans un simple filtre fixe. **Si `sourceN` et `temoinN` sonnent pareil, l
 n'a fait que couper des fréquences.** Mesuré, elles ne sonnent pas tout à fait pareil — 0,44
 à 0,95 de corrélation, donc la factorisation sculpte réellement — mais c'est l'oreille qui
 dit si ce qu'elle sculpte a un nom.
+
+## Le bac de mesure : quel `tXX` est quel morceau
+
+Les extraits de quatre-vingt-dix secondes qui servent à toutes les mesures de ce fichier
+viennent de **The Era of Information** (Macroblank & slowerpace 音楽), une piste par extrait,
+dans l'ordre. L'appariement a été perdu une fois et a coûté une recherche : il est écrit ici.
+
+| | titre | fiche | | | titre | fiche |
+|---|---|---|---|---|---|---|
+| `t01` | NeoAtlas (Intro Theme) | 84,74 | | `t07` | Echoes of the Ancients | 77,98 |
+| `t02` | Interactive WordBank | 76,97 | | `t08` | Timeline Explorer | 63,50 |
+| `t03` | ThinkMap Module | 82,50 | | `t09` | Codex Sinaiticus | 86,20 |
+| `t04` | Glyph Chamber | 73,50 | | `t10` | HyperText Odyssey | 77,00 |
+| `t05` | Dead Internet Theory | 90,92 | | `t11` | Lost Cultures | 59,87 |
+| `t06` | **Passepartout** | 87,06 | | | | |
+
+Les fiches sont celles du crate, vérifiées une à une contre `seed.json` : onze sur onze.
+
+**`macro.wav` n'est pas de cet album** — c'est « 07 two sided » de *RARE PSALMS COLLECTION
+VOL. 4*, identifié par corrélation d'enveloppe (1,000 contre 0,304 au suivant). Ce titre
+**n'est pas au crate**, donc il n'a pas de fiche : le 87,06 employé dans les anciennes
+mesures est celui de Passepartout, et il a été repris par erreur. Les mesures qui s'appuient
+dessus sont à relire avec cette réserve.
 
 ## Façon de travailler
 

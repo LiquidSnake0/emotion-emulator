@@ -1,38 +1,110 @@
 #!/usr/bin/env bash
-# Tout ce qu'il faut pour regarder : le moteur, et LA fenetre.
+# Un morceau du bac se joue, le moteur l'ecoute, la fenetre le montre.
 #
-#   ./outils/voir.sh                      ecoute la sortie systeme
-#   ./outils/voir.sh morceau.wav 90.92    rejoue un morceau, fiche comprise
+#   ./outils/voir.sh              une piste au hasard de l'album
+#   ./outils/voir.sh 5            la piste 5
+#   ./outils/voir.sh passepartout une piste par un bout de son titre
+#   ./outils/voir.sh --direct     rien ne se joue, le moteur ecoute ce que tu joues toi
 #
-# UNE SEULE FENETRE, ET LA SECONDE A ETE RETIREE. Elle confrontait le paquet du moteur a un
-# rapport Python precalcule sur un fichier : en ecoute directe, les deux ne parlaient donc
-# pas du meme instant, et elle ne pouvait rien dire. Elle reste sur le disque
-# (`fenetre_reference.py`) pour les mesures hors ligne, ou elle a un sens.
+# LE SON SORT DES ENCEINTES, ET C'EST LE POINT. Le mode « fichier » du moteur analyse un WAV
+# sans rien jouer : on regardait un ecran bouger sans rien entendre, donc sans pouvoir
+# marquer quoi que ce soit a l'oreille. Ici le morceau passe par la carte son et le moteur
+# ecoute cette meme sortie — c'est le chemin du direct, et il n'y a aucune horloge en trop
+# entre ce qu'on entend et ce qu'on voit.
 #
-# Ctrl-C ici arrete tout.
+# LA FICHE VIENT DU CRATE, qui est la base du bac et la premiere source d'information du
+# systeme. Sans elle le moteur cherche son tempo dans le vide : 43 % de justesse au lieu de
+# 99, et tout ce qu'on regarde ensuite en depend.
+#
+# Ctrl-C arrete tout.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+ALBUM="${EMOTION_ALBUM:-$HOME/Downloads/Macroblank & slowerpace 音楽 - The Era of Information}"
+CRATE="${EMOTION_CRATE:-$HOME/Documents/crate/src/data/seed.json}"
 PORT=5099
+
 for pid in $(ss -lptnH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
   [[ "$(ps -p "$pid" -o comm= 2>/dev/null)" == *Emotion.Server* ]] && kill "$pid" 2>/dev/null
 done
 
-if [[ -f "${1:-}" ]]; then
-  NOM=$(basename "$1" .wav)
-  echo "moteur — il rejoue $NOM${2:+, fiche $2 BPM}"
-  ./run.sh fichier "$1" "${2:-}" > /tmp/emotion-moteur.log 2>&1 &
-else
-  NOM="direct"
-  echo "moteur — il ecoute $(pactl get-default-sink).monitor"
-  ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+PISTE=""; TITRE="direct"; BPM=""
+if [[ "${1:-}" != "--direct" ]]; then
+  if [[ ! -d "$ALBUM" ]]; then
+    echo "album introuvable : $ALBUM" >&2
+    echo "en donner un autre : EMOTION_ALBUM=/chemin/vers/album ./outils/voir.sh" >&2
+    exit 1
+  fi
+  # Le choix, et la fiche qui va avec, se font en Python : il faut lire le crate et
+  # apparier sur le numero de piste, ce qui en shell serait illisible.
+  LIGNE=$(ALBUM="$ALBUM" CRATE="$CRATE" python3 - "${1:-}" <<'PYEOF'
+import glob, json, os, random, re, sys
+
+voulu = (sys.argv[1] if len(sys.argv) > 1 else "").strip().lower()
+pistes = sorted(glob.glob(os.path.join(os.environ["ALBUM"], "*.aiff")) +
+                glob.glob(os.path.join(os.environ["ALBUM"], "*.wav")) +
+                glob.glob(os.path.join(os.environ["ALBUM"], "*.flac")))
+if not pistes:
+    sys.exit(1)
+
+# Le numero et le titre se lisent dans le nom du fichier : « … - 05 Dead Internet Theory ».
+def decoupe(chemin):
+    base = os.path.splitext(os.path.basename(chemin))[0]
+    m = re.search(r"(\d{2})\s+(.+)$", base)
+    return (int(m.group(1)), m.group(2)) if m else (0, base)
+
+choix = None
+if voulu.isdigit():
+    choix = next((p for p in pistes if decoupe(p)[0] == int(voulu)), None)
+elif voulu:
+    choix = next((p for p in pistes if voulu in decoupe(p)[1].lower()), None)
+    if choix is None and os.path.isfile(voulu):
+        choix = voulu
+choix = choix or random.choice(pistes)
+rang, titre = decoupe(choix)
+
+# LA FICHE SE PREND DANS LE CRATE, jamais devinee. On apparie sur le titre, et sur le rang
+# seulement si l'album est identifie — un numero de piste seul ne designe rien.
+bpm = ""
+try:
+    with open(os.environ["CRATE"], encoding="utf-8") as fh:
+        faces = json.load(fh)
+    exact = [f for f in faces if (f.get("title") or "").lower() == titre.lower()]
+    if exact:
+        bpm = f"{exact[0]['bpm']}"
+except (OSError, ValueError, KeyError):
+    pass
+
+print(f"{choix}\t{rang:02d} {titre}\t{bpm}")
+PYEOF
+)
+  [[ -z "$LIGNE" ]] && { echo "aucune piste jouable dans $ALBUM" >&2; exit 1; }
+  IFS=$'\t' read -r PISTE TITRE BPM <<< "$LIGNE"
 fi
+
+if [[ -n "$PISTE" ]]; then
+  echo "morceau — $TITRE${BPM:+   fiche $BPM BPM}"
+  [[ -z "$BPM" ]] && echo "         (aucune fiche au crate pour ce titre : le moteur cherchera seul)"
+else
+  echo "moteur — il ecoute $(pactl get-default-sink).monitor, joue ce que tu veux"
+fi
+
+Signal__Bpm="$BPM" ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
 MOTEUR=$!
-trap 'kill $MOTEUR 2>/dev/null; kill 0 2>/dev/null' EXIT INT TERM
+LECTURE=""
+trap 'kill $MOTEUR $LECTURE 2>/dev/null; kill 0 2>/dev/null' EXIT INT TERM
 
 for _ in $(seq 1 60); do
   ss -lptnH "sport = :$PORT" 2>/dev/null | grep -q LISTEN && break
   sleep 1
 done
+
+# LE SON PART APRES LE MOTEUR, pas avant : il doit deja ecouter quand la premiere mesure
+# tombe, sans quoi les premieres secondes — celles ou la separation apprend — sont perdues.
+if [[ -n "$PISTE" ]]; then
+  ffplay -nodisp -autoexit -loglevel quiet "$PISTE" &
+  LECTURE=$!
+fi
+
 echo "fenetre — clic ou 1-6 pour isoler une source, espace pour marquer ce que tu entends"
-python3 outils/fenetre.py "$NOM"
+python3 outils/fenetre.py "$TITRE"

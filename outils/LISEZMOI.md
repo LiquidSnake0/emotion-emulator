@@ -93,8 +93,9 @@ valident le même contrat depuis deux langages.
 ## Isoler une source, et marquer ce qu'on entend
 
 ```sh
-./outils/voir.sh                      # ecoute la sortie systeme
-./outils/voir.sh morceau.wav 90.92    # rejoue un morceau, fiche comprise
+./outils/voir.sh              # une piste au hasard de l'album, jouee, ecoutee, montree
+./outils/voir.sh 5            # la piste 5   ·   ./outils/voir.sh passepartout   par le titre
+./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
 
 | | |
@@ -104,6 +105,16 @@ valident le même contrat depuis deux langages.
 | **espace tapé** | des instants, à confronter aux frappes et à la grille |
 | **retour arrière** | défaire la dernière marque |
 | **Q** | écrit le rapport et ferme |
+
+**Le son sort des enceintes, et c'était le trou.** Le mode « fichier » du moteur analyse un
+WAV sans rien jouer : on regardait un écran bouger sans rien entendre, donc sans pouvoir
+marquer quoi que ce soit — ce qui vide de son sens tout ce qui suit. Le morceau passe
+maintenant par la carte son et le moteur écoute cette même sortie. Aucune horloge en trop
+entre ce qu'on entend et ce qu'on voit.
+
+La piste et sa fiche viennent de l'album et du crate : `EMOTION_ALBUM` et `EMOTION_CRATE`
+changent les deux chemins si besoin. Sans fiche, le moteur cherche son tempo dans le vide —
+43 % de justesse au lieu de 99 — et `voir.sh` le dit à l'écran plutôt que de faire comme si.
 
 C'est la seule mesure du projet qui vienne de l'extérieur du programme. Tout le reste se juge
 contre des grandeurs que le moteur calcule lui-même — un décalage commun au juge et au jugé

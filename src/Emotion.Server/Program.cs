@@ -218,13 +218,15 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
         _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
     };
 
-    // LA FICHE, QUAND ON REJOUE UN FICHIER POUR REGARDER. En direct elle vient du crate,
-    // posee par le selecteur de faces ; en rejeu il n'y a pas de crate au bout, et sans
-    // amorce le moteur cherche son tempo dans le vide — 43 % de justesse au lieu de 99.
-    // On regarderait alors l'autre systeme, celui qui se trompe, en croyant regarder
-    // celui-ci.
-    if (master is IAcceptsCue amorcable && cfg.GetValue("Signal:Bpm", 0f) is var bpm and > 0f
-        && cfg["Signal:Source"]?.ToLowerInvariant() == "fichier")
+    // LA FICHE AU LANCEMENT, ET POUR TOUS LES MODES. Elle venait du selecteur de faces de
+    // la seconde fenetre, laquelle a ete retiree ; il fallait donc un autre chemin, et un
+    // argument de ligne de commande est le plus court. Sans amorce le moteur cherche son
+    // tempo dans le vide — 43 % de justesse au lieu de 99 — et l'on regarderait l'autre
+    // systeme, celui qui se trompe, en croyant regarder celui-ci.
+    //
+    // Elle ne verrouille rien : `Amorcer` recentre la ponderation de l'autocorrelation, qui
+    // continue de chercher. Un disque pousse au fader reste suivi malgre elle.
+    if (master is IAcceptsCue amorcable && cfg.GetValue("Signal:Bpm", 0f) is var bpm and > 0f)
     {
         amorcable.Amorcer(bpm);
         Dire($"fiche : {bpm:0.##} BPM");

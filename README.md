@@ -41,8 +41,9 @@ publie au même instant</sub></td>
 </table>
 
 ```sh
-./outils/voir.sh                      # sur la sortie systeme
-./outils/voir.sh morceau.wav 90.92    # en rejeu d'un fichier, fiche comprise
+./outils/voir.sh              # une piste au hasard de l'album, jouee, ecoutee, montree
+./outils/voir.sh 5            # la piste 5   ·   ./outils/voir.sh passepartout   par le titre
+./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
 
 Le moteur écoute la sortie système : on joue ce qu'on veut avec son lecteur habituel, il
@@ -1666,8 +1667,9 @@ change d'une ligne.
 
 ```sh
 # Tout : le moteur, le GPU simulé, la mesure
-./outils/voir.sh                      # sur la sortie systeme
-./outils/voir.sh morceau.wav 90.92    # en rejeu d'un fichier, fiche comprise
+./outils/voir.sh              # une piste au hasard de l'album, jouee, ecoutee, montree
+./outils/voir.sh 5            # la piste 5   ·   ./outils/voir.sh passepartout   par le titre
+./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 
 # Signal fabriqué, aucun matériel requis
 dotnet run --project src/Emotion.Server
