@@ -108,6 +108,48 @@ app.MapGet("/ready", (FrameBus bus) =>
 // donc a faire echouer la serialisation, ce qui tue la connexion de ce client-la sans que
 // la boucle en sache rien. Cet endpoint emprunte exactement le meme chemin : s'il rend une
 // erreur, la cause est trouvee ; s'il rend l'image, il faut chercher ailleurs.
+// LES SIX PROFILS SPECTRAUX DE LA SESSION EN COURS.
+//
+// POURQUOI CET ENDPOINT EXISTE, ET POURQUOI IL NE SUFFIT PAS DE LES EXPORTER HORS LIGNE.
+//
+// La sonde sait deja les ecrire dans un fichier, et l'on pourrait extraire les six pistes a
+// l'avance. Ce serait faux, et la mesure le dit : deux apprentissages du meme morceau
+// trouvent bien les memes six objets — cosinus 0,77 a 0,91 sous le meilleur appariement —
+// mais **un a trois RANGS sur six seulement sont conserves**. L'ordre est celui des centres
+// de gravite spectraux, et il suffit que deux sources voisines se croisent pour que tout
+// glisse.
+//
+// Autrement dit : la « source 3 » d'un fichier extrait hier n'est pas la case 3 que l'ecran
+// montre aujourd'hui. On entendrait une source en en jugeant une autre, sans que rien ne le
+// signale — exactement le genre de fausse preuve qu'un outil de validation ne doit jamais
+// produire. Les pistes doivent donc etre extraites avec LES PROFILS DE CETTE SESSION-CI.
+//
+// Le cout est nul : c'est une lecture, hors du chemin chaud, et le separateur les tient
+// deja.
+app.MapGet("/profils", (IAudioSource source) =>
+{
+    if (source.Analyzer is not { } analyseur) return Results.NotFound(new { motif = "cette source n'analyse rien" });
+    var separation = analyseur.Separation;
+    var bins = separation.Bins;
+    var profil = new float[bins];
+    var profils = new float[SourceSeparator.Sources][];
+    for (var r = 0; r < SourceSeparator.Sources; r++)
+    {
+        separation.ProfilOrdonne(r, profil);
+        profils[r] = (float[])profil.Clone();
+    }
+    return Results.Ok(new
+    {
+        taux = analyseur.Taux,
+        bins,
+        fenetre = SpectrumAnalyzer.Window,
+        // « pret » dit si quelque chose a ete appris. Faux, les profils ne decrivent que du
+        // bruit et les pistes extraites ne voudraient rien dire : l'appelant doit attendre.
+        pret = separation.Pret,
+        profils,
+    });
+});
+
 app.MapGet("/image", (FrameBus bus) => Results.Ok(bus.Latest));
 
 // Les valeurs non finies de l'image courante, nommees. Repond a « laquelle ».

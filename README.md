@@ -1556,9 +1556,16 @@ retard de 21 ms a survécu des semaines. La fenêtre porte donc maintenant l'avi
 > dit. Si ça suit, je le laisse ; sinon je veux pouvoir montrer, à travers la touche espace,
 > moi ce que j'entends. »
 
-Un clic — ou les touches 1 à 6 — isole une source : les cinq autres s'éteignent **sans
-disparaître**, parce que deux sources sur six portent presque le même son et qu'il faut
-pouvoir vérifier du coin de l'œil qu'une voisine ne fait pas la même chose. Espace maintenu
+Un clic — ou les touches 1 à 6 — isole une source : **on l'entend seule**, et les cinq autres
+s'éteignent à l'écran sans disparaître, parce que deux sources sur six portent presque le même
+son et qu'il faut pouvoir vérifier du coin de l'œil qu'une voisine ne fait pas la même chose.
+Le bord droit de chaque case est un fader : la fenêtre est un **stem player** à six pistes.
+
+> L'idée vient de l'appareil de Kanye West, et le point qu'il fallait comprendre, c'est qu'il
+> **ne sépare rien en temps réel** : il a les stems et ne fait que les mélanger. Les six
+> pistes sont donc extraites une fois — vingt-cinq secondes, masquées par le morceau entier
+> qui joue pendant ce temps — et taillées sur les profils de **cette session-là**, puisque
+> deux apprentissages ne rangent pas les six sources dans le même ordre. Espace maintenu
 donne un intervalle de présence, espace tapé donne des instants. **On enregistre toujours les
 deux** : seule la durée les sépare, et elle n'est connue qu'après le relâchement.
 

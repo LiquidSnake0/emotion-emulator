@@ -44,8 +44,12 @@ import math
 import mmap
 import os
 import struct
+import subprocess
 import sys
+import threading
 import time
+import traceback
+import wave
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QLinearGradient,
@@ -54,7 +58,9 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import formes
+import lecteur
 import mouvement
+import stems
 
 
 CHEMIN = "/dev/shm/emotion-emulator"
@@ -105,6 +111,14 @@ P_RETRAITS = 232
 # bande. Une periode nulle veut dire « on ne sait pas », et c'est une reponse.
 P_MOTIF = 240
 S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2, 3, 4, 5, 7
+
+# LA LARGEUR DU FADER, ET LA FORME LUI CEDE LA PLACE.
+#
+# On aurait pu le dessiner PAR-DESSUS le motif : c'est une ligne de moins et c'est faux. Le
+# motif se dessine jusqu'au bord de sa case, donc le fader lui passerait dessus et l'on
+# lirait un dessin ampute en croyant lire une source faible. La grille des formes se calcule
+# donc sur la largeur restante — la case ne change pas, son contenu se serre.
+FADER_LARGE = 9
 
 GRIS_FOND = QColor(14, 14, 15)
 GRIS_CADRE = QColor(48, 50, 52)
@@ -430,6 +444,25 @@ class Mur(QWidget):
         # ne sait pas encore trancher — à commencer par la latence de la main.
         self.isolee = None
         self.cases = []                  # rectangles des six cases, pour le clic
+
+        # LE STEM PLAYER. « Tu vois le stem player de Kanye West ? »
+        #
+        # Six pistes, six niveaux qu'on bouge pendant que ça tourne. Et le point qu'il
+        # fallait comprendre : cet appareil ne sépare rien en temps réel, il A les stems et
+        # ne fait que les mélanger. Ici pareil — l'extraction tourne une fois en fond
+        # (`stems.py`), et la fenêtre ne fait plus que doser.
+        #
+        # Tant que les six pistes ne sont pas prêtes, on joue le morceau entier : l'attente
+        # est masquée par la musique au lieu d'être un écran qui ne fait rien.
+        self.lecteur = None
+        self.gains = [1.0] * 6
+        self.fader = None                # (rang, en train de tirer)
+        self.solo = False                # la source choisie s'entend-elle SEULE
+        self.stems = None                # les six chemins, quand ils existent
+        self.etat_stems = ""
+        self.morceau_wav = os.environ.get("EMOTION_MORCEAU", "")
+        self.cache_stems = os.environ.get("EMOTION_CACHE", "")
+        self.ecart_horloge = 0.0
         self.marques = []                # (source, geste, debut, fin)
         self.tenue = None                # (source, instant d'enfoncement)
         self.journal = []               # ce que le moteur publiait, image par image
@@ -442,7 +475,20 @@ class Mur(QWidget):
         self.minuterie.timeout.connect(self.battre)
         self.minuterie.start(16)          # environ soixante images par seconde
 
+        if self.morceau_wav and os.path.exists(self.morceau_wav):
+            self._ouvrir_lecteur([self.morceau_wav], 0.0)   # le calage le remettra en place
+            self.etat_stems = "extraction des six pistes…"
+            threading.Thread(target=self._preparer_stems, daemon=True).start()
+
     def battre(self):
+        # LES SIX PISTES PRENNENT LA PLACE DU MORCEAU, A LA MEME SECONDE.
+        if self.stems is not None:
+            pistes, self.stems = self.stems, None
+            # ON REPART DE L'HORLOGE DU MOTEUR, pas de celle du lecteur qu'on remplace : le
+            # chargement des six pistes prend une seconde, et cette seconde-la manquerait.
+            ou = self.paquet.temps / 1000.0 if self.paquet else 0.0
+            self._ouvrir_lecteur(pistes, ou)
+
         maintenant = time.monotonic() * 1000.0
         dt_ms = max(1.0, min(100.0, maintenant - self.horodatage))
         self.horodatage = maintenant
@@ -457,6 +503,15 @@ class Mur(QWidget):
                 self.derniere_sequence = p.sequence
                 self.entre_images.pousser(p, maintenant)
                 self.journaliser(p)
+
+                # LE SON SE CALE SUR L'HORLOGE DU MOTEUR, deux fois par seconde. Les deux
+                # avancent sur le meme quartz, donc l'ecart reste nul en pratique — mais le
+                # moteur peut prendre du retard s'il est charge, et l'on a deja mesure des
+                # trous de deux cents millisecondes. Le lecteur ne saute que si l'ecart
+                # s'entend ; corriger en continu chuinterait pour rattraper ce que personne
+                # ne remarque.
+                if self.lecteur is not None and p.sequence % 24 == 0:
+                    self.ecart_horloge = self.lecteur.caler(p.temps / 1000.0)
 
                 # L'HORLOGE SE CALE SUR LA GRILLE DU MOTEUR, PLUS SUR LES FRAPPES.
                 #
@@ -604,15 +659,32 @@ class Mur(QWidget):
         change de hauteur.
         """
         d.setPen(GRIS_CADRE)
+        if self.etat_stems:
+            d.setPen(VERT_SOURD)
+            d.drawText(x, h - 46, f"le morceau entier joue — {self.etat_stems}")
+            d.setPen(GRIS_CADRE)
+        elif self.lecteur is not None and len(self.lecteur.pistes) >= 6:
+            # LE RETARD DE LA CHAINE AUDIO SE DIT. Il est mesure, pas suppose — et un
+            # lecteur qui se cale en silence cacherait justement ce qu'on cherche a voir.
+            d.setPen(GRIS_CADRE)
+            etat = ("six pistes  ·  son en retard de "
+                    f"{self.lecteur.retard_ms:.0f} ms, mesure et rattrape"
+                    if self.lecteur.retard_mesure else
+                    "six pistes  ·  mesure du retard de la chaine audio…")
+            d.drawText(x, h - 46, f"{etat}   ·   ecart courant {1000*self.ecart_horloge:+.0f} ms")
         if self.isolee is None:
             d.drawText(x, h - 26,
-                       "clic ou 1-6 : isoler une source   ·   "
-                       "espace : marquer ce que tu entends   ·   Q : enregistrer et fermer")
+                       "clic dans une case ou 1-6 : choisir une source   ·   "
+                       "bord droit : doser   ·   Q : enregistrer et fermer")
+        elif self.solo:
+            d.drawText(x, h - 26,
+                       f"source {self.isolee + 1} SEULE   ·   reclique pour remettre tout "
+                       "le morceau et marquer dedans   ·   echap : relacher")
         else:
             d.drawText(x, h - 26,
-                       f"source {self.isolee + 1} isolee   ·   "
+                       f"source {self.isolee + 1} choisie, tout le morceau s'entend   ·   "
                        "espace : maintenir = presence, taper = instants   ·   "
-                       "retour arriere : defaire   ·   Q : enregistrer et fermer")
+                       "retour arriere : defaire")
 
     def bandeau(self, d, p, x, y, largeur):
         d.setPen(GRIS_CLAIR)
@@ -783,13 +855,14 @@ class Mur(QWidget):
             # coute un debordement — on la mesure, comme partout ailleurs.
             d.setPen(GRIS_CADRE if eteinte else (GRIS_CLAIR if vif else GRIS_CADRE))
             large = QFontMetricsF(self.mono).horizontalAdvance(verdict)
-            d.drawText(int(cx + larg - 8 - large), int(cy) + 16, verdict)
+            d.drawText(int(cx + larg - FADER_LARGE - 10 - large), int(cy) + 16, verdict)
 
             # LA TAILLE SE DONNE EN PIXELS, PAS EN POINTS. setPointSizeF prend des
             # points ; a 96 points par pouce un point vaut 1,33 pixel, donc une taille
             # calculee en pixels et passee la sortait un tiers trop grande — et chaque
             # ligne debordait d'autant. C'est ce qui faisait se chevaucher les cases.
-            provisoire = formes.Grille(cx, cy, larg, haut, lignes=9)
+            utile = larg - FADER_LARGE - 8
+            provisoire = formes.Grille(cx, cy, utile, haut, lignes=9)
             police = QFont(self.mono)
             police.setPixelSize(max(6, int(provisoire.taille)))
 
@@ -797,7 +870,7 @@ class Mur(QWidget):
             # avec elle. Mesurer plutot que supposer : c'est la seule chose qui empeche une
             # ligne de sortir de sa case.
             avance = QFontMetricsF(police).horizontalAdvance("M")
-            g = formes.Grille(cx, cy, larg, haut, lignes=9, avance=avance)
+            g = formes.Grille(cx, cy, utile, haut, lignes=9, avance=avance)
             # UNE SOURCE ABSENTE SE DESSINE EN CREUX, A SA PLACE.
             #
             # Elle ne joue plus, donc son niveau est nul et la forme s'effondrerait à rien.
@@ -817,7 +890,7 @@ class Mur(QWidget):
             # le decoupage garantit : ce qui depasse n'est pas dessine, quelle qu'en soit la
             # cause. Le renderer web a mis trois tentatives a l'admettre.
             d.save()
-            d.setClipRect(int(cx) + 1, int(cy) + 1, int(larg) - 2, haut - 2)
+            d.setClipRect(int(cx) + 1, int(cy) + 1, int(utile) - 2, haut - 2)
             d.setFont(police)
             teinte = QColor(GRIS_CADRE if absente else VERT)
             alpha = min(1.0, (0.35 + force * 0.45) if absente
@@ -828,7 +901,31 @@ class Mur(QWidget):
                 d.drawText(int(g.x0), int(g.y0 + (i + 1) * g.ch), ligne)
             d.restore()
             d.setFont(self.mono)
+
+            self.dessiner_fader(d, r, cx, cy, larg, haut)
         return y + rangs * (haut + 12)
+
+    def dessiner_fader(self, d, r, cx, cy, larg, haut):
+        """Le niveau de la piste, sur le bord droit de sa case.
+
+        IL SE DESSINE MEME QUAND LES PISTES N'EXISTENT PAS ENCORE, en gris. Un contrôle qui
+        apparaît en cours de route se cherche ; un contrôle éteint qui s'allume se comprend.
+        """
+        fx, fy, fl, fh = self._fader_rect(cx, cy, larg, haut)
+        pret = self.lecteur is not None and len(self.lecteur.pistes) >= 6
+        v = self.gains[r]
+
+        d.setPen(QPen(QColor(34, 36, 38), 1))
+        d.drawRect(int(fx), int(fy), fl, int(fh))
+        if v > 0.002:
+            h = int(fh * v)
+            teinte = QColor(VERT if pret else GRIS_CADRE)
+            teinte.setAlphaF(0.75 if pret else 0.35)
+            d.fillRect(int(fx) + 1, int(fy + fh - h), fl - 1, h, teinte)
+        # LA POIGNEE, parce qu'un remplissage a zero ne se distingue pas d'un fader absent.
+        d.setPen(QPen(GRIS_CLAIR if pret else GRIS_CADRE, 1))
+        py = int(fy + fh - fh * v)
+        d.drawLine(int(fx) - 2, py, int(fx) + fl + 1, py)
 
     def _case(self, d, x, y, larg, haut, titre, lignes, teinte, alpha):
         """Une case : son cadre, son nom, et son dessin decoupe a l'interieur.
@@ -1027,6 +1124,74 @@ class Mur(QWidget):
         g.setColorAt(1.0, bord)
         d.fillRect(int(x - w * 0.10), 0, int(w * 0.20), h, g)
 
+    # ------------------------------------------------------------------ le son
+    def _ouvrir_lecteur(self, chemins, position):
+        """Ouvre (ou remplace) le lecteur, en gardant la place où l'on en était."""
+        try:
+            ancien, self.lecteur = self.lecteur, lecteur.Lecteur(chemins)
+        except (OSError, ValueError, wave.Error) as e:
+            self.etat_stems = f"lecture impossible : {e}"
+            return
+        if ancien is not None:
+            ancien.arreter()
+        for r, g in enumerate(self.gains[:len(chemins)]):
+            self.lecteur.gain(r, g)
+        self.lecteur.demarrer(position)
+
+    def _preparer_stems(self):
+        """Extrait les six pistes DANS UN AUTRE PROCESSUS, avec les profils de cette session.
+
+        POURQUOI UN PROCESSUS ET NON UN SIMPLE FIL. La premiere version tournait dans un fil
+        de cette fenetre : mesure, l'extraction passait de dix-sept secondes en ligne de
+        commande a **quatre-vingt-dix-huit** ici. La separation est du calcul Python par
+        blocs — numpy ne rend le verrou global que par a-coups — et elle se disputait le
+        verrou avec la boucle de dessin, soixante fois par seconde.
+
+        Un processus separe n'a pas ce verrou a partager. Il isole aussi ses pannes : si
+        l'extraction meurt, la fenetre continue de montrer le moteur.
+        """
+        base = os.path.splitext(os.path.basename(self.morceau_wav))[0]
+        attendus = [os.path.join(self.cache_stems, f"{base}-{i + 1}.wav") for i in range(6)]
+        ici = os.path.dirname(os.path.abspath(__file__))
+        try:
+            p = subprocess.Popen(
+                [sys.executable, os.path.join(ici, "stems.py"),
+                 self.morceau_wav, self.cache_stems],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        except OSError as e:
+            self.etat_stems = f"extraction impossible : {e}"
+            return
+
+        dernier = ""
+        for ligne in p.stdout:
+            dernier = ligne.strip()
+            if dernier:
+                # A L'ECRAN ET DANS LE LOG. Ce fil-ci a deja echoue en silence une fois : la
+                # fenetre affichait « extraction… » pendant qu'il n'y avait plus personne, et
+                # rien nulle part ne disait pourquoi.
+                self.etat_stems = dernier
+                print(f"stems : {dernier}", flush=True)
+        p.wait()
+
+        if p.returncode == 0 and all(os.path.exists(c) for c in attendus):
+            # ON NE BASCULE PAS ICI. Remplacer le lecteur depuis ce fil-ci pendant que le
+            # fil de dessin le lit produirait exactement la course qu'on a deja payee dans
+            # l'anneau — et une deuxieme fois dans ce lecteur le meme jour.
+            self.stems = attendus
+            self.etat_stems = ""
+        else:
+            self.etat_stems = dernier or "pas de pistes : le moteur n'a rien appris"
+
+    def _fader_rect(self, cx, cy, larg, haut):
+        """La bande où l'on attrape le niveau, sur le bord droit de la case."""
+        return (cx + larg - FADER_LARGE - 4, cy + 22, FADER_LARGE, haut - 30)
+
+    def _regler_fader(self, rang, y, cy, hauteur):
+        v = 1.0 - (y - cy) / max(1.0, hauteur)
+        self.gains[rang] = max(0.0, min(1.0, v))
+        if self.lecteur is not None:
+            self.lecteur.gain(rang, self.gains[rang])
+
     # ------------------------------------------------------------------ annoter
     def journaliser(self, p):
         """Ce que le moteur publiait, image d'analyse par image d'analyse.
@@ -1064,11 +1229,59 @@ class Mur(QWidget):
         return self.paquet.temps / 1000.0 if self.paquet else 0.0
 
     def isoler(self, r):
-        """Choisir une source, ou revenir a la vue d'ensemble en la rechoisissant."""
-        avant = self.isolee
-        self.isolee = None if self.isolee == r else r
-        if self.isolee != avant:
+        """Choisir la source qu'on annote, et basculer entre « elle seule » et « tout ».
+
+        DEUX GESTES DANS UNE TOUCHE, ET C'EST L'USAGE QUI L'IMPOSE.
+
+        > « Si je sélectionne la source piano je veux entendre QUE le piano, et là je peux
+        >   juger déjà visuellement. »
+        > « Avec la touche espace j'indique à quel rythme et quand j'entends la source
+        >   QUAND LA MUSIQUE ENTIÈRE PASSE. »
+
+        Ce sont deux moments d'un même travail : on isole pour reconnaître ce que la source
+        contient, puis on remet le morceau pour marquer où cet instrument tombe dedans.
+        Repérer une note de piano dans un mélange est justement ce que l'oreille sait faire
+        et qu'aucune de nos mesures ne sait faire.
+
+        Une première version coupait le son des cinq autres dès la sélection, et rendait le
+        second geste impossible : on ne peut pas taper au rythme d'un morceau qu'on n'entend
+        plus. Le choix de la source et le solo sont donc séparés.
+
+          premier appel sur une case   elle est choisie, et elle seule s'entend
+          deuxième appel sur la même   tout s'entend a nouveau, elle RESTE choisie
+          Echap                        plus rien n'est choisi
+        """
+        if self.isolee != r:
+            self.isolee = r
             self.tenue = None
+            self.solo = True
+        else:
+            # ON NE DESELECTIONNE PAS ICI. C'est le retour au melange, la case garde son
+            # cadre et l'espace continue de la marquer.
+            self.solo = not self.solo
+        self._appliquer_gains()
+
+    def relacher(self):
+        """Plus aucune source choisie, et tout s'entend."""
+        self.isolee = None
+        self.solo = False
+        self.tenue = None
+        self._appliquer_gains()
+
+    def _appliquer_gains(self):
+        """Le son suit l'etat : solo d'une source, ou melange complet."""
+        if self.solo and self.isolee is not None:
+            self.gains = [1.0 if i == self.isolee else 0.0 for i in range(6)]
+        else:
+            self.gains = [1.0] * 6
+        if self.lecteur is None:
+            return
+        if len(self.lecteur.pistes) < 6:
+            # Une seule piste : le morceau entier. Rien a soloer encore, et le couper
+            # laisserait le silence pendant l'extraction.
+            self.lecteur.tous(1.0)
+        else:
+            self.lecteur.solo(self.isolee if self.solo else None)
 
     def marquer(self, appuye):
         """Espace enfonce, espace relache. On garde LES DEUX, toujours.
@@ -1119,11 +1332,34 @@ class Mur(QWidget):
     def mousePressEvent(self, e):
         pos = e.position() if hasattr(e, "position") else e.pos()
         for r, (cx, cy, larg, haut) in enumerate(self.cases):
-            if cx <= pos.x() <= cx + larg and cy <= pos.y() <= cy + haut:
+            if not (cx <= pos.x() <= cx + larg and cy <= pos.y() <= cy + haut):
+                continue
+            fx, fy, fl, fh = self._fader_rect(cx, cy, larg, haut)
+            # LE FADER D'ABORD, LA CASE ENSUITE. Deux gestes dans le meme rectangle : tirer
+            # le niveau sur la bande de droite, isoler en cliquant n'importe ou ailleurs.
+            # La bande est etroite, donc on l'attrape un peu plus large que ce qu'on dessine
+            # — viser huit pixels a la souris pendant qu'on ecoute est une corvee.
+            if pos.x() >= fx - 6:
+                self.fader = r
+                self._regler_fader(r, pos.y(), fy, fh)
+            else:
                 self.isoler(r)
-                return
+            return
+
+    def mouseMoveEvent(self, e):
+        if self.fader is None:
+            return
+        pos = e.position() if hasattr(e, "position") else e.pos()
+        cx, cy, larg, haut = self.cases[self.fader]
+        _, fy, _, fh = self._fader_rect(cx, cy, larg, haut)
+        self._regler_fader(self.fader, pos.y(), fy, fh)
+
+    def mouseReleaseEvent(self, _):
+        self.fader = None
 
     def closeEvent(self, e):
+        if self.lecteur is not None:
+            self.lecteur.arreter()
         self.enregistrer()
         e.accept()
 
@@ -1141,8 +1377,10 @@ class Mur(QWidget):
         soiree de mesures. Le reglage appartient donc a ce qui affiche, et a lui seul —
         c'est la seule piece de la chaine qui puisse reellement l'appliquer.
         """
-        if e.key() in (Qt.Key.Key_Q, Qt.Key.Key_Escape):
+        if e.key() == Qt.Key.Key_Q:
             self.close()
+        elif e.key() == Qt.Key.Key_Escape:
+            self.relacher()
         elif e.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
             self.avance_ms = min(200.0, self.avance_ms + 5.0)
         elif e.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):

@@ -699,6 +699,9 @@ public sealed class SpectrumAnalyzer
     /// <summary>Les sources separees par le timbre, du grave a l'aigu.</summary>
     public SourceSeparator Separation => _separation;
 
+    /// <summary>Le taux d'echantillonnage sur lequel tout ceci est calcule.</summary>
+    public int Taux => _sampleRate;
+
     /// <summary>La courbe d'autocorrelation du tempo, pour le reglage.</summary>
     public IEnumerable<(float Bpm, float Raw, float Score)> TempoPeaks(int take = 6) =>
         _tempo.Peaks(take);

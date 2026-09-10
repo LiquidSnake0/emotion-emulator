@@ -6,11 +6,14 @@
 #   ./outils/voir.sh passepartout une piste par un bout de son titre
 #   ./outils/voir.sh --direct     rien ne se joue, le moteur ecoute ce que tu joues toi
 #
-# LE SON SORT DES ENCEINTES, ET C'EST LE POINT. Le mode « fichier » du moteur analyse un WAV
-# sans rien jouer : on regardait un ecran bouger sans rien entendre, donc sans pouvoir
-# marquer quoi que ce soit a l'oreille. Ici le morceau passe par la carte son et le moteur
-# ecoute cette meme sortie — c'est le chemin du direct, et il n'y a aucune horloge en trop
-# entre ce qu'on entend et ce qu'on voit.
+# UN STEM PLAYER, ET C'EST LUI QUI JOUE. « Tu vois le stem player de Kanye West ? » Six
+# pistes, six niveaux qu'on bouge pendant que ca tourne. Le moteur ANALYSE le morceau entier
+# depuis le fichier ; la fenetre, elle, JOUE ce qu'on lui demande — le morceau au debut, puis
+# les six sources des qu'elles sont extraites.
+#
+# Le moteur ne peut donc plus ecouter la carte son : elle ne porte plus le morceau mais le
+# melange qu'on est en train de tripoter. Il lit le fichier, ce qui est de toute facon le
+# seul moyen d'analyser le morceau ENTIER pendant qu'on n'en ecoute qu'un sixieme.
 #
 # LA FICHE VIENT DU CRATE, qui est la base du bac et la premiere source d'information du
 # systeme. Sans elle le moteur cherche son tempo dans le vide : 43 % de justesse au lieu de
@@ -89,22 +92,30 @@ else
   echo "moteur — il ecoute $(pactl get-default-sink).monitor, joue ce que tu veux"
 fi
 
-Signal__Bpm="$BPM" ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+CACHE="${EMOTION_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/emotion-emulator}"
+mkdir -p "$CACHE"
+
+if [[ -n "$PISTE" ]]; then
+  # UN SEUL DECODAGE, ET TOUT LE MONDE PART DE LA. Le moteur ne lit que du RIFF — il refuse
+  # l'AIFF du bac — et les six pistes doivent etre taillees sur exactement le meme signal
+  # que celui qu'il analyse. Un WAV mono 48 kHz, mis en cache, sert donc aux deux.
+  WAV="$CACHE/$(echo "$TITRE" | tr -c '[:alnum:]._-' '_').wav"
+  if [[ ! -f "$WAV" ]]; then
+    echo "decodage — une fois, puis c'est en cache"
+    ffmpeg -v error -y -i "$PISTE" -ac 1 -ar 48000 "$WAV" || exit 1
+  fi
+  export EMOTION_MORCEAU="$WAV" EMOTION_CACHE="$CACHE/stems"
+  ./run.sh fichier "$WAV" "$BPM" > /tmp/emotion-moteur.log 2>&1 &
+else
+  Signal__Bpm="$BPM" ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+fi
 MOTEUR=$!
-LECTURE=""
-trap 'kill $MOTEUR $LECTURE 2>/dev/null; kill 0 2>/dev/null' EXIT INT TERM
+trap 'kill $MOTEUR 2>/dev/null; kill 0 2>/dev/null' EXIT INT TERM
 
 for _ in $(seq 1 60); do
   ss -lptnH "sport = :$PORT" 2>/dev/null | grep -q LISTEN && break
   sleep 1
 done
 
-# LE SON PART APRES LE MOTEUR, pas avant : il doit deja ecouter quand la premiere mesure
-# tombe, sans quoi les premieres secondes — celles ou la separation apprend — sont perdues.
-if [[ -n "$PISTE" ]]; then
-  ffplay -nodisp -autoexit -loglevel quiet "$PISTE" &
-  LECTURE=$!
-fi
-
-echo "fenetre — clic ou 1-6 pour isoler une source, espace pour marquer ce que tu entends"
+echo "fenetre — clic dans une case pour isoler, bord droit pour doser, espace pour marquer"
 python3 outils/fenetre.py "$TITRE"

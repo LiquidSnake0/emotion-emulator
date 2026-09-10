@@ -14,6 +14,18 @@ public interface IAudioSource
     string Name { get; }
 
     /// <summary>
+    /// L'analyseur de cette source, quand elle en a un.
+    ///
+    /// Il n'est pas la pour etre pilote : rien ne doit ecrire au travers. Il sert a LIRE ce
+    /// que la session a appris — les six profils spectraux, que l'extraction hors ligne a
+    /// besoin de prendre a CETTE session-ci et non a une autre, les rangs n'etant pas
+    /// stables d'un apprentissage au suivant.
+    ///
+    /// Nul par defaut : une source fabriquee n'analyse rien.
+    /// </summary>
+    SpectrumAnalyzer? Analyzer => null;
+
+    /// <summary>
     /// Emet les images du signal jusqu'a annulation. Un flux tire, pas un evenement :
     /// c'est le consommateur qui cadence, et un renderer lent ne noie pas le hub.
     /// </summary>

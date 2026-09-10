@@ -90,7 +90,7 @@ rester d'accord — c'est tout le contrat.
 `tools/Emotion.Ascii` fait la même chose dans un terminal, en C#, sans dépendance. Les deux
 valident le même contrat depuis deux langages.
 
-## Isoler une source, et marquer ce qu'on entend
+## Le stem player : isoler, doser, et marquer ce qu'on entend
 
 ```sh
 ./outils/voir.sh              # une piste au hasard de l'album, jouee, ecoutee, montree
@@ -100,35 +100,40 @@ valident le même contrat depuis deux langages.
 
 | | |
 |---|---|
-| **clic sur une case, ou 1 à 6** | isole une source — les cinq autres s'éteignent sans disparaître |
+| **clic dans une case, ou 1 à 6** | choisit la source, et elle seule s'entend — pour reconnaître ce qu'elle contient |
+| **le même clic à nouveau** | tout le morceau revient, **la source reste choisie** — pour marquer dedans |
+| **échap** | plus aucune source choisie |
+| **bord droit d'une case** | le fader : on tire le niveau de cette piste |
 | **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
 | **espace tapé** | des instants, à confronter aux frappes et à la grille |
 | **retour arrière** | défaire la dernière marque |
 | **Q** | écrit le rapport et ferme |
 
-**Le son sort des enceintes, et c'était le trou.** Le mode « fichier » du moteur analyse un
-WAV sans rien jouer : on regardait un écran bouger sans rien entendre, donc sans pouvoir
-marquer quoi que ce soit — ce qui vide de son sens tout ce qui suit. Le morceau passe
-maintenant par la carte son et le moteur écoute cette même sortie. Aucune horloge en trop
-entre ce qu'on entend et ce qu'on voit.
+L'idée est du DJ, et elle vient de l'appareil de Kanye West : quatre stems, un fader par
+stem. Le point qu'il fallait comprendre, c'est que **cet appareil ne sépare rien en temps
+réel** — il a les stems et ne fait que les mélanger. Ici pareil : `stems.py` extrait les six
+pistes une fois, `lecteur.py` les dose, la fenêtre les commande.
 
-La piste et sa fiche viennent de l'album et du crate : `EMOTION_ALBUM` et `EMOTION_CRATE`
-changent les deux chemins si besoin. Sans fiche, le moteur cherche son tempo dans le vide —
-43 % de justesse au lieu de 99 — et `voir.sh` le dit à l'écran plutôt que de faire comme si.
+Trois pièces, et chacune ne fait qu'une chose :
 
-C'est la seule mesure du projet qui vienne de l'extérieur du programme. Tout le reste se juge
-contre des grandeurs que le moteur calcule lui-même — un décalage commun au juge et au jugé
-leur est invisible par construction. Une oreille, non.
+| | |
+|---|---|
+| `stems.py` | les six pistes, taillées sur les profils de la session en cours (`/profils`) |
+| `lecteur.py` | six pistes, six niveaux, un mélange poussé vers `pacat` — aucune dépendance nouvelle |
+| `fenetre.py` | les faders, le solo, les marques, et le calage sur l'horloge du moteur |
 
-Le rapport part dans `~/Documents/emotion-sources/rapports/`, et il porte **les deux côtés** :
-les marques, et ce que le moteur publiait au même instant pour la source isolée. Sans le
-second, comparer serait impossible : il faudrait rejouer le morceau pour retrouver ses
-frappes, et l'alignement obtenu serait approximatif — or c'est justement l'alignement qu'on
-mesure. Environ 145 ko par minute.
+**Le moteur analyse le fichier, la fenêtre joue le mélange.** Il ne peut plus écouter la carte
+son puisqu'elle ne porte plus le morceau. C'est de toute façon le seul moyen d'analyser le
+morceau entier pendant qu'on n'en écoute qu'un sixième.
 
-**Aucun verdict n'est calculé à l'écran.** Le trancher en direct obligerait à décider tout de
-suite de la latence de la main, qui n'est pas connue. Elle se lit à l'analyse : si le décalage
-est constant, c'est la main ; s'il part dans tous les sens, c'est le moteur.
+**Les pistes sont refaites à chaque session, et c'est voulu** : deux apprentissages du même
+morceau ne rangent pas les six sources dans le même ordre (mesuré : 1 à 3 rangs sur 6). Un
+cache d'album ferait écouter une source en en jugeant une autre. Vingt-cinq secondes par
+morceau, masquées par le morceau entier qui joue pendant ce temps.
+
+**Le retard de la chaîne audio est mesuré et affiché**, pas supposé — 10 à 60 ms selon la
+machine, retranché une fois, écart résiduel ±9 ms. Un lecteur qui se cale en silence
+cacherait exactement ce qu'on cherche à voir.
 
 ## `fenetre_reference.py` — retirée du flux, gardée pour les mesures
 

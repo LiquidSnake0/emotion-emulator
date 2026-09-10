@@ -1370,48 +1370,94 @@ mesure.
 isolée porte une information qu'on peut nommer. Si elle n'en porte pas — et deux mesures
 laissent craindre que non — la corrélation entre sources n'aura rien à corréler.
 
-### La vérité de l'oreille : une seule fenêtre, et l'on y marque ce qu'on entend
+### Un stem player, et c'est lui qui joue
 
-L'idée est du DJ, et elle vaut mieux que ce qu'on lui demandait — on ne demandait que « où
-est le temps », il propose de dire **quelle source fait quoi, et quand** :
+> « Tu vois le stem player de Kanye West ? »
 
-> « J'isole en cliquant sur la source que je veux, et je regarde si ça suit bien ce qu'il
-> dit. Si ça suit, je le laisse ; sinon je veux pouvoir montrer, à travers la touche espace,
-> moi ce que j'entends. »
+Quatre stems, un fader par stem, on monte, on coupe, on isole pendant que ça tourne. **Et le
+point qu'il fallait comprendre : cet appareil ne sépare rien en temps réel.** Il *a* les
+stems et ne fait que les mélanger. C'est ce qui rend la chose faisable ici — les six sources
+sont extraites une fois, et la fenêtre ne fait plus que doser.
 
 ```sh
-./outils/voir.sh              # une piste au hasard de l'album, jouee et ecoutee
-./outils/voir.sh 5            # la piste 5
-./outils/voir.sh passepartout # par un bout de son titre
+./outils/voir.sh              # une piste au hasard de l'album
+./outils/voir.sh 5            # la piste 5   ·   ./outils/voir.sh passepartout   par le titre
 ./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
 
-**Le son sort des enceintes, et c'était le trou.** Le mode « fichier » du moteur analyse un
-WAV sans rien jouer : on regardait un écran bouger sans rien entendre, donc sans pouvoir
-marquer quoi que ce soit à l'oreille — ce qui vide de son sens tout ce qui suit. Le morceau
-passe maintenant par la carte son et le moteur écoute cette même sortie : c'est le chemin du
-direct, et il n'y a **aucune horloge en trop** entre ce qu'on entend et ce qu'on voit.
-
-**La fiche vient du crate, elle ne se devine pas.** `voir.sh` lit `seed.json`, apparie sur le
-titre et la passe au moteur, qui l'amorce sans s'y verrouiller. Sans elle : 43 % de justesse
-au lieu de 99.
-
 | | |
 |---|---|
-| **clic sur une case, ou 1 à 6** | isole une source — les cinq autres s'éteignent sans disparaître |
+| **clic dans une case, ou 1 à 6** | choisit la source, et elle seule s'entend — pour reconnaître ce qu'elle contient |
+| **le même clic à nouveau** | tout le morceau revient, **la source reste choisie** — pour marquer dedans |
+| **échap** | plus aucune source choisie |
+| **bord droit d'une case** | le fader : on tire le niveau de cette piste |
 | **espace maintenu** | un intervalle de présence, à confronter au niveau et au retrait |
 | **espace tapé** | des instants, à confronter aux frappes et à la grille |
 | **retour arrière** | défaire la dernière marque |
 | **Q** | écrit le rapport et ferme |
 
-**Deux gestes, un seul mécanisme.** On enregistre toujours l'enfoncement *et* le
-relâchement, et c'est l'analyse qui décide de les lire comme un intervalle ou comme un
-instant. Décider à l'enregistrement perdrait ce qu'on ne pourrait plus retrouver — seule la
-durée les sépare, et elle n'est connue qu'après coup.
+**Le moteur analyse le fichier, la fenêtre joue le mélange.** Il ne peut plus écouter la
+carte son : elle ne porte plus le morceau mais ce qu'on est en train de tripoter. C'est de
+toute façon le seul moyen d'analyser le morceau *entier* pendant qu'on n'en écoute qu'un
+sixième.
 
-**Les autres s'éteignent, elles ne disparaissent pas.** Elles gardent leur place et leur
-mouvement, en sourdine : deux sources sur six portent presque le même son, et il faut
-pouvoir vérifier du coin de l'œil qu'une voisine ne fait pas exactement la même chose.
+**L'attente est masquée par la musique.** Le morceau entier joue pendant que la séparation
+apprend puis que l'extraction tourne — une vingtaine de secondes — et les six pistes prennent
+sa place à la seconde où elles sont prêtes.
+
+### Choisir une source et l'isoler sont deux gestes, pas un
+
+C'est l'usage qui l'impose, et une première version l'avait manqué :
+
+> « Si je sélectionne la source piano je veux entendre QUE le piano, et là je peux juger déjà
+> visuellement. »
+> « Avec la touche espace j'indique à quel rythme et quand j'entends la source **quand la
+> musique entière passe**. »
+
+Deux moments d'un même travail : on isole pour **reconnaître** ce que la source contient,
+puis on remet le morceau pour marquer **où cet instrument tombe dedans**. Repérer une note de
+piano dans un mélange est précisément ce que l'oreille sait faire et qu'aucune de nos mesures
+ne sait faire — c'est tout l'intérêt d'avoir une oreille dans la boucle.
+
+La première version coupait le son des cinq autres dès la sélection et rendait le second
+geste impossible : **on ne peut pas taper au rythme d'un morceau qu'on n'entend plus.**
+
+### Trois défauts trouvés en le construisant, tous par la mesure
+
+**1. La position d'écriture n'est pas la position d'écoute.** Première version : on comptait
+les échantillons poussés vers `pacat`. Mesuré, le lecteur avançait **par à-coups de 1,36 s
+puis stagnait**, pour une moyenne juste. `pacat` ne respecte pas la latence qu'on lui demande :
+il avale de gros paquets quand son tampon se vide. Confronté au moteur, cela donnait des
+écarts de 500 à 1800 ms qui n'étaient **pas de la dérive** mais l'avance du tampon. La
+position se calcule donc depuis l'horloge ; l'écriture court devant d'une avance *choisie*.
+
+**2. Le fil de lecture écrasait les calages.** Il prend la position, calcule son bloc, écrit
+la position suivante — et un calage tombé entre les deux était annulé. L'écart restait bloqué
+à +513 ms, soit exactement l'intervalle entre deux calages. C'est la course de l'anneau, à
+l'identique : on vérifie après coup que personne n'a bougé, et l'on jette son bloc sinon.
+
+**3. Le retard de la chaîne audio se mesure, il ne se corrige pas en boucle.** Il vaut 10 à
+60 ms selon la machine et il est **constant** : le traiter comme une dérive faisait sauter le
+lecteur en permanence. On l'estime sur huit calages, on le retranche une fois, et l'écart
+résiduel tombe à ±9 ms. Le premier calage d'un lecteur neuf recale sans mesurer — sans quoi
+la seconde qu'il faut pour charger six pistes en mémoire est prise pour de la latence et
+figée comme telle : mesuré, un « retard » annoncé à 1617 ms.
+
+> **Et l'extraction ne peut pas vivre dans la fenêtre.** Mesuré : dix-sept secondes en ligne
+> de commande, **quatre-vingt-dix-huit** dans un fil de la fenêtre. La séparation est du
+> calcul Python par blocs et se disputait le verrou global avec la boucle de dessin, soixante
+> fois par seconde. Dans un processus séparé : vingt-cinq secondes, et ses pannes n'emportent
+> plus l'écran.
+
+### Les pistes sont taillées sur les profils de CETTE session
+
+C'est la raison d'être de `/profils`, et elle vient d'une mesure de la veille : deux
+apprentissages du même morceau trouvent les mêmes six objets — cosinus 0,77 à 0,91 — mais
+**un à trois rangs sur six seulement sont conservés**. La « source 3 » d'un fichier extrait
+hier n'est pas la case 3 que l'écran montre aujourd'hui.
+
+Extraire l'album à l'avance aurait donc fait écouter une source en en jugeant une autre,
+**sans que rien ne le signale**. On paie vingt-cinq secondes par morceau pour l'éviter.
 
 ### Le rapport contient les deux côtés, et c'est ce qui le rend analysable
 

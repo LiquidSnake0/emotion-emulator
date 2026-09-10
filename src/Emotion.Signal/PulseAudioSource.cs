@@ -22,6 +22,8 @@ public sealed class PulseAudioSource : IAudioSource, ILearnsTracks, IAcceptsCue
 
     private readonly string? _device;
     private readonly SpectrumAnalyzer _analyzer;
+
+    public SpectrumAnalyzer Analyzer => _analyzer;
     private readonly Action<string>? _log;
 
     /// <param name="device">

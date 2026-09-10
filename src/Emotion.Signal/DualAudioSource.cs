@@ -85,6 +85,9 @@ public sealed class DualAudioSource : IAudioSource
     /// moment ou l'on n'a pas le temps.
     /// </summary>
     public IAudioSource Master => _master;
+
+    /// <summary>Celui de la platine qui sort, jamais celui du casque.</summary>
+    public SpectrumAnalyzer? Analyzer => _master.Analyzer;
     public IAudioSource Cue => _cue;
 
     /// <summary>
