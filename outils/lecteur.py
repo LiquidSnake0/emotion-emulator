@@ -55,6 +55,11 @@ LATENCE_MS = 40              # ce qu'on demande a pacat ; il fait ce qu'il veut
 # millisecondes tiennent les deux bouts — c'est aussi l'ordre de grandeur du geste humain.
 AVANCE_S = 0.150
 
+# COMBIEN DE CHEMIN LE GAIN FAIT PAR BLOC, vers la valeur demandee. Un tiers par bloc de
+# vingt et une millisecondes : le fader suit la main en une soixantaine de millisecondes,
+# sans jamais sauter.
+GLISSE = 0.34
+
 # Au-dela de quoi on saute plutot que de laisser courir. LARGE, ET C'EST DELIBERE : la chaine
 # audio a un retard constant — mesure entre 47 et 66 ms sur cette machine — qui n'est pas une
 # derive et qu'un seuil serre ferait « corriger » vingt fois par minute pour rien. On mesure
@@ -86,7 +91,18 @@ class Lecteur:
         self.n = max((len(p) for p in self.pistes), default=0)
         self.duree = self.n / self.taux
 
+        # DEUX JEUX DE GAINS, ET C'EST INDISPENSABLE.
+        #
+        # `gains` est ce qu'on DEMANDE, `_gains` est ce qui SORT. Les faire coïncider
+        # instantanément produisait un saut dans la forme d'onde a chaque clic : un gain qui
+        # passe de zero a un entre deux echantillons est une discontinuite, et une
+        # discontinuite s'entend comme un claquement. Le DJ l'a decrit comme « une distorsion
+        # quand je reclique sur une source ».
+        #
+        # On glisse donc de l'un vers l'autre en quelques millisecondes. C'est ce que fait
+        # n'importe quelle table de mixage, et pour la meme raison.
         self.gains = np.ones(len(self.pistes), np.float32)
+        self._gains = np.ones(len(self.pistes), np.float32)
         self._origine = 0.0               # position du morceau, en secondes, au temps _t0
         self._t0 = 0.0                    # instant monotone correspondant
         self._ecrit = 0                   # echantillons deja pousses, en absolu
@@ -162,7 +178,7 @@ class Lecteur:
             with self._verrou:
                 debut = self._ecrit
                 saut = self._saut
-                gains = self.gains.copy()
+                vises = self.gains.copy()
                 retard = self._cible() - debut
 
             # ON N'ECRIT QUE CE QUE L'HORLOGE RECLAME. Sans cette attente, on remplirait le
@@ -175,10 +191,19 @@ class Lecteur:
             n = max(1, self.n)
             i = debut % n
             melange = np.zeros(BLOC, np.float32)
-            for g, piste in zip(gains, self.pistes):
-                if g <= 0.0004 or i >= len(piste):
+
+            # LA RAMPE COUVRE LE BLOC ENTIER. Vingt et une millisecondes de glissement : assez
+            # pour qu'aucune discontinuite ne subsiste, assez peu pour que le geste reste vif.
+            depart = self._gains.copy()
+            self._gains = depart + (vises - depart) * GLISSE
+            rampe = np.linspace(0.0, 1.0, BLOC, dtype=np.float32)
+
+            for k, piste in enumerate(self.pistes):
+                a, b = float(depart[k]), float(self._gains[k])
+                if max(a, b) <= 0.0004 or i >= len(piste):
                     continue
                 bout = piste[i:min(i + BLOC, len(piste))]
+                g = a + (b - a) * rampe[:len(bout)]
                 melange[:len(bout)] += g * bout
 
             # LA SOMME DES SIX EST LE MORCEAU, mesure entre 64 et 97 dB : a gains pleins on

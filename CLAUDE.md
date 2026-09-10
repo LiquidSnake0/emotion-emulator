@@ -1773,6 +1773,69 @@ Et **70 % de l'énergie des six sources vit sous 150 Hz**, sur tout l'album.
 retenir n'aurait rien réglé : *Lost Cultures* a un rang de 4,79 et souffre du même mal. Ce
 qu'il faut mesurer, c'est la part de ce qui frappe.
 
+### Égaliser le spectre avant de factoriser : mesuré, et ça échoue aussi
+
+Le raisonnement tenait : la factorisation est pilotée par l'énergie, 70 % de l'énergie est
+sous 150 Hz, donc elle y dépense ses composantes. En égalisant chaque raie par sa moyenne
+longue (`Signal__Blanchiment`, de 0 à 1), le médium devrait peser autant que le grave.
+
+**Critère fixé avant la mesure : la part de ce qui frappe doit dépasser 5 %, contre 0,4 %.**
+
+| égalisation | rang médian | ce qui frappe |
+|---|---|---|
+| aucune | 2,04 | **0,4 %** |
+| β = 0,25 | 1,54 | 0,5 % |
+| β = 0,5 | 2,63 | **0,9 %** |
+| β = 0,75 | 1,72 | 0,5 % |
+| β = 1,0 | 1,27 | 0,1 % |
+
+Le meilleur point est cinq fois sous le seuil. **Abandonnée**, sans second réglage.
+
+> **Et elle a réfuté le diagnostic qui l'avait motivée**, ce qui vaut plus que le réglage :
+>
+> ```
+> sans égalisation   05 : 38,9 · 1,2 · 2,1 · 0,3 · 0,9 · 56,5 %
+> β = 0,5            05 :  0,7 · 5,4 · 92,7 · 0,9 · 0,2 ·  0,2 %
+> β = 0,75           05 : 99,3 · 0,1 · 0,6 · 0,0 · 0,0 ·  0,0 %
+> ```
+>
+> **La concentration ne disparaît jamais, elle change de case.** Le grave n'était donc pas la
+> cause : une source prend tout quel que soit l'endroit où on met l'énergie. Le défaut est
+> dans la factorisation elle-même sur cette matière, pas dans la couleur du répertoire.
+
+Le code reste, coupé par défaut — comme HPSS, et pour la même raison : sur un autre
+répertoire le calcul pourrait s'inverser. **Le masque d'extraction n'en dépend pas** : un gain
+diagonal se simplifie dans le rapport `W_s·h_s / Σ W_j·h_j`, raie par raie, donc les six WAV
+restent exacts quelle que soit l'égalisation.
+
+### Le kick creuse les autres sources, et c'est structurel
+
+> « Ils sont tous affectés par le kick, ce qui fait que le kick est rendu muet mais le son de
+>   la source aussi au moment où le kick arrive. »
+
+Mesuré au moment des 320 frappes détectées, niveau pendant rapporté au niveau juste avant :
+
+| | source 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Dead Internet | 1,46 | 1,15 | 0,97 | **0,43** | 1,66 | 0,85 |
+| Passepartout | 1,29 | **0,58** | 1,25 | 1,49 | **0,51** | 1,33 |
+
+Des sources tombent de moitié à l'instant précis où le kick frappe. **Ce n'est pas un défaut,
+c'est la définition du masque doux** : les six masques somment à 1 sur chaque raie, donc une
+source qui monte *prend* la part des autres. Elles ne se taisent pas, on la leur retire.
+
+C'est le prix de la garantie « somme des six = le morceau ». Des masques indépendants —
+chacun prenant ce qui lui ressemble sans contrainte de somme — supprimeraient le creusement
+et perdraient l'exactitude. Le choix n'est pas tranché.
+
+### Le fader qui claquait
+
+Les gains passaient de zéro à un entre deux blocs. **Saut mesuré entre deux échantillons
+consécutifs : 9373 unités, contre 288 avec une rampe** — soit un facteur trente-trois. Une
+discontinuité s'entend comme un claquement, et c'est ce que le DJ décrivait comme « une
+distorsion quand je reclique sur une source ». Le gain glisse maintenant vers sa valeur en une
+soixantaine de millisecondes, comme sur n'importe quelle table.
+
 ### Séparer harmonie et percussion d'abord : mesuré, et ça échoue
 
 La piste était la sienne et elle épousait ce qu'il entend. Elle a été mesurée avant d'être

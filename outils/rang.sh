@@ -23,6 +23,12 @@ CACHE="${EMOTION_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/emotion-emulator}"
 CRATE="${EMOTION_CRATE:-$HOME/Documents/crate/src/data/seed.json}"
 PORT=5099
 
+# UN DOSSIER PAR REGLAGE. Sans cela, la mesure « avec egalisation » relirait les pistes
+# extraites « sans », le cache la trouvant deja faite — et les deux colonnes du tableau
+# seraient la meme.
+STEMS="$CACHE/stems${Signal__Blanchiment:+-b$Signal__Blanchiment}"
+mkdir -p "$STEMS"
+
 libere() {
   for pid in $(ss -lptnH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
     kill "$pid" 2>/dev/null
@@ -64,7 +70,7 @@ dotnet build -c Release src/Emotion.Server > /dev/null 2>&1 || { echo "compilati
 for w in "${CIBLES[@]}"; do
   base=$(basename "$w" .wav)
   bpm=$(fiche "$w")
-  if compgen -G "$CACHE/stems/$base-6.wav" > /dev/null; then
+  if compgen -G "$STEMS/$base-6.wav" > /dev/null; then
     echo "── $base   pistes deja extraites"
     continue
   fi
@@ -79,7 +85,10 @@ for w in "${CIBLES[@]}"; do
   #
   # ET LA SORTIE NE VA PLUS DANS /dev/null. C'est elle qui aurait dit « command not found »
   # des le premier morceau ; la jeter a coute une mesure entiere lancee dans le vide.
+  # `Signal__Blanchiment` traverse jusqu'au separateur : c'est ce qui permet de rejouer la
+  # meme mesure avec et sans egalisation, sur les memes morceaux, comparable ligne a ligne.
   env Signal__Source=fichier Signal__Device="$w" ${bpm:+Signal__Bpm="$bpm"} \
+    ${Signal__Blanchiment:+Signal__Blanchiment="$Signal__Blanchiment"} \
     dotnet run -c Release --no-build --project src/Emotion.Server > "$CACHE/moteur-$base.log" 2>&1 &
   ouvert=""
   for _ in $(seq 1 60); do
@@ -90,9 +99,9 @@ for w in "${CIBLES[@]}"; do
     echo "   le moteur n'a pas demarre : $(tail -2 "$CACHE/moteur-$base.log" | head -1)"
     continue
   fi
-  python3 outils/stems.py "$w" "$CACHE/stems" 2>&1 | sed 's/^/   /'
+  python3 outils/stems.py "$w" "$STEMS" 2>&1 | sed 's/^/   /'
   libere
 done
 
 echo
-python3 outils/rang.py "$CACHE/stems"
+python3 outils/rang.py "$STEMS"
