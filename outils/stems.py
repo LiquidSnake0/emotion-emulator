@@ -104,6 +104,11 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
         with open(marque, encoding="utf-8") as fh:
             if fh.read() == signature:
                 dire("pistes deja en cache")
+                # ET L'ON COMPARE QUAND MEME. Ce retour anticipe sautait la comparaison :
+                # des la seconde ouverture d'un morceau, le verdict du juge n'etait plus
+                # calcule, et la fenetre lisait un fichier que personne n'ecrivait. Le cache
+                # porte sur les PISTES, pas sur ce qu'on en conclut.
+                comparer(chemin_morceau, dossier, sorties, dire=dire)
                 return sorties
 
     wprof = np.array(p["profils"], np.float64).T
@@ -130,7 +135,43 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
         fh.write(signature)
 
     dire(f"six pistes en {time.time() - depart:.0f} s")
+    comparer(chemin_morceau, dossier, sorties, dire=dire)
     return sorties
+
+
+def comparer(chemin_morceau, dossier, sorties, dire=print):
+    """Confronte les six sources au juge exterieur, si celui-ci a deja tourne.
+
+    C'EST ICI QUE LA COMPARAISON DOIT SE FAIRE, ET NULLE PART AILLEURS. Le pre-calcul
+    (`preparer.sh`) produit les quatre pistes nommees mais ne peut pas comparer : les six
+    sources du moteur n'existent pas encore, puisqu'elles dependent des profils de LA SESSION
+    qui les ecoutera. Le seul moment ou les deux cotes sont la est celui-ci, juste apres
+    l'extraction — et l'on est deja dans un processus separe, donc le calcul ne dispute le
+    verrou global a personne.
+
+    Sans cet appel, la fenetre lisait un fichier que personne n'ecrivait : le verdict du juge
+    n'apparaissait jamais, sans que rien ne le signale. C'est le genre de trou qui ne se voit
+    qu'en lancant la commande.
+    """
+    base = os.path.splitext(os.path.basename(chemin_morceau))[0]
+    refs = {p: os.path.join(dossier, "reference", f"{base}-ref-{p}.wav")
+            for p in ("drums", "bass", "vocals", "other")}
+    if not all(os.path.exists(c) for c in refs.values()):
+        return None
+    try:
+        import reference
+    except ImportError:
+        return None
+    dire("comparaison au juge exterieur…")
+    try:
+        verdict = reference.correspondances(sorties, refs, dire=dire)
+    except Exception as e:                       # noqa: BLE001 — un juge absent n'arrete rien
+        dire(f"comparaison impossible : {e}")
+        return None
+    with open(os.path.join(dossier, f"{base}.correspondances.json"), "w",
+              encoding="utf-8") as fh:
+        json.dump({"morceau": base, "correspondances": verdict}, fh, ensure_ascii=False)
+    return verdict
 
 
 def toutes(chemin_morceau, dossier, url=MOTEUR, dire=print):

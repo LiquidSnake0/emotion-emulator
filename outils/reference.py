@@ -128,15 +128,27 @@ def correspondances(sources, references, dire=print):
     UNE CORRELATION SIMPLE NE MARCHE PAS ICI, ET LA MESURE L'A MONTRE TOUT DE SUITE.
 
     Premier essai : pour chaque source, le stem le mieux correle. Verdict rendu : « source 1
-    basse, source 6 basse » — alors que la source 6 est la plus AIGUE du lot. Le diagnostic a
-    pris deux minutes : sur ce repertoire, Demucs met **74 % du morceau dans `bass`**, avec un
-    centre de gravite a 452 Hz. Ce n'est pas une basse, c'est presque tout. Correler a `bass`
-    revenait donc a demander « cette source ressemble-t-elle au morceau », a quoi la reponse
-    est oui pour les six.
+    basse, source 6 basse » — alors que la source 6 est la plus AIGUE du lot.
 
-    (Le juge n'est pas casse pour autant : sur `etalon-kick.wav`, des grosses caisses seules,
-    il met 99,9 % dans `drums`. C'est le barber beats qui le deroute — un sample de soul
-    ralenti et filtre ne ressemble a rien de son entrainement.)
+    LA CAUSE N'EST PAS CELLE QU'ON A CRU D'ABORD, et le premier diagnostic etait faux. On
+    avait conclu que « `bass` n'est pas une basse » sur la foi d'un centre de gravite a
+    452 Hz. C'etait NOTRE mesure qui se trompait : un centre pondere par l'amplitude est tire
+    vers le haut par le souffle des aigus. La repartition d'ENERGIE dit l'inverse —
+
+        bass    99,6 % sous 150 Hz      other    63,6 % entre 500 et 2000
+        drums   78,6 % sous 150 Hz      vocals   96,9 % entre 500 et 2000
+
+    — et sur `etalon-kick.wav`, des grosses caisses seules, Demucs met 99,9 % dans `drums`.
+    **Il separe proprement ce repertoire, et ses noms tiennent.**
+
+    La vraie cause est ailleurs : **76,8 % de l'energie de ce morceau est sous 150 Hz.** Une
+    comparaison en energie demande donc surtout « cette source contient-elle du grave », et le
+    grave ecrase tout le reste. Le resultat penche vers `bass` par construction.
+
+    CE BIAIS EST CONNU ET NON CORRIGE. Une comparaison bande par bande le leverait ; ecrite
+    une premiere fois, elle demandait un gigaoctet et demi de memoire et s'est fait tuer. Elle
+    reste a faire. En attendant, **les verdicts de sources graves sont a lire avec cette
+    reserve** — et c'est ecrit ici plutot que tu decouvert plus tard.
 
     ON REGRESSE DONC AU LIEU DE CORRELER. On cherche les coefficients qui reconstruisent au
     mieux la source a partir des quatre pistes, et l'on regarde ce que chacune apporte. Un
