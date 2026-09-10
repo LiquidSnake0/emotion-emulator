@@ -107,7 +107,14 @@ if [[ -n "$PISTE" ]]; then
   export EMOTION_MORCEAU="$WAV" EMOTION_CACHE="$CACHE/stems"
   ./run.sh fichier "$WAV" "$BPM" > /tmp/emotion-moteur.log 2>&1 &
 else
-  Signal__Bpm="$BPM" ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+  # UNE VARIABLE VIDE N'EST PAS UNE VARIABLE ABSENTE, et le moteur ne demarrait plus.
+  # `Signal__Bpm=""` fait echouer la conversion en Single au demarrage : le mode direct et
+  # tout morceau absent du crate tombaient sur un serveur qui refusait de s'ouvrir.
+  if [[ -n "$BPM" ]]; then
+    Signal__Bpm="$BPM" ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+  else
+    ./run.sh pulse > /tmp/emotion-moteur.log 2>&1 &
+  fi
 fi
 MOTEUR=$!
 trap 'kill $MOTEUR 2>/dev/null; kill 0 2>/dev/null' EXIT INT TERM

@@ -120,6 +120,21 @@ S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2,
 # donc sur la largeur restante — la case ne change pas, son contenu se serre.
 FADER_LARGE = 9
 
+def reglage(nom, defaut, conv=float):
+    """Un reglage lu dans l'environnement, qui ne fait jamais tomber le programme.
+
+    UNE VARIABLE VIDE N'EST PAS UNE VARIABLE ABSENTE, et la difference a coute deux pannes le
+    meme jour. Un script qui ecrit `EMOTION_AVANCE_MS=` quand il n'a rien a dire produit une
+    chaine vide, et `float("")` leve. Le reglage est FACULTATIF : ne pas le donner ne doit
+    jamais empecher le programme de demarrer.
+    """
+    v = os.environ.get(nom, "").strip()
+    try:
+        return conv(v) if v else defaut
+    except ValueError:
+        return defaut
+
+
 GRIS_FOND = QColor(14, 14, 15)
 GRIS_CADRE = QColor(48, 50, 52)
 GRIS_TEXTE = QColor(122, 126, 130)
@@ -385,7 +400,7 @@ class Mur(QWidget):
         # web l'a appris en retirant l'une en croyant garder l'autre.
         self.horloge = mouvement.Horloge()
         self.entre_images = mouvement.Interpolation()
-        self.avance_ms = float(os.environ.get("EMOTION_AVANCE_MS", "30"))
+        self.avance_ms = reglage("EMOTION_AVANCE_MS", 30.0)
         self.horodatage = time.monotonic() * 1000.0
 
         # LE DERNIER TEMPO CONNU, ET POURQUOI ON LE GARDE A L'ECRAN.

@@ -18,25 +18,25 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `mémoire partagée` · `PulseAudio` · `xUnit` · `Python` · `Qt` ·
-**187 tests** · **zéro dépendance tierce dans le cœur** · **21 ms d'analyse**
+**187 tests** · **30 contrôles de fumée** · **zéro dépendance tierce dans le cœur** ·
+**21 ms d'analyse**
 
 ---
 
 ## Voir tourner
 
-Deux fenêtres, et elles ne montrent pas la même chose. **Le mur** est ce que l'unité de
-rendu affichera ; **la mesure** dit si ce qu'il affiche est juste. Rien n'y est décoratif :
-chaque forme est commandée par une grandeur mesurée, et chaque grandeur est confrontée à ce
-qu'une analyse hors ligne indépendante a trouvé sur le même morceau.
+**Une fenêtre, et elle ne montre pas seulement : elle joue.** Chaque forme est commandée par
+une grandeur mesurée, et l'on peut isoler la source qui la commande pour vérifier à l'oreille
+qu'elle contient bien ce qu'elle prétend.
 
 <table>
 <tr>
 <td width="55%"><img src="docs/images/mur.png" alt="Le mur"><br>
 <sub><b>Le mur</b> · six sources, une forme chacune, aucune deux fois ; le tempo, la mesure
 et ce qui se répète en bandeau</sub></td>
-<td width="45%"><img src="docs/images/mesure.png" alt="La mesure"><br>
-<sub><b>La mesure</b> · clair = ce que l'analyse hors ligne attend, vert = ce que le moteur
-publie au même instant</sub></td>
+<td width="45%"><img src="docs/images/mesure.png" alt="La mesure hors ligne"><br>
+<sub><b>La mesure hors ligne</b> · clair = ce qu'une analyse indépendante attend, vert = ce
+que le moteur publie au même instant. Elle ne sert plus qu'aux mesures sur fichier</sub></td>
 </tr>
 </table>
 
@@ -46,8 +46,17 @@ publie au même instant</sub></td>
 ./outils/voir.sh --direct     # rien ne se joue, le moteur ecoute ce que tu joues toi
 ```
 
-Le moteur écoute la sortie système : on joue ce qu'on veut avec son lecteur habituel, il
-suit. La fenêtre de mesure liste le bac, et choisir une face envoie sa fiche au moteur.
+Le morceau sort des enceintes, le moteur l'analyse, la fenêtre le montre. **La fiche vient du
+crate** — `voir.sh` la cherche par le titre et la passe au moteur, qui s'en sert comme point
+de départ sans jamais s'y verrouiller.
+
+| | |
+|---|---|
+| **clic dans une case, ou 1 à 6** | la source est choisie, **et elle seule s'entend** |
+| **le même clic à nouveau** | tout le morceau revient, la source reste choisie |
+| **7 et 8** | la batterie de référence, et ce que le moteur retient comme frappe |
+| **bord droit d'une case** | le fader : la fenêtre est un stem player à six pistes |
+| **espace** | maintenu = présence, tapé = instants — ce que l'oreille marque |
 
 **Le rendu ne passe par aucun réseau.** Le moteur publie 256 octets dans `/dev/shm`, la
 fenêtre Qt les lit, et l'eGPU les lira sur PCIe ou USB-C — même contrat, sans intermédiaire.
@@ -1728,8 +1737,20 @@ La sonde fait tourner le même analyseur que le serveur **sans ouvrir de port**.
 coûté des ports laissés ouverts pendant des mesures qui n'en avaient pas besoin.
 
 ```sh
-dotnet test        # 187 tests
+dotnet test          # 187 tests : la logique
+./outils/fumee.sh    # 30 controles : chaque point d'entree demarre-t-il
 ```
+
+**Les deux, et pas l'un ou l'autre.** Trois fonctionnalités ont été annoncées prêtes et
+découvertes cassées au premier lancement, les 187 tests verts à chaque fois : le son qui ne
+sortait de nulle part, une sélection qui coupait le mélange, une valeur facultative laissée
+vide qui empêchait le serveur de s'ouvrir. **Un défaut de câblage ne vit dans aucune unité ;
+il vit entre elles.** Le contrôle de fumée ne teste aucune logique — il tape ce qu'on tape.
+
+Son premier passage a trouvé cinq défauts, dont un qui comptait vraiment : le `.gitignore`
+n'empêchait pas un morceau du bac d'être versionné sur un dépôt **public**, alors que « aucune
+œuvre dans le dépôt » est une règle du projet depuis le début. Une règle qu'aucun outil
+n'applique n'est qu'une intention.
 
 ### Les images et les clips
 

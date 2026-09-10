@@ -210,7 +210,16 @@ def analyser(nom, chemin, periode, alea):
 
 
 if __name__ == "__main__":
-    S = "/tmp/claude-1000/-home-swave/c04a8217-9706-417b-8656-c9d8f435baac/scratchpad"
+    # LE BAC DE MESURE SE DONNE, IL NE SE DEVINE PAS. Un chemin de session fige ici ne
+    # marchait que sur une machine et un jour donnes — et il n'a rien a faire dans un depot
+    # public, ou il se lit comme un residu.
+    S = os.environ.get("EMOTION_BAC") or (
+        sys.argv[1] if len(sys.argv) > 1 else
+        os.path.expanduser("~/.cache/emotion-emulator/bac"))
+    if not os.path.isdir(S):
+        print(f"bac introuvable : {S}\n"
+              f"    EMOTION_BAC=/chemin/vers/les/wav python3 outils/motif.py")
+        sys.exit(1)
     FICHIERS = [("macro", f"{S}/macro.wav")] + [
         (f"t{n:02d}", f"{S}/valid/t{n:02d}.wav") for n in (2, 3, 4, 5, 6, 8, 9, 10, 11)]
 

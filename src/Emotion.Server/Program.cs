@@ -244,6 +244,20 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
     // "mock" fabrique un signal a partir d'un tempo, sans carte son.
     // "pulse" ecoute pour de vrai : le monitor de la sortie pour essayer sans
     // materiel, l'entree ligne le jour ou la table est branchee.
+    // ON LIT LA FICHE EN TEXTE PUIS ON CONVERTIT, ET UNE SEULE FOIS.
+    //
+    // `GetValue<float>` leve sur une chaine vide, et une chaine vide est exactement ce qu'un
+    // script produit quand la fiche est inconnue : `Signal__Bpm=""`. Le serveur refusait
+    // alors de s'ouvrir, pour une valeur FACULTATIVE — le mode direct et tout morceau absent
+    // du crate tombaient dessus. Une option qu'on peut ne pas donner ne doit jamais empecher
+    // le demarrage.
+    //
+    // Deux endroits la lisaient, et corriger le premier laissait le second echouer de la
+    // meme facon. C'est le genre de defaut qui se corrige une fois pour toutes ou pas du tout.
+    var bpmFiche = float.TryParse(cfg["Signal:Bpm"], System.Globalization.NumberStyles.Float,
+                                  System.Globalization.CultureInfo.InvariantCulture, out var b)
+                   ? b : 0f;
+
     IAudioSource master = cfg["Signal:Source"]?.ToLowerInvariant() switch
     {
         "pulse" => new PulseAudioSource(cfg["Signal:Device"],
@@ -257,7 +271,7 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
         // mal ».
         "fichier" => new WavAudioSource(cfg["Signal:Device"] ?? "",
                                         separate: cfg.GetValue("Signal:Separate", false)),
-        _       => new MockAudioSource(cfg.GetValue("Signal:Bpm", 87f)),
+        _       => new MockAudioSource(bpmFiche > 0f ? bpmFiche : 87f),
     };
 
     // LA FICHE AU LANCEMENT, ET POUR TOUS LES MODES. Elle venait du selecteur de faces de
@@ -268,10 +282,16 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
     //
     // Elle ne verrouille rien : `Amorcer` recentre la ponderation de l'autocorrelation, qui
     // continue de chercher. Un disque pousse au fader reste suivi malgre elle.
-    if (master is IAcceptsCue amorcable && cfg.GetValue("Signal:Bpm", 0f) is var bpm and > 0f)
+    // ON LIT EN TEXTE PUIS ON CONVERTIT, ET CE N'EST PAS DE LA PARANOIA.
+    //
+    // `GetValue<float>` leve sur une chaine vide, et une chaine vide est exactement ce qu'un
+    // script produit quand la fiche est inconnue : `Signal__Bpm=""`. Le serveur refusait
+    // alors de s'ouvrir, pour une valeur FACULTATIVE. Une option qu'on peut ne pas donner ne
+    // doit jamais empecher le demarrage.
+    if (master is IAcceptsCue amorcable && bpmFiche > 0f)
     {
-        amorcable.Amorcer(bpm);
-        Dire($"fiche : {bpm:0.##} BPM");
+        amorcable.Amorcer(bpmFiche);
+        Dire($"fiche : {bpmFiche:0.##} BPM");
     }
 
     // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme

@@ -3,6 +3,19 @@
 Ce que le dépôt ne peut pas contenir — les disques — et ce qu'il doit contenir : la façon
 de les mesurer.
 
+## `fumee.sh` — chaque point d'entrée démarre-t-il
+
+```sh
+./outils/fumee.sh
+```
+
+Il ne teste aucune logique : il tape ce que le DJ tape. Le moteur dans chacun de ses modes,
+l'import de chaque outil, les réglages facultatifs vides ou absurdes, la fenêtre qui rend une
+image. **Un défaut de câblage ne vit dans aucune unité** — il vit entre elles, là où les 187
+tests ne regardent pas, et c'est exactement là qu'on s'est fait prendre trois fois.
+
+À lancer avant d'annoncer que quelque chose est prêt. C'est moins cher qu'un lancement raté.
+
 ## `metronome.py`
 
 Fabrique un signal dont on connaît la vérité : tempo exact, kick sur chaque temps, clap sur

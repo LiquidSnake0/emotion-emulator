@@ -64,6 +64,21 @@ from tempo_reference import lire_mono
 # Itérations pour retrouver les activations, profils fixés. Au-delà, elles ne bougent plus.
 ITERATIONS = 40
 
+def reglage(nom, defaut, conv=float):
+    """Un reglage lu dans l'environnement, qui ne fait jamais tomber le programme.
+
+    UNE VARIABLE VIDE N'EST PAS UNE VARIABLE ABSENTE, et la difference a coute deux pannes le
+    meme jour. Un script qui ecrit `EMOTION_AVANCE_MS=` quand il n'a rien a dire produit une
+    chaine vide, et `float("")` leve. Le reglage est FACULTATIF : ne pas le donner ne doit
+    jamais empecher le programme de demarrer.
+    """
+    v = os.environ.get(nom, "").strip()
+    try:
+        return conv(v) if v else defaut
+    except ValueError:
+        return defaut
+
+
 # RECOUVREMENT DES TRAMES, ET IL A ÉTÉ MESURÉ.
 #
 # Un masque qui change d'une trame à l'autre module l'amplitude à la cadence des trames.
@@ -82,7 +97,7 @@ ITERATIONS = 40
 #
 # On aurait pu s'arrêter à 50 % en écoutant vite fait, et l'on aurait entendu une source
 # bourdonner cent fois plus que son témoin en croyant que la séparation la hachait.
-RECOUVREMENT = int(os.environ.get("RECOUVREMENT", "8"))
+RECOUVREMENT = reglage("RECOUVREMENT", 8, int)
 
 # Trames traitées d'un coup. À 88 % de recouvrement, un morceau de quatre-vingt-dix secondes
 # en compte soixante-sept mille : garder tout le spectrogramme en mémoire demanderait un
@@ -102,7 +117,7 @@ BLOC = 1024
 # raisonnement désigne, pas celle qui donne le meilleur chiffre. Seize ne gagne que deux
 # dixièmes et coûte de la finesse temporelle ; choisir seize pour ces deux dixièmes serait
 # tirer des flèches jusqu'à ce que l'une aille au milieu.
-LISSAGE = int(os.environ.get("LISSAGE", "8"))
+LISSAGE = reglage("LISSAGE", 8, int)
 
 EPS = 1e-9
 

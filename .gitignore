@@ -11,3 +11,19 @@ assets/*
 # Python
 __pycache__/
 *.pyc
+
+# AUCUNE OEUVRE DANS LE DEPOT, ET IL EST PUBLIC.
+#
+# La regle etait ecrite dans CLAUDE.md mais rien ne l'appliquait : un `git add -A` lance
+# depuis la racine aurait verse un morceau du bac sur GitHub. Un controle l'a montre en
+# deposant un fichier temoin — il apparaissait comme candidat au commit.
+#
+# Les mesures ont besoin de WAV, et elles les gardent hors du depot : dans le cache
+# (~/.cache/emotion-emulator) ou dans /tmp. Rien de sonore n'a de raison d'etre ici.
+*.wav
+*.aif
+*.aiff
+*.flac
+*.mp3
+*.m4a
+*.ogg

@@ -1693,6 +1693,38 @@ VOL. 4*, identifié par corrélation d'enveloppe (1,000 contre 0,304 au suivant)
 mesures est celui de Passepartout, et il a été repris par erreur. Les mesures qui s'appuient
 dessus sont à relire avec cette réserve.
 
+## Le contrôle de fumée, et pourquoi il a fallu l'écrire
+
+```sh
+./outils/fumee.sh
+```
+
+**Trois fois dans la même journée, une fonctionnalité a été annoncée prête et découverte
+cassée au premier lancement** : le son qui ne sortait de nulle part, la sélection qui coupait
+le mélange, la fiche vide qui empêchait le serveur de s'ouvrir. Les 187 tests étaient verts à
+chaque fois, et les rendus hors écran aussi.
+
+> **On vérifiait le code modifié, jamais la commande tapée.** Un défaut de câblage ne vit
+> dans aucune unité ; il vit *entre* elles, exactement là où un test unitaire ne regarde pas.
+
+Ce script ne teste aucune logique. Il tape ce que le DJ tape et regarde si ça démarre : le
+moteur dans chacun de ses modes, l'import de chaque outil, les réglages facultatifs laissés
+vides ou absurdes, et la fenêtre qui rend une image sans lever.
+
+### Ce qu'il a trouvé à son premier passage
+
+| | |
+|---|---|
+| **`Signal__Bpm=` vide** | `GetValue<float>` lève sur une chaîne vide — le serveur refusait de s'ouvrir pour une valeur **facultative**. Cassait `--direct` et tout morceau absent du crate. Deux endroits la lisaient ; corriger le premier laissait le second échouer pareil. |
+| **`EMOTION_AVANCE_MS=` vide** | même famille, côté fenêtre. Tous les réglages passent maintenant par `reglage()`, qui rend le défaut plutôt que de tomber. |
+| **`metronome.py` écrivait un WAV à l'import** | tout son corps était au niveau du module. Un module qui produit un fichier en étant chargé ne peut ni se relire ni se réutiliser. |
+| **le dépôt acceptait les œuvres** | la règle « aucune œuvre dans le dépôt » était écrite mais rien ne l'appliquait : un `git add -A` aurait versé un morceau du bac sur un dépôt **public**. Le `.gitignore` la fait respecter. |
+| **des chemins de session figés** | `banc.sh` et `motif.py` pointaient un répertoire temporaire d'un jour donné, dans une vitrine d'entretien. Ils lisent `EMOTION_BAC`. |
+
+**Une variable vide n'est pas une variable absente.** C'est la leçon commune aux deux
+premiers, et elle vaut d'être retenue : un script qui n'a rien à dire écrit une chaîne vide,
+pas rien du tout.
+
 ## Façon de travailler
 
 Questions ciblées avant de partir sur une solution. Mesurer avant de corriger, et écrire

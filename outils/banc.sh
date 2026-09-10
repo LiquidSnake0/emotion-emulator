@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Banc de pulsation : passe les treize morceaux avec une option donnee et rend
 # la force et la stabilite moyennes. Le seul juge non circulaire dont on dispose.
-cd /home/swave/Documents/emotion-emulator
-S=/tmp/claude-1000/-home-swave/c04a8217-9706-417b-8656-c9d8f435baac/scratchpad
+cd "$(dirname "$0")/.."
+
+# LE BAC DE MESURE SE DONNE, IL NE SE DEVINE PAS. Un chemin de session fige ici ne marchait
+# que sur une machine et un jour donnes, et n'a rien a faire dans un depot public.
+S="${EMOTION_BAC:-${XDG_CACHE_HOME:-$HOME/.cache}/emotion-emulator/bac}"
+[[ -d "$S" ]] || { echo "bac introuvable : $S" >&2
+                   echo "    EMOTION_BAC=/chemin/vers/les/wav ./outils/banc.sh <etiquette>" >&2
+                   exit 1; }
 ETQ="$1"; shift
 D=$S/banc/$ETQ; mkdir -p $D
 for f in macro live instamata; do
