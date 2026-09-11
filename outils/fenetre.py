@@ -836,7 +836,7 @@ class Mur(QWidget):
             # affichee, l'ecran montre six cases quoi qu'il arrive.
             n = self.paquet.actives if self.paquet else 0
             compte = (f"{n} source{'s' if n > 1 else ''} trouvee{'s' if n > 1 else ''}"
-                      + ("   ·   verrouille" if p.verrou else "") + "   ·   "
+                      + ("   ·   verrouille" if (self.paquet and self.paquet.verrou) else "") + "   ·   "
                       if n else "la separation ecoute encore   ·   ")
             d.drawText(x, h - 26,
                        compte + "clic dans une case ou 1-6 : choisir une source   ·   "
