@@ -20,7 +20,10 @@ public readonly record struct Voices(
     int Actives = 0,
     // LE MOTIF DE CHAQUE SOURCE : un bit par case de la mesure, la ou elle monte — le morse
     // a venir, pas le morse passe. Et le verrou : le morceau est su, on ne retouche plus.
-    ushort[]? Motifs = null, bool Verrou = false)
+    ushort[]? Motifs = null, bool Verrou = false,
+    // LE CARACTERE de chaque source, sur la duree : 0 frappe, 1 tient. C'est l'octet qui
+    // dit au rendu quel geste donner a quelle source.
+    float[]? Caracteres = null)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.

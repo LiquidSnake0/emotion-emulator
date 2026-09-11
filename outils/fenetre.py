@@ -108,6 +108,7 @@ ENVELOPPE_PAS = 2
 P_RETRAITS = 232
 # COMBIEN DE SOURCES SONT ACTIVES : le moteur le decouvre par disque, il ne l'impose plus.
 P_SOURCES_ACTIVES = 120
+P_CARACTERES = 201     # un quartet par source : 0 frappe, 15 tient, mesure sur la duree
 P_MOTIFS = 243         # six mots de seize bits : le motif de chaque source, une case par double croche
 P_VERROU = 255         # 1 quand le morceau est su et que le moteur ne retouche plus
 
@@ -283,6 +284,8 @@ class Paquet:
                 "retrait": mm[base + P_RETRAITS + r] / 16.0,
                 # LE MOTIF : ou, dans la mesure, cette source monte. Le morse a venir.
                 "motif": struct.unpack_from("<H", mm, base + P_MOTIFS + 2 * r)[0],
+                # LE CARACTERE, sur la duree : ce que le rendu lit pour choisir son geste.
+                "caractere": (mm[base + P_CARACTERES + r // 2] >> (4 * (r % 2)) & 0xF) / 15.0,
             })
 
 
@@ -903,10 +906,13 @@ class Mur(QWidget):
             # cela, on voit un mouvement sans savoir s'il decrit un instrument qui frappe ou
             # un qui souffle — et un ecran qui montre autre chose que ce qui decide est pire
             # qu'aucun ecran.
-            nature = ("pincé" if s["pique"] > 0.5 and s["tenue"] < 0.45 else
-                      "frappé" if s["pique"] > 0.5 else
-                      "tenu" if s["tenue"] > 0.6 else
-                      "")
+            # LE CARACTERE VIENT DU MOTEUR, SUR LA DUREE — plus d'une lecture de l'image :
+            # une nappe qui monte une fois n'est pas « frappee », un kick entre deux coups
+            # n'est pas « tenu ». Mesure : la batterie sous 0,4, les nappes au-dessus de 0,8,
+            # le pince entre les deux.
+            nature = ("frappé" if s["caractere"] < 0.45 else
+                      "tenu" if s["caractere"] > 0.8 else
+                      "pincé")
             gauche = f"{r + 1}·{s['nom']}" if s["nom"] else f"{r + 1}"
             titre = "  ".join(x for x in (gauche, nom, nature) if x)
 

@@ -2131,10 +2131,21 @@ le rendu reçoit par source, tableau croisé), avec deux captures `docs/images/m
 `motif.png` prises sur Glyph Chamber verrouillé (fenêtre hors écran, `capture.sh` dans le tmp
 du job).
 
-Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
-un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; le morse du
-piano jugé à l'oreille, avec le protocole corrigé ; et le retard de 60–80 ms du bit `frappe`
-à compenser au rendu (ou à remplacer par le motif, qui est en avance).
+### Le caractère par source : frappe, pincé, tient — sur la durée
+
+Mesuré sur les niveaux publiés (trois titres, régime final) : la `tenue` du moteur (moyenne
+rapportée à la crête glissante de 1,5 s) moyennée dans le temps sépare nettement — le reste
+0,22–0,38, les nappes et la basse 0,84–0,92, le pincé (piano de Passepartout, troisième
+source de Glyph Chamber) 0,65–0,77. `SourceEnvelope.Caractere` = cette tenue moyennée sur
+**20 s** (`CaractereS`), apprise seulement quand la source joue. Paquet : **un quartet par
+source à 201–203** (`Caracteres0..2`, source 0 dans le quartet bas de 201). `Voices.Caracteres`.
+La fenêtre lit l'étiquette « frappé / pincé / tenu » là, plus sur l'image (une nappe qui
+montait une fois passait pour frappée). La sonde l'imprime. Passepartout : 0,70 / 0,89 /
+0,93 / reste 0,35 ; Glyph : 0,86 / 0,89 / 0,77 / reste 0,32. Trois tests. 208 verts.
+
+Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
+corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
+le motif, qui est en avance).
 
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 

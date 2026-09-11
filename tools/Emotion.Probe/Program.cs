@@ -1103,7 +1103,8 @@ Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "
         analyzer.Motifs.Motif(r, motif);
         var dessin = new System.Text.StringBuilder();
         foreach (var v in motif) dessin.Append(v >= 0.66f ? '#' : v >= 0.33f ? '+' : '.');
-        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures");
+        var caractere = analyzer.Derniere.Voices.Caracteres is { } cs && r < cs.Length ? cs[r] : 0.5f;
+        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures   caractere {caractere:F2} ({(caractere < 0.45f ? "frappe" : caractere > 0.8f ? "tient" : "pince")})");
     }
 }
 foreach (var b in sep.Bilans)

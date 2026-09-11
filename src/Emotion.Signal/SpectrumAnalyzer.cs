@@ -726,6 +726,7 @@ public sealed class SpectrumAnalyzer
     /// </summary>
     private readonly MotifSources _motifs;
     private readonly ushort[][] _motifPool = [new ushort[SourceSeparator.Sources], new ushort[SourceSeparator.Sources]];
+    private readonly float[][] _caracterePool = [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
 
     /// <summary>Le motif de chaque source et sa stabilite, pour la sonde.</summary>
     public MotifSources Motifs => _motifs;
@@ -975,11 +976,17 @@ public sealed class SpectrumAnalyzer
             var phaseMotif = _grid.Beat < 0 ? (float?)null : (_grid.Beat + _grid.Phase) / 4f;
             for (var i = 0; i < publiees; i++) _motifs.Feed(i, act[i], phaseMotif);
             var masques = _motifPool[_sepTurn];
-            for (var i = 0; i < SourceSeparator.Sources; i++) masques[i] = i < publiees ? _motifs.Masque(i) : (ushort)0;
+            var caracteres = _caracterePool[_sepTurn];
+            for (var i = 0; i < SourceSeparator.Sources; i++)
+            {
+                masques[i] = i < publiees ? _motifs.Masque(i) : (ushort)0;
+                caracteres[i] = i < publiees ? _enveloppes.Caractere(i) : 0.5f;
+            }
             if (!_separation.Verrou && _motifs.Verrouille(publiees)) _separation.Verrouiller();
 
             voices = voices with { Levels = act, Pitches = haut, Lanes = etats,
-                                   Actives = publiees, Motifs = masques, Verrou = _separation.Verrou };
+                                   Actives = publiees, Motifs = masques, Verrou = _separation.Verrou,
+                                   Caracteres = caracteres };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint

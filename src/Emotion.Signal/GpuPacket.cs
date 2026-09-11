@@ -432,6 +432,16 @@ public struct GpuPacket
     [FieldOffset(MotifSourcesOffset + 8)] public ushort MotifSource4;
     [FieldOffset(MotifSourcesOffset + 10)] public ushort MotifSource5;
 
+    /// <summary>
+    /// Le caractere de chaque source, un quartet par source a partir de 201 : 0 frappe, 15
+    /// tient, mesure sur la duree. Source 0 dans le quartet bas de 201, source 1 dans le
+    /// haut, et ainsi de suite jusqu'a la source 5 dans le haut de 203.
+    /// </summary>
+    public const int CaracteresOffset = 201;
+    [FieldOffset(CaracteresOffset)] public byte Caracteres0;
+    [FieldOffset(CaracteresOffset + 1)] public byte Caracteres1;
+    [FieldOffset(CaracteresOffset + 2)] public byte Caracteres2;
+
     /// <summary>Le verrou : 1 quand le morceau est su et que le moteur ne retouche plus.</summary>
     public const int VerrouOffset = 255;
     [FieldOffset(VerrouOffset)] public byte Verrou;
@@ -662,6 +672,13 @@ public struct GpuPacket
         p.GridAgreement = (byte)Math.Clamp(f.GridAgreement * 255f, 0f, 255f);
         p.SourceActives = (byte)Math.Clamp(f.Voices.Actives, 0, SourceSlots);
         p.Verrou = f.Voices.Verrou ? (byte)1 : (byte)0;
+        if (f.Voices.Caracteres is { } caracteres)
+        {
+            byte Q(int i) => (byte)(i < caracteres.Length ? Math.Clamp((int)MathF.Round(caracteres[i] * 15f), 0, 15) : 0);
+            p.Caracteres0 = (byte)(Q(0) | Q(1) << 4);
+            p.Caracteres1 = (byte)(Q(2) | Q(3) << 4);
+            p.Caracteres2 = (byte)(Q(4) | Q(5) << 4);
+        }
         if (f.Voices.Motifs is { } motifs)
         {
             ushort M(int i) => i < motifs.Length ? motifs[i] : (ushort)0;

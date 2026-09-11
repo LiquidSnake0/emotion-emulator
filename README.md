@@ -133,7 +133,8 @@ de santé de la grille.
 | niveau | combien elle joue, rapporté à sa propre crête | le suivi des gabarits, lissé sur 85 ms |
 | hauteur | une vraie hauteur de note : le gabarit plus sa position | le gabarit qui glisse sur deux octaves |
 | frappe | elle vient de monter franchement | son propre niveau — plus la bande de fréquence de même rang |
-| pique · tenue · retrait | frappe-t-elle, tient-elle, s'est-elle tue | l'enveloppe par source |
+| pique · tenue · retrait | frappe-t-elle, tient-elle, s'est-elle tue — sur l'image | l'enveloppe par source |
+| **caractère** (4 bits) | ce qu'elle *est* : 0 frappe, 15 tient — sur la durée | la tenue moyennée sur vingt secondes : batterie 0,3, nappes 0,9, pincé entre les deux |
 | motif (16 bits) | où elle monte dans la mesure | seize mesures de montées, sur la grille |
 | **la dernière case** | **le reste** : ce que les gabarits n'expliquent pas | sur ce répertoire, la batterie |
 | verrou | le morceau est su | deux motifs tenus sur seize mesures |

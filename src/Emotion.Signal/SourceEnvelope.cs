@@ -60,6 +60,9 @@ public sealed class SourceEnvelope
     private readonly float[] _muet;      // depuis combien de secondes la source se tait
     private readonly bool[] _frappe;     // la source vient-elle de frapper, sur cette image
     private readonly int[] _depuisFrappe;
+    private readonly float[] _caractere; // part tenue, moyennee sur la duree : 0 frappe, 1 tient
+    private readonly bool[] _caractereConnu;
+    private readonly float _oubliCaractere;
 
     // L'ETAT AU MOMENT OU LE SILENCE COMMENCE.
     //
@@ -85,6 +88,9 @@ public sealed class SourceEnvelope
         _muet = new float[sources];
         _frappe = new bool[sources];
         _depuisFrappe = new int[sources];
+        _caractere = new float[sources];
+        _caractereConnu = new bool[sources];
+        _oubliCaractere = MathF.Exp(-_frameS / CaractereS);
         _creteGardee = new float[sources];
         _moyenneGardee = new float[sources];
         _piqueGarde = new float[sources];
@@ -188,6 +194,24 @@ public sealed class SourceEnvelope
 
     public bool Frappe(int rang) => (uint)rang < (uint)_frappe.Length && _frappe[rang];
 
+    /// <summary>
+    /// LE CARACTERE D'UNE SOURCE : frappe-t-elle, ou tient-elle ? Sur la duree, pas sur
+    /// l'image.
+    ///
+    /// C'est l'octet que le rendu attend pour choisir son geste — « la couleur change au
+    /// rythme de ce qui est frappe, les coins s'etirent au rythme d'un souffle » — et rien
+    /// d'instantane ne le dit : pique et tenue decrivent l'image, pas l'instrument. Ici,
+    /// la tenue (moyenne rapportee a la crete, sur 1,5 s) est moyennee sur vingt secondes.
+    ///
+    /// Mesure sur trois titres, en regime final : le reste (la batterie) vaut 0,22 a 0,38 ;
+    /// les nappes et la basse 0,84 a 0,92 ; ce qui est pince (le piano de Passepartout, la
+    /// troisieme source de Glyph Chamber) 0,65 a 0,75. Zero = frappe, un = tient.
+    /// </summary>
+    public const float CaractereS = 20f;
+
+    public float Caractere(int rang) =>
+        (uint)rang < (uint)_caractere.Length ? Math.Clamp(_caractere[rang], 0f, 1f) : 0.5f;
+
     public void Feed(int rang, float niveau)
     {
         if ((uint)rang >= (uint)_crete.Length) return;
@@ -252,6 +276,14 @@ public sealed class SourceEnvelope
         //
         // Une montee qui atteint la crete en une fenetre vaut un ; en deux fenetres, un
         // demi. Au-dela de MonteeMaxS on ne parle plus d'attaque.
+        // Le caractere ne s'apprend que quand elle joue : un silence ne dit rien d'elle.
+        if (_crete[rang] > 1e-3f)
+        {
+            var tenue = Math.Clamp(_moyenne[rang] / _crete[rang], 0f, 1f);
+            if (!_caractereConnu[rang]) { _caractere[rang] = tenue; _caractereConnu[rang] = true; }
+            else _caractere[rang] += (tenue - _caractere[rang]) * (1f - _oubliCaractere);
+        }
+
         var pente = niveau - _precedent[rang];
         _precedent[rang] = niveau;
         if (pente >= SeuilFrappe && niveau >= PlancherFrappe && _depuisFrappe[rang] > ReposFrappe)
@@ -299,6 +331,8 @@ public sealed class SourceEnvelope
         Array.Clear(_muet);
         Array.Clear(_frappe);
         Array.Clear(_depuisFrappe);
+        Array.Clear(_caractere);
+        Array.Clear(_caractereConnu);
         Array.Clear(_creteGardee);
         Array.Clear(_moyenneGardee);
         Array.Clear(_piqueGarde);
