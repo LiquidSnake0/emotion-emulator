@@ -377,7 +377,13 @@ public sealed class SourceSeparator
         {
             var m = _re[b];
             if (m <= _re[b - 1] || m <= _re[b + 1] || m < 1e-4f) continue;
-            var cents = 1200.0 * Math.Log2(b * raieHz / 440.0);
+            // LE PIC S'INTERPOLE, SINON L'ESTIMATION EST DU BRUIT. Une raie fait 11,7 Hz : a
+            // 440 Hz c'est quarante-six cents, presque une case entiere. Une parabole sur les
+            // trois raies autour du pic rend sa position a un ou deux cents pres.
+            var g = MathF.Log(_re[b - 1] + 1e-9f); var c0 = MathF.Log(m + 1e-9f); var d = MathF.Log(_re[b + 1] + 1e-9f);
+            var denom = g - 2f * c0 + d;
+            var delta = MathF.Abs(denom) > 1e-9f ? Math.Clamp(0.5f * (g - d) / denom, -0.5f, 0.5f) : 0f;
+            var cents = 1200.0 * Math.Log2((b + delta) * raieHz / 440.0);
             var reste = ((cents % 100) + 150) % 100 - 50;              // de -50 a +50
             var k = Math.Clamp((int)((reste + 50) / 5), 0, 19);
             _histoCents[k] += m;

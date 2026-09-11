@@ -2177,13 +2177,19 @@ et **décale son axe log d'autant** avant d'apprendre (`RelevierAccordage`, `Acc
 mauvais axe. Sous 15 cents, rien ne bouge. Export : `f0` (décalé) et `accordageCents` dans
 `/profils` et la sonde, pour qu'`extraire.py` rebâtisse le même axe.
 
+**Le pic s'interpole, sinon l'estimation est du bruit.** Première version sans
+interpolation : +23 cents sur Passepartout là où le juge hors ligne disait −48, et un
+disque fabriqué désaccordé de +40 relevé à +27 — une raie fait 11,7 Hz, soit 46 cents à
+440 Hz, presque une case. Le commit `b9e3af8` est parti avec « 212 tests verts » dans son
+message alors que deux échouaient : la chaîne a commité sans lire le résultat. Corrigé par
+une parabole sur les trois raies du pic ; les deux estimateurs sont alors d'accord sur les
+5,5 premières secondes (Passepartout −43 / −37, Glyph +43 / +42, Codex −48 / −42, Lost
+Cultures −43 / −42, WordBank 0 / −7).
+
 Mesuré sur cinq titres, avant → après : Glyph mélodique 0,80 → **0,87**, Passepartout
-batterie 0,77 → 0,80 (mélodique 0,72 → 0,69), Codex **5 → 3 sources** (la basse n'est plus
+batterie 0,77 → 0,80 (mélodique 0,72 → 0,65), Codex **5 → 3 sources** (la basse n'est plus
 coupée en trois, 0,51 → 0,52), WordBank inchangé (axe standard). Motifs inchangés. **Gain
-modeste, aucune régression** — gardé. Point ouvert et dit : l'estimateur du moteur (5,5 s,
-fenêtre 4096) ne rend pas les mêmes cents que le juge hors ligne (150 s, fenêtre 8192) sur
-trois titres sur quatre (+23 contre −48 sur Passepartout) ; les deux fenêtres n'écoutent
-pas la même chose, et seul Codex tombe pareil (−48). `AccordageTests` (4). 212 verts.
+modeste, aucune régression** — gardé. `AccordageTests` (4). 212 verts, fumée 32 ok.
 
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
 corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
