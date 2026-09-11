@@ -1988,8 +1988,52 @@ source 3 → other 29 % (hasard 21). Tests `SourceEnvelopeFrappeTests` (4). 198 
 > touches entendues, Échap → `~/Documents/emotion-sources/rapports/<morceau>-<date>.json`
 > (marques + journal du moteur, dont `frappe` par image). À lire et à confronter.
 
+### Le morse n'a pas pu être jugé : les pistes en solo n'étaient pas celles du paquet
+
+Trois rapports de marques (31, 65, 46 marques), tous inexploitables, et la cause était dans
+la fenêtre : `stems.py` extrayait ses pistes **au provisoire** (`pret`), pas au choix
+(`choix`). Le DJ isolait la case 1, entendait une piste provisoire (du piano, 0,34 avec
+`other`), et le paquet publiait la basse dans cette case-là après 45 s. Corrigé : on attend
+`choix`. Puis les pistes arrivaient à 2 min 20 (choix à 65 s + 94 s d'extraction) et il
+fermait avant, deux fois : le choix part maintenant **dès la mémoire pleine** (40 s), et
+l'extraction passe à 75 % de recouvrement et 15 itérations (35 s, juge inchangé). Bout en
+bout, moteur + `stems.py` : pistes vers 70–80 s.
+
+### La croissance : le morceau ne dit pas tout en quarante secondes
+
+Le choix à 40 s a rendu **2** sources — et c'était juste : Passepartout commence par piano +
+basse (0–30 s), la guitare entre à 30 s, la batterie à 50 s, et le piano *disparaît* de 40 à
+80 s (énergie des stems Demucs par tranche de 10 s). Mais rien ne grandissait ensuite.
+
+`ProfileLearner.TryStartCroissance` : à chaque réapprentissage (toutes les 20 s), on
+apprend à K depuis les gabarits courants (ils restent à leur place), puis à K+1 avec un
+gabarit neuf, et l'on garde K+1 s'il passe les critères. **La croissance ne réordonne pas** :
+la nouvelle source prend la case suivante. On ne redescend jamais.
+
+Les critères ont dû être recalés, parce que les instruments fabriqués grandissaient à tort
+(2 → 3, 3 → 4) : un instrument coupé en deux gabarits de formes différentes passait le
+doublon. Lu dans `Historique` (tous les bilans depuis le début, nouveau) :
+
+| | doublon | lien |
+|---|---|---|
+| fausses croissances (fabriqué) | 0,74 · 0,79 | 0,59 · 0,69 |
+| vraie entrée de la guitare, Passepartout 60 s | **0,34** | **0,55** |
+| seuils | **0,60** (était 0,85) | **0,70** (nouveau) |
+
+Le **lien** est la corrélation dans le temps des niveaux de deux sources : un instrument
+coupé en deux donne deux niveaux qui montent et descendent ensemble. Résultat sur
+Passepartout : 4 (provisoire) → **2 à 40 s → 3 à 60 s**, stable ensuite ; la 4ᵉ candidate
+(la batterie) est rejetée à chaque essai à doublon 0,90–0,94. Juge sur les pistes finales :
+source 1 basse 0,76 ; source 2 guitare 0,43 / other 0,44 ; source 3 other 0,53.
+Apprentissage 2,4 s en moyenne, 4 s au pire, 13 fois sur le morceau.
+
+> **Ce que les rapports de marques ont quand même dit** : il tape une fois toutes les
+> ~2,4 s, et ses marques ne suivent aucun juge automatique. Quand le protocole sera enfin
+> propre (pistes = paquet, dès 80 s), il faut lui demander CE qu'il tape avant de lire.
+
 Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
-un octet du paquet) pour que le GPU sache quel geste donner à quelle source.
+un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; et le morse du
+piano jugé à l'oreille, avec le protocole corrigé.
 
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 

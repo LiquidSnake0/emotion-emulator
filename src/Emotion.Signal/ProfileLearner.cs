@@ -80,12 +80,19 @@ public sealed class ProfileLearner
     private int _trames;
 
     /// <summary>Ce que le balayage a mesure pour chaque nombre de sources essaye.</summary>
-    public sealed record Bilan(int K, float Reste, float Doublon);
+    /// <param name="Lien">Le pire lien entre deux sources : la correlation de leurs niveaux
+    /// dans le temps. Deux gabarits qui montent et descendent ensemble sont un instrument
+    /// coupe en deux, meme si leurs formes different.</param>
+    public sealed record Bilan(int K, float Reste, float Doublon, float Lien = 0f);
     // PUBLIE D'UN BLOC, JAMAIS PENDANT. Le balayage tourne dans un fil de fond ; une liste
     // qu'on remplit au fur et a mesure se lit a moitie faite depuis /profils, et un bilan a
     // moitie fait ressemble a un choix. On construit a part et l'on echange la reference.
     private volatile IReadOnlyList<Bilan> _bilans = [];
     public IReadOnlyList<Bilan> Bilans => _bilans;
+
+    /// <summary>Tous les bilans depuis le debut, dans l'ordre : pour lire les seuils apres coup.</summary>
+    private readonly List<IReadOnlyList<Bilan>> _historique = [];
+    public IReadOnlyList<IReadOnlyList<Bilan>> Historique => _historique;
 
     /// <summary>Le nombre de sources retenu par le dernier balayage, ou zero.</summary>
     public int Choix { get; private set; }
@@ -95,8 +102,10 @@ public sealed class ProfileLearner
     public bool DernierEtaitChoix { get; private set; }
 
     private int _kMin, _kMax, _iterationsBalayage;
-    private float _seuilGain, _seuilDoublon, _plancher;
+    private float _seuilGain, _seuilDoublon, _plancher, _seuilLien;
     private bool _choisir;
+    private bool _croitre;
+    private readonly float[] _wGarde;     // les gabarits a K, si K+1 n'apporte rien
 
     // TRAME PAR TRAME EN MEMOIRE : chaque colonne du spectrogramme est contigue. Toutes les
     // boucles interieures parcourent un gabarit le long de l'axe des frequences, et c'est
@@ -132,6 +141,7 @@ public sealed class ProfileLearner
         _ready = new float[sources * Longueur];
         _positionMoyenne = new float[sources];
         _positionMoyenneReady = new float[sources];
+        _wGarde = new float[sources * Longueur];
     }
 
     public bool Running => _running;
@@ -204,14 +214,28 @@ public sealed class ProfileLearner
     /// qui dit trois. Deux instruments : doublon 1,00 au troisieme. Une basse seule : 0,8 %
     /// de reste des deux sources — le plancher dit deux.
     ///
+    /// ET LE LIEN. Un instrument coupe en deux gabarits de formes differentes passe le
+    /// doublon, mais ses deux niveaux montent et descendent ensemble : mesure, 0,77 et 0,79
+    /// sur les instruments fabriques, contre 0,55 pour la guitare qui entre vraiment a
+    /// soixante secondes de Passepartout. Le seuil est a 0,70, entre les deux.
+    ///
+    /// LE DOUBLON EST A 0,60, ET IL ETAIT A 0,85. La croissance (voir
+    /// <see cref="TryStartCroissance"/>) a montre des coupes en deux a 0,74 et 0,79 qui
+    /// passaient, avec un lien de 0,59 a 0,69 qui passait aussi ; la vraie entree de la
+    /// guitare, elle, est a 0,34. Entre 0,34 et 0,74, le seuil est a 0,60 — et sur
+    /// Passepartout a quarante secondes, deux sources restent deux : la troisieme etait une
+    /// seconde basse a 0,86, ce que l'oreille appelait deja « aussi une basse ».
+    ///
     /// LE BALAYAGE PART DE LA MEME GRAINE POUR TOUS LES K. Sans cela le reste ne serait pas
     /// comparable d'un K au suivant — une initialisation heureuse a K=5 battrait une
     /// initialisation malheureuse a K=6 et l'on prendrait ce hasard pour un coude.
     /// </summary>
     public bool TryStartChoix(ReadOnlySpan<float> spectrogram, int kMin, int kMax, int trames,
                               int iterationsBalayage = 40, float seuilGain = 0.15f,
-                              float seuilDoublon = 0.85f, float plancher = 0.01f)
+                              float seuilDoublon = 0.60f, float plancher = 0.01f,
+                              float seuilLien = 0.70f)
     {
+        _seuilLien = seuilLien;
         if (_running || _published) return false;
         spectrogram.CopyTo(_v);
         _kMin = Math.Max(1, kMin);
@@ -225,6 +249,76 @@ public sealed class ProfileLearner
         _running = true;
         if (RunInline) Run(); else Task.Run(Run);
         return true;
+    }
+
+    /// <summary>
+    /// Reapprend au nombre courant, en repartant des gabarits donnes — et essaie UNE source
+    /// de plus.
+    ///
+    /// LE MORCEAU NE DIT PAS TOUT EN QUARANTE SECONDES. Passepartout commence par piano et
+    /// basse ; la guitare entre a trente secondes, la batterie a cinquante. Le choix fait a
+    /// la memoire pleine rendait deux sources, et c'etait juste — a cet instant-la. Mais
+    /// ensuite rien ne grandissait : ce qui entrait apres se faisait absorber par les deux.
+    ///
+    /// Ici, a chaque reapprentissage, on apprend a K depuis les gabarits courants (ils
+    /// restent a leur place), puis a K+1 avec un gabarit neuf, et l'on garde K+1 seulement
+    /// s'il passe les memes criteres que le balayage : du neuf explique, pas un doublon,
+    /// et quelque chose qui restait a expliquer. On ne redescend jamais : une source qui
+    /// se tait garde sa case, elle est juste muette.
+    /// </summary>
+    public bool TryStartCroissance(ReadOnlySpan<float> spectrogram, ReadOnlySpan<float> seed,
+                                   int k, int trames, float seuilGain = 0.15f,
+                                   float seuilDoublon = 0.60f, float plancher = 0.01f,
+                                   float seuilLien = 0.70f)
+    {
+        _seuilLien = seuilLien;
+        if (_running || _published) return false;
+        spectrogram.CopyTo(_v);
+        seed.CopyTo(_w);
+        _k = Math.Clamp(k, 1, _sources);
+        _trames = trames <= 0 ? _memory : Math.Min(trames, _memory);
+        _seuilGain = seuilGain;
+        _seuilDoublon = seuilDoublon;
+        _plancher = plancher;
+        _choisir = false;
+        _croitre = _k < _sources;
+        _running = true;
+        if (RunInline) Run(); else Task.Run(Run);
+        return true;
+    }
+
+    private void Croitre()
+    {
+        var k = _k;
+        GraineNiveaux();
+        for (var it = 0; it < _iterations; it++) Iterer();
+        var resteK = Reste();
+        Array.Copy(_w, _wGarde, _w.Length);
+
+        // Un gabarit neuf en colonne k, les k premiers tels qu'ils viennent d'etre appris.
+        var rng = new Random(1203 + k);
+        var neuf = _w.AsSpan(k * Longueur, Longueur);
+        for (var f = 0; f < Longueur; f++) neuf[f] = 0.1f + (float)rng.NextDouble();
+        _k = k + 1;
+        Normaliser();
+        GraineNiveaux();
+        for (var it = 0; it < _iterations; it++) Iterer();
+        var resteK1 = Reste();
+        var doublon = Doublon();
+        var lien = Lien();
+        _bilans = [new Bilan(k, resteK, 0f), new Bilan(k + 1, resteK1, doublon, lien)];
+        lock (_historique) _historique.Add(_bilans);
+
+        var garde = resteK >= _plancher
+                 && (resteK - resteK1) / MathF.Max(Eps, resteK) >= _seuilGain
+                 && doublon < _seuilDoublon
+                 && lien < _seuilLien;
+        if (!garde)
+        {
+            Array.Copy(_wGarde, _w, _w.Length);
+            _k = k;
+        }
+        Choix = _k;
     }
 
     private void Graine()
@@ -269,9 +363,11 @@ public sealed class ProfileLearner
             for (var it = 0; it < _iterationsBalayage; it++) Iterer();
             var reste = Reste();
             var doublon = Doublon();
-            bilans.Add(new Bilan(k, reste, doublon));
+            var lien = Lien();
+            bilans.Add(new Bilan(k, reste, doublon, lien));
 
             if (doublon >= _seuilDoublon) break;                                   // coupe en deux : trop
+            if (lien >= _seuilLien) break;                                         // joue avec un autre : trop
             if (restePrecedent is { } rp && (rp - reste) / rp < _seuilGain) break; // plus rien de neuf
             choix = k;
             restePrecedent = reste;
@@ -279,6 +375,7 @@ public sealed class ProfileLearner
         }
         Choix = choix;
         _bilans = bilans;
+        lock (_historique) _historique.Add(bilans);
 
         // Puis l'apprentissage complet, au nombre retenu, depuis la meme graine.
         Graine();
@@ -316,6 +413,38 @@ public sealed class ProfileLearner
             }
         }
         return tot > 0 ? (float)(d / tot) : 0f;
+    }
+
+    /// <summary>
+    /// Le pire lien entre deux sources : la correlation, dans le temps, de leurs niveaux
+    /// (toutes positions confondues). Un instrument coupe en deux gabarits donne deux
+    /// niveaux qui montent et descendent ensemble ; deux instruments, non.
+    /// </summary>
+    private float Lien()
+    {
+        var pire = 0f;
+        for (var a = 0; a < _k; a++)
+            for (var b = a + 1; b < _k; b++)
+            {
+                double sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+                for (var t = 0; t < _trames; t++)
+                {
+                    double na = 0, nb = 0;
+                    for (var p = 0; p < Positions; p++)
+                    {
+                        na += _h[(a * Positions + p) * _memory + t];
+                        nb += _h[(b * Positions + p) * _memory + t];
+                    }
+                    sa += na; sb += nb; saa += na * na; sbb += nb * nb; sab += na * nb;
+                }
+                var n = (double)_trames;
+                var cov = sab / n - (sa / n) * (sb / n);
+                var va = saa / n - (sa / n) * (sa / n);
+                var vb = sbb / n - (sb / n) * (sb / n);
+                var c = va > 1e-12 && vb > 1e-12 ? (float)(cov / Math.Sqrt(va * vb)) : 0f;
+                if (c > pire) pire = c;
+            }
+        return pire;
     }
 
     /// <summary>
@@ -365,6 +494,10 @@ public sealed class ProfileLearner
         if (_choisir)
         {
             Balayer();
+        }
+        else if (_croitre)
+        {
+            Croitre();
         }
         else
         {

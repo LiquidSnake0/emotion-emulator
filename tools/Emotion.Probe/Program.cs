@@ -216,6 +216,7 @@ var agree = 0;
 var compared = 0;
 var ruptures = 0;
 var kickAt = new List<long>();
+IReadOnlyList<ProfileLearner.Bilan> bilansVus = [];
 using var journalSources = args.FirstOrDefault(a => a.StartsWith("sources="))?[8..] is { } fichierSources
     ? new StreamWriter(fichierSources) : null;
 var syncErr = new List<float>();
@@ -333,6 +334,15 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
                  .Append('\t').Append(l.Tenue.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         }
         journalSources.WriteLine(ligne.ToString());
+    }
+
+    // Chaque balayage ou croissance, quand il tombe : pour lire les seuils sur un morceau.
+    if (!ReferenceEquals(analyzer.Separation.Bilans, bilansVus) && analyzer.Separation.Bilans.Count > 0)
+    {
+        bilansVus = analyzer.Separation.Bilans;
+        Console.WriteLine($"   t={tMs / 1000.0,6:F1} s  bilans  " + string.Join("  ",
+            bilansVus.Select(b => $"{b.K}:{100 * b.Reste:F2}%/doublon {b.Doublon:F2}/lien {b.Lien:F2}"))
+            + $"  -> {analyzer.Separation.Actives} actives");
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));

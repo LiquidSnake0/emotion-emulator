@@ -88,7 +88,8 @@ public class SeparationChoixTests
     }
 
     private static string Bilans(SourceSeparator sep) =>
-        string.Join("  ", sep.Bilans.Select(b => $"{b.K}:{100 * b.Reste:F2}%/{b.Doublon:F2}"));
+        string.Join(" | ", sep.Historique.Select(h => string.Join("  ",
+            h.Select(b => $"{b.K}:{100 * b.Reste:F2}%/{b.Doublon:F2}/lien {b.Lien:F2}"))));
 
     [Fact]
     public void Trois_instruments_donnent_trois()
@@ -177,8 +178,10 @@ public class SeparationChoixTests
         var sep = Apprendre([Basse, Piano, Clair]);
 
         // Le reste doit baisser jusqu'a trois, puis ne presque plus bouger : c'est CELA
-        // qu'on appelle un coude, et c'est ce que l'ecran doit pouvoir expliquer.
-        var bilans = sep.Bilans;
+        // qu'on appelle un coude, et c'est ce que l'ecran doit pouvoir expliquer. On lit le
+        // PREMIER bilan, celui du balayage : les suivants sont ceux de la croissance, qui
+        // n'essaie que K et K+1.
+        var bilans = sep.Historique[0];
         Assert.True(bilans.Count >= 3);
         var deux = bilans.First(b => b.K == 2).Reste;
         var trois = bilans.First(b => b.K == 3).Reste;

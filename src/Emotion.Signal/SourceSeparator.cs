@@ -77,6 +77,7 @@ public sealed class SourceSeparator
 
     /// <summary>Ce que le balayage a mesure, pour la sonde et le diagnostic.</summary>
     public IReadOnlyList<ProfileLearner.Bilan> Bilans => _apprentissage.Bilans;
+    public IReadOnlyList<IReadOnlyList<ProfileLearner.Bilan>> Historique => _apprentissage.Historique;
     public bool ChoixFait => _choixFait;
 
     /// <summary>Iterations de l'apprentissage complet. Au-dela, les gabarits ne bougent plus guere.</summary>
@@ -320,7 +321,7 @@ public sealed class SourceSeparator
             // deux fois de suite. Ensuite on reapprend au nombre retenu, une fois par
             // demi-memoire, en repartant des gabarits courants : ils restent a leur place.
             var lance = _choixFait
-                ? _apprentissage.TryStart(_v, _w, Actives, _memoire)
+                ? _apprentissage.TryStartCroissance(_v, _w, Actives, _memoire)
                 : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire, IterationsBalayage);
             if (lance) _depuisApprentissage = 0;
         }
@@ -331,11 +332,21 @@ public sealed class SourceSeparator
         {
             var avant = Actives;
             Actives = _apprentissage.DernierK;
-            if (_apprentissage.DernierEtaitChoix) _choixFait = true;
-            // Un nombre de sources qui change rend la stabilite par rang sans objet : les
-            // rangs ne designent plus les memes choses. On repart.
-            if (Actives != avant) _profilConnu = false;
-            Ordonner();
+            MesurerHauteurs();
+            if (_apprentissage.DernierEtaitChoix)
+            {
+                // Le choix range les sources du grave a l'aigu, une fois par disque. Un
+                // nombre de sources qui change rend la stabilite par rang sans objet.
+                _choixFait = true;
+                if (Actives != avant) _profilConnu = false;
+                Ordonner();
+            }
+            else
+            {
+                // LA CROISSANCE NE REORDONNE PAS. Une source qui entre prend la case
+                // suivante : la case 2 reste la case 2, ce que le DJ y a entendu y reste.
+                for (var r = avant; r < Actives; r++) _ordre[r] = r;
+            }
             MesurerStabilite();
             Pret = true;
         }
@@ -420,7 +431,7 @@ public sealed class SourceSeparator
     /// ou il a joue. Sans nom, il faut au moins un ordre stable : sans lui, la source
     /// affichee en premiere case changerait a chaque apprentissage.
     /// </summary>
-    private void Ordonner()
+    private void MesurerHauteurs()
     {
         for (var s = 0; s < Sources; s++)
         {
@@ -434,7 +445,10 @@ public sealed class SourceSeparator
             _centres[s] = total > Eps ? (float)(poids / total) : Longueur / 2f;
             _hauteurs[s] = EnOctavesHz(CaseEnHz(_centres[s] + _positionsApprises[s]));
         }
+    }
 
+    private void Ordonner()
+    {
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
         // Seules les actives se classent du grave a l'aigu ; les rangs eteints restent
         // derriere, ou personne ne les lit.

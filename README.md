@@ -906,10 +906,20 @@ qu'*est* une guitare, pas une propriété du signal qu'on extrait de quarante se
 la limite d'un séparateur sans connaissance préalable, et elle est dite.**
 
 Le nombre de sources reste choisi par balayage, avec des seuils mesurés sur la nouvelle
-divergence : Passepartout 4,2 · 2,3 · 2,1 · 2,1 % de reste — **trois** ; trois instruments
-fabriqués qui changent de note — trois, parce que le quatrième gabarit est une copie à 0,98 ;
-une basse seule qui parcourt son octave — une source, et non une par note. L'apprentissage
-coûte une seconde et demie en moyenne et quatre au pire, dans un fil de fond, pour quarante secondes de cue.
+divergence : trois instruments fabriqués qui changent de note — trois, parce que le
+quatrième gabarit est une copie ; une basse seule qui parcourt son octave — une source, et
+non une par note.
+
+**Et le morceau ne dit pas tout en quarante secondes.** Passepartout commence par piano et
+basse ; la guitare entre à trente secondes, la batterie à cinquante. Le choix fait à la
+mémoire pleine rend donc **deux** sources — et c'est juste, à cet instant-là. Ensuite, à
+chaque réapprentissage, la séparation essaie une source de plus et ne la garde que si elle
+explique du neuf, n'est ni une copie d'un gabarit existant ni un instrument coupé en deux
+(deux niveaux qui montent et descendent ensemble : 0,77 sur une fausse coupe, 0,55 sur la
+vraie entrée de la guitare). Une source qui entre prend la case suivante ; on ne redescend
+jamais. Sur Passepartout : deux à 40 s, **trois à 60 s**, stable ensuite — la batterie est
+rejetée à chaque essai, à 0,9 de ressemblance avec la basse. L'apprentissage coûte deux
+secondes et demie en moyenne et quatre au pire, dans un fil de fond.
 
 ### Le morse de chaque source, et il était celui d'une bande
 
