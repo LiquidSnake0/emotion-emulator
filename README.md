@@ -18,8 +18,8 @@ Compagnon de [crate](https://github.com/LiquidSnake0/crate), la base de données
 de disques. Les deux se parlent par HTTP, ils ne fusionnent pas.
 
 `.NET 10` · `ASP.NET Core` · `mémoire partagée` · `PulseAudio` · `xUnit` · `Python` · `Qt` ·
-**187 tests** · **30 contrôles de fumée** · **zéro dépendance tierce dans le cœur** ·
-**21 ms d'analyse**
+**205 tests** · **32 contrôles de fumée** · **zéro dépendance tierce dans le cœur** ·
+**21 ms d'analyse** · **le nombre de sources est découvert, jamais imposé**
 
 ---
 
@@ -31,12 +31,13 @@ qu'elle contient bien ce qu'elle prétend.
 
 <table>
 <tr>
-<td width="55%"><img src="docs/images/mur.png" alt="Le mur"><br>
-<sub><b>Le mur</b> · six sources, une forme chacune, aucune deux fois ; le tempo, la mesure
-et ce qui se répète en bandeau</sub></td>
-<td width="45%"><img src="docs/images/mesure.png" alt="La mesure hors ligne"><br>
-<sub><b>La mesure hors ligne</b> · clair = ce qu'une analyse indépendante attend, vert = ce
-que le moteur publie au même instant. Elle ne sert plus qu'aux mesures sur fichier</sub></td>
+<td width="50%"><img src="docs/images/mur.png" alt="Le mur"><br>
+<sub><b>Le mur</b> · Glyph Chamber, verrouillé : trois sonorités trouvées par le moteur et
+<b>le reste</b> en dernière case ; sous chaque forme, son motif dans la mesure — le morse à
+venir — et le curseur de la mesure</sub></td>
+<td width="50%"><img src="docs/images/motif.png" alt="Une source isolée"><br>
+<sub><b>Une source choisie</b> · elle seule s'entend, les autres restent en sourdine ; ses
+seize cases disent où elle monte, mesure après mesure</sub></td>
 </tr>
 </table>
 
@@ -54,13 +55,109 @@ de départ sans jamais s'y verrouiller.
 |---|---|
 | **clic dans une case, ou 1 à 6** | la source est choisie, **et elle seule s'entend** |
 | **le même clic à nouveau** | tout le morceau revient, la source reste choisie |
-| **7 et 8** | la batterie de référence, et ce que le moteur retient comme frappe |
-| **bord droit d'une case** | le fader : la fenêtre est un stem player à six pistes |
-| **espace** | maintenu = présence, tapé = instants — ce que l'oreille marque |
+| **bord droit d'une case** | le fader : la fenêtre est un stem player, autant de pistes que de sources |
+| **la ligne du bas** | « 2 pistes », puis « 3 pistes » : les pistes suivent les sources que le moteur découvre |
+| **espace** | maintenu = présence, tapé = instants — ce que l'oreille marque, confronté au moteur |
+| **le trait sous chaque forme** | le motif de la source : où elle monte dans la mesure, et où l'on en est |
 
 **Le rendu ne passe par aucun réseau.** Le moteur publie 256 octets dans `/dev/shm`, la
 fenêtre Qt les lit, et l'eGPU les lira sur PCIe ou USB-C — même contrat, sans intermédiaire.
 C'est ce qui fait de cette fenêtre une mesure et non une illustration.
+
+---
+
+## Le cue apprend, le master joue
+
+C'est la bifurcation qui a donné sa forme au moteur, et elle est du DJ :
+
+> « Pendant le beatmatch il arrive à séparer le son ; quand la musique est au master, il
+> doit pouvoir se débrouiller par la suite : fixer le BPM, ne plus chercher à le retoucher
+> une fois qu'on a capté le boom-tchak, et si au boom une note de piano puis au tchak une
+> autre, on garde en tête cette possibilité — repérer les patterns de répétition. »
+
+Le son ne passe jamais par le moteur : platine → table → sono. Le moteur **écoute** la
+sortie casque pendant les quarante secondes du cue, et ce qu'il en tire ne s'appelle jamais
+« piano » ou « guitare » — le rendu n'en a que faire. Ce qu'il en tire, c'est **combien de
+sonorités**, **laquelle frappe, laquelle tient**, et **où chacune tombe dans la mesure**.
+
+```mermaid
+flowchart LR
+    dj(["DJ"])
+    platine["platine"]
+    xone["Xone:92<br/>cue · master"]
+    sono["sono"]
+    ee["<b>Emotion Emulator</b><br/>écoute le cue<br/>publie 256 octets"]
+    gpu["unité de rendu<br/>cube · vidéo · formes"]
+    crate["crate<br/>la fiche du disque"]
+
+    dj -->|pose un disque| platine --> xone --> sono
+    xone -.->|sortie casque| ee
+    crate -.->|BPM · caractère M+/M-| ee
+    ee ==>|"sources · morse à venir · verrou"| gpu
+    dj -.->|"beatmatch 40 s<br/>puis master"| xone
+    gpu -->|"le cube tourne au BPM,<br/>la couleur change sur la source 3,<br/>les coins s'étirent sur le souffle"| dj
+```
+
+### Ce qui se passe entre le cue et le master
+
+```mermaid
+sequenceDiagram
+    participant DJ
+    participant M as Moteur
+    participant G as Rendu
+    DJ->>M: pose le disque au casque (t = 0)
+    Note over M: 5 s · provisoire : quatre sources, pour que l'écran vive
+    Note over M: 40 s · la mémoire est pleine : balayage 2→6,<br/>le nombre de sources est CHOISI
+    M->>G: 2 sources + le reste, niveaux, hauteurs, frappes
+    Note over M: toutes les 20 s · une source de plus est essayée,<br/>gardée si elle explique du neuf sans copier ni suivre une autre
+    M->>G: 3 sources + le reste (la guitare est entrée)
+    Note over M: chaque mesure · la montée de chaque source<br/>est rangée sur seize cases
+    M->>G: motif par source : le morse à venir
+    Note over M: 16 mesures tenues · VERROU :<br/>le morceau est su, plus de réapprentissage
+    DJ->>M: passe au master
+    G-->>DJ: allume la case avant que la note ne sonne
+```
+
+**Pourquoi le motif, et pas la détection.** Une frappe détectée arrive toujours en retard —
+la fenêtre qui la voit mesure 85 ms — et jamais deux fois pareil. Un motif tenu sur seize
+mesures se joue *en avance* : le rendu allume la couleur sur la note, pas après. La détection
+ne sert plus qu'à confirmer qu'on est toujours en phase. Et quand le motif ne tient pas, le
+moteur ne verrouille pas : Timeline Explorer n'a de motif stable nulle part, pas même chez le
+juge extérieur, parce que la grille y dérive — la stabilité du motif est aussi un indicateur
+de santé de la grille.
+
+### Ce que le rendu reçoit, par source
+
+| octet | ce qu'il dit | d'où il vient |
+|---|---|---|
+| niveau | combien elle joue, rapporté à sa propre crête | le suivi des gabarits, lissé sur 85 ms |
+| hauteur | une vraie hauteur de note : le gabarit plus sa position | le gabarit qui glisse sur deux octaves |
+| frappe | elle vient de monter franchement | son propre niveau — plus la bande de fréquence de même rang |
+| pique · tenue · retrait | frappe-t-elle, tient-elle, s'est-elle tue | l'enveloppe par source |
+| motif (16 bits) | où elle monte dans la mesure | seize mesures de montées, sur la grille |
+| **la dernière case** | **le reste** : ce que les gabarits n'expliquent pas | sur ce répertoire, la batterie |
+| verrou | le morceau est su | deux motifs tenus sur seize mesures |
+
+### Ce que ça vaut, mesuré
+
+Le moteur seul sur chaque titre de l'album, jugé contre un séparateur appris sur des
+milliers de morceaux (Demucs) — meilleure corrélation d'une piste avec chaque stem :
+
+| titre | sources | basse | batterie | mélodique | verrou |
+|---|---|---|---|---|---|
+| Interactive WordBank | 3 + reste | 0,86 | 0,78 | 0,91 | — |
+| Glyph Chamber | 3 + reste | **0,96** | 0,60 | 0,80 | **oui**, motifs à 0,86–0,93 |
+| Dead Internet Theory | 3 + reste | 0,92 | 0,69 | 0,77 | — |
+| Passepartout | 3 + reste | 0,83 | 0,77 | 0,72 | — |
+| Echoes of the Ancients | 3 + reste | 0,83 | 0,80 | 0,80 | — |
+| Timeline Explorer | 3 + reste | 0,71 | 0,80 | 0,83 | — (la grille dérive) |
+| Codex Sinaiticus | 4 + reste | 0,51 | 0,78 | 0,82 | — |
+
+Sur sept titres sur neuf, la batterie est bien la dernière case. Le DJ, à l'oreille, sur
+Passepartout : « piano / synthé très tenu / les aigus et le tchak / boum-tchak » — quatre
+cases, quatre sonorités. Et ce que le moteur **ne sait pas faire**, dit tel quel : décoller
+une guitare d'un piano qui ont les mêmes harmoniques et la même enveloppe (trois bancs, aucune
+configuration), et juger le morse du piano à la machine — c'est la touche espace qui le juge.
 
 ---
 
@@ -116,7 +213,7 @@ flowchart LR
     subgraph server["Emotion.Server — .NET 10"]
         deck["<b>DeckState</b><br/>joue / calé"]
         am["<b>analyseur MASTER</b><br/>attaques · tempo · harmonie"]
-        ac["<b>analyseur CUE</b><br/>attaques · tempo · harmonie"]
+        ac["<b>analyseur CUE</b><br/>attaques · tempo · harmonie<br/>sources · reste · motifs · verrou"]
         blend["<b>BlendEstimator</b><br/>corrélation des dynamiques"]
         worker["<b>SignalWorker</b><br/>BackgroundService"]
         bus["<b>FrameBus</b><br/>file bornée"]
@@ -275,6 +372,17 @@ flowchart TD
     fft2 --> flat["platitude spectrale"]
     chroma --> harm(["HARMONIE<br/>note · accord · auréole"])
     flat --> harm
+
+    fft2 --> log["192 cases log<br/>24 par octave"]
+    log --> gab["gabarits qui glissent<br/>KL · 2 octaves · 40 s de cue<br/>nombre choisi, puis croissance"]
+    gab --> src(["SOURCES<br/>niveau · hauteur · frappe"])
+    gab --> reste(["LE RESTE<br/>ce que rien n'explique : la batterie"])
+    src --> motif(["MOTIF<br/>16 cases par mesure · verrou"])
+    reste --> motif
+
+    style src fill:#2d5c3a,stroke:#5ad98a,color:#fff
+    style reste fill:#5c2d2d,stroke:#d95a5a,color:#fff
+    style motif fill:#2d5c5c,stroke:#5ad9d9,color:#fff
 
     style kick fill:#2d4a6b,stroke:#5a90d9,color:#fff
     style clap fill:#6b5a2d,stroke:#d9b95a,color:#fff

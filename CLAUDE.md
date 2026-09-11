@@ -2097,9 +2097,44 @@ HyperText Odyssey la mettent dans un gabarit. Basse médiane 0,83, batterie 0,77
 faible est la basse de Codex Sinaiticus (0,51, cinq sources) — à écouter. Pistes livrées
 pour l'oreille : `~/Documents/emotion-sources/{glyph-chamber,codex-sinaiticus,timeline-explorer}/`.
 
+### Le motif de chaque source, et le verrou
+
+Sa phrase, à garder telle quelle : « pendant le beatmatch il arrive à séparer le son ; au
+master il doit se débrouiller : fixer le BPM, ne plus retoucher une fois le boom-tchak
+capté, et si au boom une note de piano puis au tchak une autre, repérer les patterns de
+répétition ». Le cue apprend, le master joue.
+
+**Mesure d'abord** (sonde `sources=` avec la phase, trois titres, seize cases par mesure) :
+le bit `frappe` donne des motifs vides (trop peu de frappes depuis le lissage du suivi, une
+case de jitter) ; le niveau suit la nappe ; **la montée du niveau** donne des motifs stables
+à 0,93–0,98 entre mesures paires et impaires sur Glyph Chamber, et le motif du reste y colle
+à celui de la batterie ; Passepartout 0,4–0,8 ; Timeline Explorer rien, pas même chez le
+juge — la grille y dérive, et la stabilité du motif devient un indicateur de santé de la
+grille.
+
+**Dans le moteur** : `MotifSources` (montée par case, seize mesures en anneau, stabilité =
+corrélation paires/impaires, `Masque` = cases ≥ 50 % du max, `Verrouille(publiees)` = deux
+sources tenues à ≥ 0,80 sur seize mesures). Branché dans l'analyseur sur `act[i]` et
+`(_grid.Beat + _grid.Phase) / 4`. Paquet : six `ushort` à **243** (`MotifSource0..5`), verrou
+à **255**. `SourceSeparator.Verrou` coupe tout réapprentissage. La fenêtre dessine seize
+cases sous chaque forme avec le curseur de la mesure (`P_MOTIFS`, `P_VERROU`). La sonde
+imprime motifs, stabilités, verrou.
+
+> **Le verrou souple a été essayé et retiré** : gabarits figés mais croissance permise →
+> sans adaptation, « du neuf » apparaissait à chaque essai, Glyph Chamber montait à cinq
+> sources. Strict, avec seize mesures (≈ 50 s) avant de verrouiller, pour laisser aux
+> instruments qui entrent le temps d'avoir leur case. Glyph Chamber : 3 + reste, verrouillé,
+> motifs 0,86–0,93. Passepartout, Timeline Explorer, WordBank : pas de verrou.
+
+Le README a été réécrit en tête pour cette avancée (cas d'usage, séquence cue→master, ce que
+le rendu reçoit par source, tableau croisé), avec deux captures `docs/images/mur.png` et
+`motif.png` prises sur Glyph Chamber verrouillé (fenêtre hors écran, `capture.sh` dans le tmp
+du job).
+
 Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
-un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; et le morse du
-piano jugé à l'oreille, avec le protocole corrigé.
+un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; le morse du
+piano jugé à l'oreille, avec le protocole corrigé ; et le retard de 60–80 ms du bit `frappe`
+à compenser au rendu (ou à remplacer par le motif, qui est en avance).
 
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 
