@@ -1935,7 +1935,7 @@ d'apprentissage par K — abandonnée.
 | `extraire.py` | voie `gabarits` : `axe_log` (la même projection que le moteur, et son retour), `etaler`, `activer_gabarits` (KL), `separer_gabarits` (STFT par blocs, deux passes, masque = part de la source dans la reconstruction, ramené sur les raies). Contrôles 1 et 2 gardés. `stems.py` suit. |
 | `fenetre.py` | `EMOTION_PISTES=<prefixe>` joue des pistes externes sous les faders ; plus d'exigence de six pistes ; doublon `journaliser`/`instant` retiré. |
 | tests | `SeparationChoixTests` sur des **instruments fabriqués qui changent de note** (basse 55 Hz, piano 220, clair 880, harmoniques propres) : 3 → 3, 2 → 2, une basse seule ≤ 2, ordre du grave à l'aigu, rangs au-delà à zéro, Reset, coude. |
-| retiré | `outils/profils_entier.py` (ancien format). |
+| retiré | `outils/profils_entier.py` (ancien format) ; puis, sur son « vasy », l'ancienne voie `profils` d'`extraire.py` (`separer`, `activations`, le témoin fixe, le masque `independant`, la reproductibilité des rangs) et le second passage de sonde d'`ecouter.sh`. Les mesures restent dans le README. |
 
 ### Chiffres du moteur sur Passepartout
 

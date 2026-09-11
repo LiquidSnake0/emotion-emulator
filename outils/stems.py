@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Les six pistes d'un morceau, taillées sur les profils de la session en cours.
+"""Les pistes d'un morceau, taillées sur les gabarits de la session en cours.
 
     python3 outils/stems.py <morceau> <dossier-cache> [url-du-moteur]
 
-POURQUOI LES PROFILS VIENNENT DU MOTEUR QUI TOURNE, ET NON D'UNE EXTRACTION FAITE LA VEILLE.
+POURQUOI LES GABARITS VIENNENT DU MOTEUR QUI TOURNE, ET NON D'UNE EXTRACTION FAITE LA VEILLE.
 
 On pourrait extraire l'album une fois pour toutes. Ce serait faux, et la mesure le dit : deux
 apprentissages du même morceau trouvent bien les mêmes six objets — cosinus 0,77 à 0,91 sous
@@ -15,12 +15,12 @@ Autrement dit, la « source 3 » d'un fichier extrait hier n'est pas la case 3 q
 montre aujourd'hui. On entendrait une source en en jugeant une autre, **sans que rien ne le
 signale** — exactement la fausse preuve qu'un outil de validation ne doit jamais produire.
 
-D'où `/profils` : le moteur rend ce que CETTE session a appris, et les six pistes portent
-alors les mêmes numéros que les six cases.
+D'où `/profils` : le moteur rend ce que CETTE session a appris, et les pistes portent alors
+les mêmes numéros que les cases.
 
 CE QU'IL FAUT ATTENDRE, ET POURQUOI ON NE PEUT PAS L'ÉVITER.
 
-La séparation apprend en écoutant : ses profils ne valent rien tant qu'elle n'a pas entendu
+La séparation apprend en écoutant : ses gabarits ne valent rien tant qu'elle n'a pas entendu
 assez de musique (`pret` reste faux). On attend donc que le moteur le dise, puis on extrait.
 Pendant ce temps le morceau joue déjà — l'attente est masquée, pas supprimée.
 """
@@ -84,23 +84,17 @@ def mono48(chemin, vers):
 
 
 def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
-    """Écrit les six pistes. Rend leur liste, ou None si la session n'a rien appris.
-
-    Le mode de masque (`MASQUE`) traverse jusqu'a `extraire` : « partage » garantit que la
-    somme des six est le morceau, « independant » supprime le creusement mutuel et perd cette
-    exactitude. Les deux jeux doivent aller dans des dossiers distincts, sinon le cache de
-    l'un sert a l'autre et les deux colonnes de la comparaison sont la meme.
-    """
+    """Écrit les pistes. Rend leur liste, ou None si la session n'a rien appris."""
     os.makedirs(dossier, exist_ok=True)
     base = os.path.splitext(os.path.basename(chemin_morceau))[0]
     # AUTANT DE PISTES QUE LE MOTEUR PUBLIE DE SOURCES, et ce n'est plus six : la
-    # separation decouvre son nombre par disque. Le nombre se lit dans les profils.
+    # separation decouvre son nombre par disque. Le nombre se lit dans les gabarits.
     nb = 6
 
     # DEJA FAIT, DEJA BON — mais seulement pour CETTE session. Le fichier temoin porte la
-    # signature des profils employes : si le moteur a rappris entre-temps, les rangs ont pu
+    # signature des gabarits employes : si le moteur a rappris entre-temps, les rangs ont pu
     # glisser et le cache ne vaut plus rien.
-    marque = os.path.join(dossier, f"{base}.profils.json")
+    marque = os.path.join(dossier, f"{base}.gabarits.json")
 
     p = profils(url, dire=dire)
     if p is None:
