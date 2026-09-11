@@ -312,11 +312,13 @@ public sealed class SourceSeparator
             if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
                 _provisoireFait = true;
         }
-        else if (_remplies >= _memoire && ++_depuisApprentissage >= _memoire / 2)
+        else if (_remplies >= _memoire && (!_choixFait || ++_depuisApprentissage >= _memoire / 2))
         {
-            // Le CHOIX du nombre de sources se fait une fois par disque, quand la memoire
-            // est pleine pour la premiere fois. Ensuite on reapprend au nombre retenu, en
-            // repartant des gabarits courants : ils restent a leur place.
+            // Le CHOIX du nombre de sources se fait une fois par disque, DES QUE la memoire
+            // est pleine : il attendait encore une demi-memoire de plus, et les pistes en
+            // solo n'arrivaient qu'a deux minutes vingt — le DJ fermait la fenetre avant,
+            // deux fois de suite. Ensuite on reapprend au nombre retenu, une fois par
+            // demi-memoire, en repartant des gabarits courants : ils restent a leur place.
             var lance = _choixFait
                 ? _apprentissage.TryStart(_v, _w, Actives, _memoire)
                 : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire, IterationsBalayage);

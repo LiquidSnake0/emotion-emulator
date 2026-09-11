@@ -100,7 +100,12 @@ def reglage(nom, defaut, conv=float):
 #
 # On aurait pu s'arrêter à 50 % en écoutant vite fait, et l'on aurait entendu une source
 # bourdonner cent fois plus que son témoin en croyant que la séparation la hachait.
-RECOUVREMENT = reglage("RECOUVREMENT", 8, int)
+# QUATRE PAR DEFAUT, ET C'EST UN ARBITRAGE DIT. A huit (88 %), l'extraction d'un morceau
+# prenait 94 s apres les 45 s du choix : le DJ fermait la fenetre avant d'avoir entendu une
+# seule piste en solo, deux fois de suite. A quatre (75 %), le bourdonnement mesure passe de
+# x5 a x7 — audible a l'oreille attentive, mais les pistes arrivent en une trentaine de
+# secondes, et c'est leur raison d'etre : etre entendues pendant que le disque joue.
+RECOUVREMENT = reglage("RECOUVREMENT", 4, int)
 
 # Trames traitées d'un coup. À 88 % de recouvrement, un morceau de quatre-vingt-dix secondes
 # en compte soixante-sept mille : garder tout le spectrogramme en mémoire demanderait un
@@ -192,7 +197,7 @@ def etaler(gabarits, cases, positions):
     return A
 
 
-def activer_gabarits(A, v, it=30):
+def activer_gabarits(A, v, it=15):
     """Les niveaux par position, gabarits fixes — la regle de Kullback-Leibler du moteur."""
     h = np.full((A.shape[1], v.shape[1]), 0.01)
     somme = A.sum(0)[:, None] + EPS
