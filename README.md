@@ -862,6 +862,55 @@ et l'écran n'allume que les cases trouvées.
 > 0 %**. La séparation trouve le bon nombre d'objets ; elle ne trouve pas encore les bons
 > objets. C'est l'oreille du DJ qui tranche l'étape, pas ce tableau.
 
+### Une sonorité glisse avec la note : le gabarit
+
+Quatre sources trouvées, mais quatre tranches du grave. L'oreille a dit pourquoi avant la
+mesure : « quand le kick, le piano et la guitare sont sur la même mesure, ils s'annulent ».
+Mesuré kick par kick, la source du medium **s'écroulait à un kick sur deux** (48 % contre
+23 % à des instants pris au hasard) pendant que les trois autres montaient de 4 à 8 dB dans
+un registre où le morceau, lui, ne bougeait pas. Trois profils sur quatre étaient le grave.
+
+Et à douze composantes, la factorisation a montré de quoi elle était faite :
+
+```
+0 Hz · 47 · 47 · 47 · 47 · 94 · 94 · 141 · 188 · 281 · 328 · 422 Hz
+```
+
+**Neuf des douze profils étaient les notes de la ligne de basse**, une par case de 47 Hz. Un
+profil spectral fixe ne peut pas décrire un instrument : une basse qui joue un mi puis un la,
+c'est deux profils, et un piano qui change d'accord n'en a jamais un. Faire compter le medium
+davantage (racine, cube, Kullback-Leibler) déplaçait la coupe, jamais le mécanisme.
+
+Une sonorité, c'est une forme spectrale qui **glisse avec la hauteur en gardant sa forme**.
+Sur un axe logarithmique en fréquence, un changement de note est une translation. Le
+séparateur apprend donc des **gabarits** : une forme par source, sur 192 cases de vingt-quatre
+par octave, libre de se placer sur deux octaves — à une octave la basse mangeait trois
+gabarits parce que sa ligne ne tenait pas dedans, à quatre le modèle trichait. Il prend pour
+cela sa propre transformée de 4096 échantillons : à 47 Hz la case, le grave n'avait que quatre
+cases et rien ne pouvait y glisser.
+
+Jugé hors ligne contre un séparateur appris sur des milliers de morceaux (Demucs), par
+corrélation de signal avec ses stems :
+
+| | basse | piano | guitare | kick |
+|---|---|---|---|---|
+| profils fixes (étape 2) | 0,70 · 0,68 · 0,56 | 0,69 (avec tout le reste) | — | — |
+| **gabarits, dans le moteur** | **0,79** · 0,76 | **0,68**, seul | — | — |
+
+**La basse et le piano sortent chacun dans leur gabarit** ; le DJ l'a confirmé à l'oreille
+(« gabarit-2 c'est le piano, gabarit-3 c'est la basse »). La guitare et le kick, non : dans
+aucune configuration — ni spectrale, ni avec une forme dans le temps de 213 ms, mesurée
+aussi — ils ne se décollent de leur voisin. Sur ce mix lo-fi, guitare et piano ont les mêmes
+harmoniques et la même enveloppe ; ce qui les distingue chez Demucs, c'est d'avoir appris ce
+qu'*est* une guitare, pas une propriété du signal qu'on extrait de quarante secondes. **C'est
+la limite d'un séparateur sans connaissance préalable, et elle est dite.**
+
+Le nombre de sources reste choisi par balayage, avec des seuils mesurés sur la nouvelle
+divergence : Passepartout 4,2 · 2,3 · 2,1 · 2,1 % de reste — **trois** ; trois instruments
+fabriqués qui changent de note — trois, parce que le quatrième gabarit est une copie à 0,98 ;
+une basse seule qui parcourt son octave — une source, et non une par note. L'apprentissage
+coûte une seconde et demie en moyenne et quatre au pire, dans un fil de fond, pour quarante secondes de cue.
+
 ---
 
 ## Faire monter la stabilité

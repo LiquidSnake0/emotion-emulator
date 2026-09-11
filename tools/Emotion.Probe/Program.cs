@@ -778,8 +778,8 @@ if (bpmTrace is not null && traceBpm is not null)
     Console.WriteLine($"\n{traceBpm.Count} tempos ecrits vers {bpmTrace}");
 }
 
-// « profils=<fichier.json> » : les six profils spectraux appris, dans l'ordre du grave a
-// l'aigu.
+// « profils=<fichier.json> » : les gabarits appris, dans l'ordre du grave a l'aigu, avec
+// ce qu'il faut pour les relire : l'axe logarithmique et le glissement.
 //
 // C'EST CE QUI PERMET D'ENTENDRE CE QU'UNE SOURCE ENTEND. Toutes nos mesures disent si une
 // source est REGULIERE ; aucune ne dit si elle contient ce qu'elle pretend contenir. Avec
@@ -798,11 +798,15 @@ if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfi
         "{",
         $"  \"fichier\": \"{Path.GetFileName(path).Replace("\\", "/")}\",",
         $"  \"taux\": {rate},",
-        $"  \"bins\": {bins},",
-        $"  \"fenetre\": {SpectrumAnalyzer.Window},",
+        $"  \"fenetre\": {SourceSeparator.FenetreLog},",
+        $"  \"cases\": {ProfileLearner.NLog},",
+        $"  \"parOctave\": {ProfileLearner.ParOctave},",
+        $"  \"f0\": {ProfileLearner.F0.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)},",
+        $"  \"positions\": {ProfileLearner.Positions},",
+        $"  \"longueur\": {bins},",
         $"  \"pret\": {(separation.Pret ? "true" : "false")},",
         $"  \"actives\": {separation.Actives},",
-        "  \"profils\": [",
+        "  \"gabarits\": [",
     };
     for (var r = 0; r < separation.Actives; r++)
     {
@@ -814,7 +818,7 @@ if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfi
     lignes.Add("  ]");
     lignes.Add("}");
     File.WriteAllLines(fichierProfils, lignes);
-    Console.WriteLine($"\nsix profils ecrits vers {fichierProfils}"
+    Console.WriteLine($"\n{separation.Actives} gabarits ecrits vers {fichierProfils}"
                       + (separation.Pret ? "" : "  — ATTENTION : rien n'a ete appris"));
 }
 

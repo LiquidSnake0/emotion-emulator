@@ -253,6 +253,114 @@ def separer(x, wprof, nfft, hop, sources):
     return sorties, brut[:len(x)], n
 
 
+def axe_log(p, taux):
+    """La projection des raies sur les cases logarithmiques, EXACTEMENT celle du moteur.
+
+    Un triangle par case, large d'une case ou d'une raie, la plus grande des deux — voir
+    `SourceSeparator.ConstruireProjection`. On rend aussi la projection inverse, qui ramene
+    un masque de l'axe log sur les raies : chaque raie prend la moyenne des cases qui la
+    couvrent, ponderee comme a l'aller.
+    """
+    nfft, cases, par_oct, f0 = p["fenetre"], p["cases"], p["parOctave"], p["f0"]
+    flin = np.fft.rfftfreq(nfft, 1 / taux)
+    F = np.zeros((cases, len(flin)))
+    ratio = 2 ** (1 / par_oct) - 1
+    for l in range(cases):
+        fc = f0 * 2 ** (l / par_oct)
+        demi = max(fc * ratio, taux / nfft)
+        F[l] = np.clip(1 - np.abs(flin - fc) / demi, 0, None)
+    F /= F.sum(1, keepdims=True) + EPS
+    retour = F / (F.sum(0, keepdims=True) + EPS)
+    return F, retour
+
+
+def etaler(gabarits, cases, positions):
+    """Chaque gabarit a chacune de ses positions : une colonne par (source, position)."""
+    longueur, k = gabarits.shape
+    A = np.zeros((cases, k * positions))
+    for s in range(k):
+        for q in range(positions):
+            A[q:q + longueur, s * positions + q] = gabarits[:, s]
+    return A
+
+
+def activer_gabarits(A, v, it=30):
+    """Les niveaux par position, gabarits fixes — la regle de Kullback-Leibler du moteur."""
+    h = np.full((A.shape[1], v.shape[1]), 0.01)
+    somme = A.sum(0)[:, None] + EPS
+    for _ in range(it):
+        h *= (A.T @ (v / (A @ h + EPS))) / somme
+    return h
+
+
+def separer_gabarits(x, p, hop, dire=print):
+    """Rend les sons des gabarits, et le morceau reconstruit sans masque.
+
+    LES GABARITS GLISSENT : une source n'est plus une colonne fixe mais un gabarit place a
+    l'une de ses positions. Le masque d'une source est la part de sa reconstruction — toutes
+    positions confondues — dans la reconstruction totale, case par case de l'axe log, puis
+    ramenee sur les raies. Le partage reste exact : les masques somment a un.
+
+    LA TRANSFORMEE SE FAIT PAR BLOCS, DEUX FOIS : une fois pour les niveaux, une fois pour
+    les masques. Le morceau entier en complexe tenait deux giga-octets et se faisait tuer.
+    """
+    nfft, cases, positions = p["fenetre"], p["cases"], p["positions"]
+    gabarits = np.array(p["gabarits"], np.float64).T          # longueur x sources
+    sources = gabarits.shape[1]
+    F, retour = axe_log(p, taux_de(p))
+    A = etaler(gabarits, cases, positions)
+    w = hann_periodique(nfft)
+    w2 = w * w
+    n = 1 + max(0, (len(x) - nfft) // hop)
+
+    def bloc_spectres(i0, i1):
+        depart = np.arange(i0, i1) * hop
+        return np.fft.rfft(np.stack([x[d:d + nfft] for d in depart]) * w, axis=1), depart
+
+    # Les niveaux, sur tout le morceau, gabarits fixes.
+    v = np.zeros((cases, n))
+    for i0 in range(0, n, BLOC):
+        i1 = min(n, i0 + BLOC)
+        spectres, _ = bloc_spectres(i0, i1)
+        v[:, i0:i1] = F @ np.abs(spectres).T
+    v += EPS
+    h = lisser(activer_gabarits(A, v), LISSAGE)
+    total = A @ h + EPS
+    parts = []
+    for s in range(sources):
+        hs = np.zeros_like(h)
+        hs[s * positions:(s + 1) * positions] = h[s * positions:(s + 1) * positions]
+        parts.append((A @ hs) / total)                         # cases x n, entre 0 et 1
+
+    sorties = [np.zeros(len(x) + nfft) for _ in range(sources)]
+    brut = np.zeros(len(x) + nfft)
+    poids = np.zeros(len(x) + nfft)
+    for i0 in range(0, n, BLOC):
+        i1 = min(n, i0 + BLOC)
+        spectres, depart = bloc_spectres(i0, i1)
+        rec = np.fft.irfft(spectres, nfft, axis=1) * w
+        for k, d in enumerate(depart):
+            brut[d:d + nfft] += rec[k]
+            poids[d:d + nfft] += w2
+        for s in range(sources):
+            masque = (retour.T @ parts[s][:, i0:i1]).T          # trames x raies
+            part = np.fft.irfft(spectres * masque, nfft, axis=1) * w
+            cible = sorties[s]
+            for k, d in enumerate(depart):
+                cible[d:d + nfft] += part[k]
+
+    bon = poids > 1e-8
+    for s in range(sources):
+        sorties[s][bon] /= poids[bon]
+        sorties[s] = sorties[s][:len(x)]
+    brut[bon] /= poids[bon]
+    return sorties, brut[:len(x)], n
+
+
+def taux_de(p):
+    return int(p["taux"])
+
+
 def ecrire_wav(chemin, x, taux):
     """Un WAV mono 16 bits. On normalise sur le morceau entier, jamais par source.
 
@@ -268,11 +376,56 @@ def ecrire_wav(chemin, x, taux):
         f.writeframes((d * 32767).astype("<i2").tobytes())
 
 
+def extraire_gabarits(p, chemin_wav, dossier):
+    """La voie des gabarits : les deux controles de chaine, puis une piste par source."""
+    x, taux = lire_mono(chemin_wav)
+    x = x.astype(np.float64)
+    if taux != p["taux"]:
+        print(f"le morceau est a {taux} Hz, les gabarits ont ete appris a {p['taux']}")
+    nfft = p["fenetre"]
+    hop = max(1, nfft // RECOUVREMENT)
+    sources = len(p["gabarits"])
+    print(f"{os.path.basename(chemin_wav)} : {len(x) / taux:.0f} s, "
+          f"recouvrement {100 * (1 - 1 / RECOUVREMENT):.0f} %, {sources} gabarits")
+    sons, brut, n = separer_gabarits(x, p, hop)
+    if n < 8:
+        print("  morceau trop court")
+        return 1
+    marge = nfft
+
+    def snr(y):
+        err = y[marge:-marge] - x[marge:-marge]
+        return 10 * math.log10(np.sum(x[marge:-marge] ** 2) / max(EPS, np.sum(err ** 2)))
+
+    a = snr(brut)
+    print(f"  reconstruction sans masque   {a:6.1f} dB", end="")
+    if a <= 60:
+        print("   ECHEC : la chaine est fausse, rien n'est ecrit")
+        return 1
+    print("   ok")
+    b = snr(sum(sons))
+    print(f"  somme des sources = morceau  {b:6.1f} dB", end="")
+    print("   ok" if b > 25 else "   SUSPECT : les masques ne se partagent pas tout")
+
+    os.makedirs(dossier, exist_ok=True)
+    base = os.path.splitext(os.path.basename(chemin_wav))[0]
+    total = max(EPS, sum(float(np.sum(y ** 2)) for y in sons))
+    print(f"\n  {'source':>7s} {'part du son':>12s}")
+    for s in range(sources):
+        chemin = os.path.join(dossier, f"{base}-source{s + 1}.wav")
+        ecrire_wav(chemin, sons[s], taux)
+        print(f"  {s + 1:7d} {100 * float(np.sum(sons[s] ** 2)) / total:11.1f} %   {os.path.basename(chemin)}")
+    return 0
+
+
 def extraire(chemin_profils, chemin_wav, dossier, chemin_bis=None):
     with open(chemin_profils, encoding="utf-8") as fh:
         p = json.load(fh)
     if not p.get("pret"):
         print("ATTENTION : le moteur n'avait rien appris, les profils ne decrivent que du bruit")
+
+    if "gabarits" in p:
+        return extraire_gabarits(p, chemin_wav, dossier)
 
     wprof = np.array(p["profils"], np.float64).T          # bins x sources
     bins, sources = wprof.shape

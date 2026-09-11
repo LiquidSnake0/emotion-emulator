@@ -1897,6 +1897,58 @@ encore les bons objets. Les quatre pistes vérifiées par corrélation de signal
 > Pas de `HarmonicSeparator`, pas de Demucs dans le moteur, pas de nouvel outil « à gauche
 > à droite ».
 
+## Le gabarit glissant, porté dans le moteur
+
+Verdict d'oreille sur l'étape 2 : « les 4 lives sont différents certes, mais c'est pas
+parfait… quand le xylophone, le kick et le piano sont sur la même mesure, ils s'annulent ».
+(Le xylophone était une guitare — Demucs la voit à 4,5 % de l'énergie ; son stem `piano`
+sur Passepartout pèse **0,0 %**, il range le piano dans `other`. Un critère « gagne piano »
+était donc impossible par construction — corrigé en cours de route.)
+
+### La mesure qui a tout tranché
+
+Kick par kick (275), niveau 100 ms après rapporté à 100 ms avant : live-3 (le medium)
+chute de plus de 3 dB à **48 %** des kicks en 150–500 Hz et 45 % en 500–2000, contre 23 %
+et 15 % au hasard ; les trois autres montent de +4 à +8 dB dans le medium où le morceau fait
+0,0 dB. Puis, à K=12 sur le spectre linéaire : neuf profils sur douze sont les notes de la
+basse (pics à 0, 47, 47, 47, 47, 94, 94, 141 Hz…). **Les profils étaient des notes, pas des
+instruments.** Racine, cube et KL sur le même modèle : la coupe change de case, jamais de
+mécanisme (bancs dans le tmp du job, chiffres dans le README).
+
+### Le modèle
+
+`V(f,t) ≈ Σ_k Σ_p w_k(f−p)·h_k(p,t)` sur 192 cases log (24/octave, C1→C9), gabarit de 144
+cases, 49 positions (deux octaves), divergence KL, règles multiplicatives. Mesuré hors ligne
+(numpy) : une octave → la basse mange 3 gabarits sur 5 ; quatre octaves → « glisse sur 4
+octaves », le modèle triche ; **deux** est la valeur entre les deux. Une forme dans le temps
+(10 images) a été mesurée aussi : guitare 0,35 max, kick à égalité avec la basse, 15 min
+d'apprentissage par K — abandonnée.
+
+### Ce qui a changé dans le code
+
+| | |
+|---|---|
+| `ProfileLearner` | réécrit : constantes `ParOctave`, `NLog`, `F0`, `Positions`, `Longueur` ; mémoire trame-major ; `Reconstruire`/`UpdateH`/`UpdateW` en KL avec `Ajouter`/`Produit` en `Vector<float>` ; `Reste` = KL/ΣV ; `Doublon` = pire cosinus **du carré** des gabarits à une translation près (±1 octave) ; `TryStartChoix(…, iterationsBalayage=40, seuilGain=0.15 relatif, seuilDoublon=0.85, plancher=0.01)` ; `TryAdopt(gabarits, positions)`. |
+| `SourceSeparator` | prend les **échantillons** (`Feed(samples)`), anneau de 4096, FFT propre, projection triangulaire sur l'axe log (`ConstruireProjection`) ; une image d'apprentissage sur deux ; `Suivre` en KL sur une colonne (8 itérations), rend niveau et **position** par source ; `HauteurOrdonnee` est une vraie hauteur de note (gabarit + position courante) ; ctor `(sampleRate, hop, memoire)` ; le blanchiment est parti avec le profil linéaire. |
+| `SpectrumAnalyzer` | `new SourceSeparator(sampleRate, Window, memoire)`, `_separation.Feed(samples)`. |
+| `/profils`, sonde | `fenetre=4096, cases, parOctave, f0, positions, longueur, gabarits` (plus de `profils`). |
+| `extraire.py` | voie `gabarits` : `axe_log` (la même projection que le moteur, et son retour), `etaler`, `activer_gabarits` (KL), `separer_gabarits` (STFT par blocs, deux passes, masque = part de la source dans la reconstruction, ramené sur les raies). Contrôles 1 et 2 gardés. `stems.py` suit. |
+| `fenetre.py` | `EMOTION_PISTES=<prefixe>` joue des pistes externes sous les faders ; plus d'exigence de six pistes ; doublon `journaliser`/`instant` retiré. |
+| tests | `SeparationChoixTests` sur des **instruments fabriqués qui changent de note** (basse 55 Hz, piano 220, clair 880, harmoniques propres) : 3 → 3, 2 → 2, une basse seule ≤ 2, ordre du grave à l'aigu, rangs au-delà à zéro, Reset, coude. |
+| retiré | `outils/profils_entier.py` (ancien format). |
+
+### Chiffres du moteur sur Passepartout
+
+Balayage à 40 itérations : 2 → 4,2 % / 0,45 ; 3 → 2,3 % / 0,78 ; 4 → 2,1 % / 0,82 → **3
+sources**. Apprentissage 1,3 à 1,6 s en moyenne, 3 à 4 s au pire selon la charge (fil de fond). Extraction 94 s pour
+279 s de morceau, reconstruction 151 dB, somme des sources 30,8 dB. Juge Demucs : source1
+bass 0,76, source2 bass 0,79, source3 **other (piano) 0,68**, guitare 0,33 max.
+
+> **Le seuil de doublon a coûté un aller-retour** : sur les gabarits bruts, deux sonorités
+> distinctes du grave montaient à 0,80 et une copie à 0,85 — pas de marge. Sur le carré des
+> gabarits : 0,78 contre 0,98 / 1,00. Avant de régler un seuil, regarder si la mesure a la
+> résolution de le porter.
+
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 
 ```sh

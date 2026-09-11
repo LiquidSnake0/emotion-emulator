@@ -9,66 +9,51 @@ namespace Emotion.Signal;
 /// ni l'un ni l'autre. Le DJ l'a dit ainsi : « piano et saxophone qui s'additionnent, ca
 /// donne un truc illisible ».
 ///
-/// Deux sons peuvent partager une hauteur ; ils ne partagent pas leur <b>timbre</b>. Un
-/// piano et un saxophone sur le meme la n'ont pas les memes harmoniques, ni les memes
-/// rapports entre elles. C'est cette signature-la qui les separe, et elle ne se voit pas
-/// dans une bande de frequence.
-///
-/// LA METHODE. La factorisation en matrices non negatives decompose un spectrogramme V en
-/// un produit W·H : W contient <see cref="Sources"/> profils spectraux — les timbres — et
-/// H leurs activations dans le temps. Rien ne lui est enseigne : elle trouve les profils
-/// qui expliquent le mieux ce qu'elle entend. C'est ce qui la rend juste ici, ou l'on veut
-/// separer <b>sans nommer</b> : elle rend « une source », jamais « un piano ».
+/// Deux sons peuvent partager une hauteur ; ils ne partagent pas leur <b>timbre</b>. Et un
+/// timbre, ce n'est pas un profil fige : c'est une forme qui <b>glisse avec la note</b>.
+/// C'est ce que <see cref="ProfileLearner"/> apprend — un gabarit par source, sur un axe
+/// logarithmique en frequence, libre de se placer sur deux octaves.
 ///
 /// DEUX REGIMES, ET C'EST CE QUI LA REND UTILISABLE EN DIRECT.
 ///
-///   apprendre    W et H ensemble, sur quelques secondes. Couteux, fait rarement, et
-///                hors du temps de la salle — c'est le travail du cue.
-///   suivre       W fige, H seul, sur l'image courante. Quelques milliers d'operations,
-///                donc gratuit a l'echelle d'une fenetre d'analyse.
+///   apprendre    gabarits et niveaux ensemble, sur quarante secondes. Couteux, fait
+///                rarement, et hors du fil d'analyse — c'est le travail du cue.
+///   suivre       gabarits figes, niveaux et positions seuls, sur l'image courante.
+///                Quelques centaines de milliers d'operations, dans le fil.
 ///
-/// Le DJ autorise « des centaines de millisecondes » pour la separation, a condition
-/// qu'elle soit juste. L'apprentissage les prend ; le suivi n'en prend aucune.
+/// CE QU'ELLE VOIT. Pas le spectre d'analyse a 1024 : a 47 Hz la case, le grave n'a que
+/// quatre cases et rien ne peut y glisser. Elle garde ses propres 4096 echantillons, prend
+/// sa propre transformee a chaque image et la projette sur 192 cases logarithmiques, vingt-
+/// quatre par octave. Le suivi du tempo, des frappes et des registres ne change pas.
 /// </summary>
 public sealed class SourceSeparator
 {
     /// <summary>
-    /// Nombre de sources cherchees.
-    ///
-    /// Un morceau de ce repertoire en contient rarement davantage : une basse, une
-    /// batterie, un ou deux instruments tenus, une voix, du souffle. En demander vingt
-    /// decouperait un meme instrument en morceaux ; en demander deux les melangerait.
-    ///
-    /// SIX EST MESURE, PAS SUPPOSE — ET L'INTUITION INVERSE EST FAUSSE.
-    ///
-    /// On pourrait croire qu'en demander davantage separerait mieux. Sur un morceau du
-    /// crate, la stabilite des profils va dans l'autre sens : 0,87 a 0,99 avec six sources,
-    /// 0,85 a 0,92 avec neuf, 0,76 a 0,92 avec douze. Passe un certain point, la
-    /// factorisation n'a plus d'objets a trouver et se met a couper des instruments en
-    /// morceaux — des morceaux qui ne se retrouvent pas d'un apprentissage a l'autre.
-    ///
-    /// Le cout, lui, monte franchement : 167 ms par apprentissage a six, 355 a douze. On
-    /// paierait donc deux fois pour un resultat moins bon.
+    /// Capacite : combien de sources le paquet peut porter. Le nombre publie, lui, est
+    /// decouvert par disque (<see cref="Actives"/>).
     /// </summary>
     public const int Sources = 6;
 
-    /// <summary>Images gardees pour l'apprentissage. A 21 ms, cela fait 2,7 secondes.</summary>
     /// <summary>
-    /// Combien d'images la separation regarde pour apprendre. QUARANTE SECONDES, ET C'EST
+    /// Combien de temps la separation ecoute pour apprendre. QUARANTE SECONDES, ET C'EST
     /// LE CUE.
     ///
-    /// Elle en regardait 128 — deux secondes et sept dixiemes. Sur un album entier, cela
-    /// donnait des tranches de registre et jamais des instruments : une source portait
-    /// 89 % du son sur Passepartout, les rangs changeaient d'une lecture a l'autre, et ce
-    /// qui frappe pesait quatre dixiemes de pour cent. Un instrument se definit sur la
-    /// duree ; sur trois secondes, ce qui joue fort a cet instant prend tout.
-    ///
-    /// Le DJ a donne la duree qui compte : « un disque reste au casque dans les 40
-    /// secondes ». C'est le temps dont on dispose avant qu'il passe au master, et c'est
-    /// donc la fenetre d'apprentissage. Apprises sur le morceau entier, les six sources
-    /// de Passepartout se partageaient le son entre 9 et 29 % au lieu de 89 · 0,8 · 3,5…
+    /// Elle en regardait 2,7 : sur un album entier, cela donnait des tranches de registre et
+    /// jamais des instruments. Le DJ a donne la duree qui compte : « un disque reste au
+    /// casque dans les 40 secondes ». C'est le temps dont on dispose avant qu'il passe au
+    /// master, et c'est donc la fenetre d'apprentissage.
     /// </summary>
     public const float MemoireDefautS = 40f;
+
+    /// <summary>La fenetre de la transformee propre a la separation, en echantillons.</summary>
+    public const int FenetreLog = 4096;
+
+    /// <summary>
+    /// Une image d'apprentissage sur deux. Un gabarit n'a pas besoin de 21 ms de finesse
+    /// pour se definir, et cela divise par deux ce que l'apprentissage coute.
+    /// </summary>
+    private const int SousEchantillon = 2;
+
     private readonly int _memoire;
 
     /// <summary>
@@ -77,7 +62,7 @@ public sealed class SourceSeparator
     /// memoire est pleine par l'apprentissage qui, lui, choisit.
     /// </summary>
     private const int Provisoire = 128;
-    private const int SourcesProvisoires = 4;    // le coude mesure sur Passepartout
+    private const int SourcesProvisoires = 4;
     private bool _provisoireFait;
     private bool _choixFait;
 
@@ -94,104 +79,101 @@ public sealed class SourceSeparator
     public IReadOnlyList<ProfileLearner.Bilan> Bilans => _apprentissage.Bilans;
     public bool ChoixFait => _choixFait;
 
-    /// <summary>Iterations de l'apprentissage complet. Au-dela, W ne bouge plus guere.</summary>
-    private const int IterationsApprentissage = 40;
+    /// <summary>Iterations de l'apprentissage complet. Au-dela, les gabarits ne bougent plus guere.</summary>
+    private const int IterationsApprentissage = 60;
+
+    /// <summary>
+    /// Iterations de chaque essai du balayage. A vingt, mesure sur Passepartout, le reste ne
+    /// baissait pas de facon monotone d'un K au suivant (1,0 · 0,3 · 0,7 · 0,3 point) : le
+    /// hasard de l'amorcage pesait autant que la source ajoutee. A quarante, il se lit.
+    /// </summary>
+    private const int IterationsBalayage = 40;
 
     /// <summary>Iterations du suivi, sur la seule image courante.</summary>
-    private const int IterationsSuivi = 6;
+    private const int IterationsSuivi = 8;
 
     private const float Eps = 1e-9f;
+    private const int NLog = ProfileLearner.NLog;
+    private const int Positions = ProfileLearner.Positions;
+    private const int Longueur = ProfileLearner.Longueur;
 
-    private readonly int _bins;
     private readonly int _rate;
-    private readonly float[] _w;          // profils spectraux : bins x Sources
-    private readonly float[] _v;          // spectrogramme glissant : bins x Memoire
-    private readonly float[] _courant;    // activations de l'image courante
-    private readonly float[] _numer;
-    private readonly float[] _denom;
-    private readonly float[] _wh;
+    private readonly int _hop;
+    private readonly float[] _w;          // gabarits : Sources x Longueur
+    private readonly float[] _v;          // spectrogramme glissant : memoire x NLog
+    private readonly float[] _courant;    // niveau de chaque source sur l'image courante
+    private readonly float[] _hCourant;   // niveaux par position, image courante
+    private readonly float[] _vh;         // reconstruction de l'image courante
+    private readonly float[] _spectre;    // l'image courante, sur l'axe log
+
+    // La transformee propre a la separation.
+    private readonly float[] _anneau = new float[FenetreLog];
+    private int _anneauEcrit;
+    private int _depuisTrame;
+    private readonly float[] _hann = Fft.Hann(FenetreLog);
+    private readonly float[] _re = new float[FenetreLog];
+    private readonly float[] _im = new float[FenetreLog];
+    private readonly int[] _fbDebut = new int[NLog];
+    private readonly float[][] _fbPoids = new float[NLog][];
 
     private int _ecrit;
     private int _remplies;
+    private int _trame;
     private int _depuisApprentissage;
     private readonly Random _alea = new(1203);
 
-    /// <summary>Activation de chaque source sur l'image courante, normalisee.</summary>
+    /// <summary>Niveau de chaque source sur l'image courante.</summary>
     public IReadOnlyList<float> Activations => _courant;
 
-    /// <summary>A-t-on appris des profils, ou rend-on encore du bruit ?</summary>
+    /// <summary>A-t-on appris des gabarits, ou rend-on encore du bruit ?</summary>
     public bool Pret { get; private set; }
 
-    /// <summary>Nombre de bins d'un profil.</summary>
-    public int Bins => _bins;
+    /// <summary>Longueur d'un gabarit, en cases logarithmiques.</summary>
+    public int Bins => Longueur;
 
     /// <summary>
-    /// Le profil spectral d'une source, dans l'ordre du grave a l'aigu. Lecture seule.
+    /// Le gabarit d'une source, dans l'ordre du grave a l'aigu. Lecture seule.
     ///
     /// POURQUOI IL SORT D'ICI. Toutes les mesures de ce projet disent si une source est
-    /// REGULIERE ; aucune ne dit si elle contient ce qu'elle pretend contenir. Un profil
+    /// REGULIERE ; aucune ne dit si elle contient ce qu'elle pretend contenir. Un gabarit
     /// exporte permet de reconstruire ce que la source a retenu, en son, et de l'ECOUTER —
     /// ce que l'oreille tranche en dix secondes et qu'aucun chiffre n'a su dire.
-    ///
-    /// Le profil est fréquentiel : il se transporte tel quel d'une grille temporelle a une
-    /// autre. C'est ce qui permet a la reconstruction de se faire sur sa propre transformee,
-    /// a recouvrement, sans rien changer ici.
     /// </summary>
     public void ProfilOrdonne(int rang, Span<float> sortie)
     {
-        if ((uint)rang >= Actives || sortie.Length < _bins) return;
-        var s = _ordre[rang];
-        for (var b = 0; b < _bins; b++) sortie[b] = _w[b * Sources + s];
+        if ((uint)rang >= Actives || sortie.Length < Longueur) return;
+        _w.AsSpan(_ordre[rang] * Longueur, Longueur).CopyTo(sortie);
     }
 
     /// <summary>
-    /// Hauteur du timbre de chaque profil, sur une echelle d'octaves entre 0 et 1.
-    ///
-    /// C'est le centre de gravite spectral, converti en octaves par <see cref="EnOctaves"/> —
-    /// parce que l'oreille compte en rapports et non en ecarts. Sert a la fois a ordonner
-    /// les sources du grave a l'aigu, faute de savoir les nommer, et a placer leur forme
-    /// dans sa case.
+    /// Hauteur habituelle de chaque source, sur une echelle d'octaves entre 0 et 1 : la
+    /// couleur du gabarit plus la position ou il a joue en moyenne. Sert a ordonner les
+    /// sources du grave a l'aigu, faute de savoir les nommer.
     /// </summary>
     public IReadOnlyList<float> Hauteurs => _hauteurs;
 
     private readonly float[] _hauteurs = new float[Sources];
+    private readonly float[] _centres = new float[Sources];         // couleur du gabarit, en cases
+    private readonly float[] _positionsApprises = new float[Sources];
+    private readonly float[] _positionCourante = new float[Sources];
     private readonly int[] _ordre = new int[Sources];
 
     /// <summary>
-    /// A quel point le profil de chaque source tient d'un apprentissage a l'autre, 0 a 1.
-    ///
-    /// C'EST LA BONNE MESURE DE NETTETE, ET L'ANCIENNE DECRIVAIT AUTRE CHOSE.
-    ///
-    /// La nettete etait calculee sur les <b>bandes de frequence</b> — six octaves — alors
-    /// que ce qui est affiche a l'ecran, ce sont les six sources separees par le
-    /// <b>timbre</b>. Deux grandeurs differentes portaient le meme numero : la jauge de la
-    /// case 1 decrivait la tranche 100-200 Hz pendant que la forme de la case 1 dessinait
-    /// un timbre. Une bande d'octave est presque toujours partagee — un kick et une basse y
-    /// tombent ensemble — donc la jauge restait basse quoi qu'il arrive, et disait le
-    /// contraire de ce que l'oeil voyait.
-    ///
-    /// Une source NMF, elle, est definie par son profil spectral : c'est exactement son
-    /// timbre. Si ce profil se retrouve identique d'un apprentissage au suivant, la source
-    /// est un objet stable du morceau ; s'il change a chaque fois, la factorisation n'a pas
-    /// trouve d'objet et melange plusieurs choses.
+    /// A quel point le gabarit de chaque source tient d'un apprentissage a l'autre, 0 a 1.
+    /// Une source dont le gabarit se retrouve identique est un objet stable du morceau ; un
+    /// gabarit qui change a chaque fois melange plusieurs choses.
     /// </summary>
     private readonly float[] _stabilite = new float[Sources];
     private readonly float[] _profilPrecedent;
     private bool _profilConnu;
 
-    /// <summary>Stabilite du profil de la source de rang donne, du grave a l'aigu.</summary>
+    /// <summary>Stabilite du gabarit de la source de rang donne, du grave a l'aigu.</summary>
     public float StabiliteOrdonnee(int rang) =>
         rang >= 0 && rang < Actives ? _stabilite[_ordre[rang]] : 0f;
 
     /// <summary>
     /// Combien d'images cette source a passe a jouer. C'est le pendant de la stabilite :
     /// l'une dit si la source est un objet net, l'autre si on l'a assez vue pour en juger.
-    ///
-    /// ELLE DOIT SE COMPTER SUR LA SOURCE, PAS SUR LA BANDE DE FREQUENCE. Les deux
-    /// grandeurs publiees decrivaient encore deux objets differents : la nettete portait
-    /// sur le timbre separe, l'ecoute sur la tranche d'octave du meme rang. Une source qui
-    /// n'entre qu'au refrain se serait donc declaree « assez ecoutee » parce que sa bande
-    /// de frequence, elle, contenait du son en permanence.
     /// </summary>
     private const int Assez = 200;
     private readonly int[] _vues = new int[Sources];
@@ -204,176 +186,104 @@ public sealed class SourceSeparator
             ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
             : 0f;
 
-    /// <param name="memoire">Images gardees pour apprendre ; zero = quarante secondes.</param>
-    public SourceSeparator(int bins, int sampleRate = 48_000, int memoire = 0)
+    /// <param name="hop">Echantillons entre deux images d'analyse.</param>
+    /// <param name="memoire">Images d'analyse gardees pour apprendre ; zero = quarante secondes.</param>
+    public SourceSeparator(int sampleRate = 48_000, int hop = 1024, int memoire = 0)
     {
-        _bins = bins;
         _rate = sampleRate;
-        // Une image fait 2·bins echantillons : c'est la fenetre d'analyse du moteur.
-        _memoire = memoire > 0 ? memoire
-                 : Math.Max(Provisoire, (int)(MemoireDefautS * sampleRate / (2f * bins)));
-        _w = new float[bins * Sources];
-        _v = new float[bins * _memoire];
-        _fond = new float[bins];
+        _hop = hop;
+        var images = memoire > 0 ? memoire : (int)(MemoireDefautS * sampleRate / hop);
+        _memoire = Math.Max(Provisoire, images / SousEchantillon);
+        _w = new float[Sources * Longueur];
+        _v = new float[_memoire * NLog];
         _courant = new float[Sources];
-        _numer = new float[Sources];
-        _denom = new float[Sources];
-        _wh = new float[bins];
-        _profilPrecedent = new float[bins * Sources];
+        _hCourant = new float[Sources * Positions];
+        _vh = new float[NLog];
+        _spectre = new float[NLog];
+        _profilPrecedent = new float[Sources * Longueur];
 
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
+        ConstruireProjection();
 
-        _apprentissage = new ProfileLearner(bins, Sources, _memoire, IterationsApprentissage);
+        _apprentissage = new ProfileLearner(Sources, _memoire, IterationsApprentissage);
     }
 
-    /// <summary>Une image de spectre. Rend les activations de l'image, dans l'ordre grave a aigu.</summary>
     private readonly ProfileLearner _apprentissage;
 
     /// <summary>
-    /// Combien on egalise le spectre avant de factoriser, de 0 (rien) a 1 (blanchiment plein).
-    ///
-    /// POURQUOI IL A FALLU CELA, ET C'EST MESURE SUR TOUT L'ALBUM.
-    ///
-    /// La factorisation est pilotee par l'energie. Or <b>70 % de l'energie de ce repertoire
-    /// vit sous 150 Hz</b> : elle depense donc ses six composantes a decouper le grave en
-    /// tranches, et il ne lui en reste plus pour ce qui frappe. Mesure sur dix morceaux, ce
-    /// qui frappe — facteur de crete au-dessus de vingt — pesait <b>quatre dixiemes de pour
-    /// cent</b> de ce que le systeme regarde, et ce qui tient en pesait quatre-vingt-onze.
-    ///
-    /// Le DJ l'entendait avant qu'on le mesure : « tout semble etre dans la source 1, le
-    /// reste c'est des minuscules bruits ».
-    ///
-    /// ON EGALISE DONC AVANT DE FACTORISER. Chaque raie est rapportee a sa propre moyenne a
-    /// long terme : une region qui porte peu d'energie compte alors autant qu'une region qui
-    /// en porte beaucoup, et la factorisation doit depenser ses composantes ailleurs que dans
-    /// les basses.
-    ///
-    /// C'est la meme correction qu'ailleurs dans ce projet, et pour la meme raison :
-    /// l'oreille juge en RAPPORTS et non en differences. La preference de tempo est
-    /// gaussienne en log, les bandes et le centroide aussi.
-    ///
-    /// LE MASQUE D'EXTRACTION N'EN EST PAS AFFECTE, et c'est ce qui rend la chose sure : un
-    /// gain diagonal se simplifie dans le rapport <c>W_s·h_s / Σ W_j·h_j</c>, raie par raie.
-    /// Les six WAV extraits restent donc exacts, et la somme des six reste le morceau.
+    /// La projection des raies lineaires sur les cases logarithmiques : un triangle par case,
+    /// large d'une case ou d'une raie, la plus grande des deux. Dans le grave, ou les raies
+    /// sont plus espacees que les cases, chaque case interpole entre ses deux raies ; dans
+    /// l'aigu, ou elles sont plus serrees, chaque case en moyenne plusieurs.
     /// </summary>
-    private static readonly float Blanchiment =
-        float.TryParse(Environment.GetEnvironmentVariable("Signal__Blanchiment"),
-                       System.Globalization.NumberStyles.Float,
-                       System.Globalization.CultureInfo.InvariantCulture, out var b)
-            ? Math.Clamp(b, 0f, 1f) : 0f;
-
-    /// <summary>La moyenne longue de chaque raie, qui sert de reference a l'egalisation.</summary>
-    private readonly float[] _fond;
-    private float[]? _vueBlanchie;
-    private bool _fondPret;
-
-    // Environ six secondes a quarante-sept images par seconde : assez long pour decrire la
-    // couleur du morceau, assez court pour suivre un changement de disque.
-    private const float FondSuivi = 0.0035f;
-
-    /// <summary>Sous cette fraction de la moyenne generale, une raie est vide et l'on
-    /// n'amplifie pas son bruit.</summary>
-    private const float FondPlancher = 0.02f;
-
-    public void Feed(ReadOnlySpan<float> spectre)
+    private void ConstruireProjection()
     {
-        var n = Math.Min(_bins, spectre.Length);
-        var col = _ecrit;
-
-        if (Blanchiment > 0f)
+        var raieHz = _rate / (float)FenetreLog;
+        var raies = FenetreLog / 2 + 1;
+        var ratio = MathF.Pow(2f, 1f / ProfileLearner.ParOctave) - 1f;
+        for (var l = 0; l < NLog; l++)
         {
-            var moyenne = 0f;
-            for (var i = 0; i < n; i++) moyenne += spectre[i];
-            moyenne = moyenne / Math.Max(1, n);
-
-            if (!_fondPret)
+            var fc = ProfileLearner.F0 * MathF.Pow(2f, l / (float)ProfileLearner.ParOctave);
+            var demi = MathF.Max(fc * ratio, raieHz);
+            var debut = Math.Max(0, (int)MathF.Ceiling((fc - demi) / raieHz));
+            var fin = Math.Min(raies - 1, (int)MathF.Floor((fc + demi) / raieHz));
+            var poids = new float[Math.Max(0, fin - debut + 1)];
+            float somme = 0;
+            for (var b = debut; b <= fin; b++)
             {
-                // LE FOND PART DU PREMIER SPECTRE, ET NON DE ZERO. Partir de zero ferait
-                // diviser par presque rien pendant les premieres images, et la factorisation
-                // apprendrait ses profils sur cette explosion-la.
-                for (var i = 0; i < n; i++) _fond[i] = spectre[i];
-                _fondPret = true;
+                var p = 1f - MathF.Abs(b * raieHz - fc) / demi;
+                if (p < 0f) p = 0f;
+                poids[b - debut] = p;
+                somme += p;
             }
-            else
+            if (somme > Eps) for (var i = 0; i < poids.Length; i++) poids[i] /= somme;
+            _fbDebut[l] = debut;
+            _fbPoids[l] = poids;
+        }
+    }
+
+    /// <summary>
+    /// Des echantillons, dans l'ordre. A chaque <c>hop</c> echantillons, une image est prise
+    /// sur les 4096 derniers, projetee sur l'axe logarithmique, et suivie.
+    /// </summary>
+    public void Feed(ReadOnlySpan<float> samples)
+    {
+        foreach (var x in samples)
+        {
+            _anneau[_anneauEcrit] = x;
+            _anneauEcrit = (_anneauEcrit + 1) % FenetreLog;
+            if (++_depuisTrame >= _hop)
             {
-                for (var i = 0; i < n; i++) _fond[i] += (spectre[i] - _fond[i]) * FondSuivi;
-            }
-
-            var plancher = moyenne * FondPlancher;
-            for (var i = 0; i < n; i++)
-            {
-                var reference = MathF.Max(_fond[i], plancher);
-                var gain = MathF.Pow(MathF.Max(1e-9f, reference), -Blanchiment);
-                _v[i * _memoire + col] = spectre[i] * gain;
+                _depuisTrame = 0;
+                Trame();
             }
         }
-        else
+    }
+
+    private void Trame()
+    {
+        // La transformee des 4096 derniers echantillons, fenetres.
+        for (var i = 0; i < FenetreLog; i++)
         {
-            for (var i = 0; i < n; i++) _v[i * _memoire + col] = spectre[i];
+            _re[i] = _anneau[(_anneauEcrit + i) % FenetreLog] * _hann[i];
+            _im[i] = 0f;
+        }
+        Fft.Forward(_re, _im);
+        var raies = FenetreLog / 2 + 1;
+        // La magnitude, reutilisee en place dans _re.
+        for (var b = 0; b < raies; b++) _re[b] = MathF.Sqrt(_re[b] * _re[b] + _im[b] * _im[b]);
+        for (var l = 0; l < NLog; l++)
+        {
+            var poids = _fbPoids[l];
+            var debut = _fbDebut[l];
+            float somme = 0;
+            for (var i = 0; i < poids.Length; i++) somme += poids[i] * _re[debut + i];
+            _spectre[l] = somme;
         }
 
-        _ecrit = (_ecrit + 1) % _memoire;
-        if (_remplies < _memoire) _remplies++;
-
-        // L'apprentissage ne tourne qu'une fois par memoire pleine : c'est lui qui coute,
-        // et il n'a aucune raison d'etre refait a chaque image.
-        // D'ABORD UN PROVISOIRE, VITE ; PUIS LE VRAI, QUAND ON A ENTENDU ASSEZ.
-        //
-        // Les quarante secondes sont le prix d'un apprentissage qui distingue des
-        // instruments. Mais quarante secondes d'ecran noir a chaque disque ne se defendent
-        // pas : on apprend donc une premiere fois des cent vingt-huit images, a un nombre de
-        // sources provisoire, et l'on remplace tout des que la memoire est pleine.
-        var provisoire = Math.Min(Provisoire, _memoire / 2);
-        if (!_provisoireFait && _remplies >= provisoire)
-        {
-            if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
-                _provisoireFait = true;
-        }
-        else if (_remplies >= _memoire && ++_depuisApprentissage >= _memoire / 2)
-        {
-            // On ne calcule plus ici : on demande. Si l'apprentissage precedent tourne
-            // encore, la demande est refusee et l'on garde les profils actuels — sauter un
-            // apprentissage ne se voit pas, bloquer treize images se voit.
-            // Le CHOIX du nombre de sources se fait une fois par disque, quand la memoire
-            // est pleine pour la premiere fois. Ensuite on reapprend au nombre retenu :
-            // rebalayer a chaque fois couterait cinq fois plus pour redire la meme chose.
-            var lance = _choixFait
-                ? _apprentissage.TryStart(_v, _w, Actives, _memoire)
-                : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire);
-            if (lance) _depuisApprentissage = 0;
-        }
-
-        // Les profils fraichement appris sont repris ici, entre deux images, sur le fil
-        // d'analyse : c'est le seul instant ou W change, et le suivi ne peut donc jamais
-        // tomber sur des profils a moitie ecrits.
-        if (_apprentissage.TryAdopt(_w))
-        {
-            var avant = Actives;
-            Actives = _apprentissage.DernierK;
-            if (_apprentissage.DernierEtaitChoix) _choixFait = true;
-            // Un nombre de sources qui change rend la stabilite par rang sans objet : les
-            // rangs ne designent plus les memes choses. On repart, plutot que de comparer
-            // le troisieme profil d'hier au troisieme d'aujourd'hui qui n'a rien a voir.
-            if (Actives != avant) _profilConnu = false;
-            Ordonner();
-            MesurerStabilite();
-            Pret = true;
-        }
-
-        // LE SUIVI VOIT CE QUE L'APPRENTISSAGE A VU. Nourri du spectre brut alors que les
-        // profils viennent d'un spectre egalise, il chercherait des profils dans un domaine
-        // qui n'est pas le leur — et rendrait des activations qui ne veulent rien dire.
-        if (Blanchiment > 0f)
-        {
-            var vue = _vueBlanchie ??= new float[_bins];
-            for (var i = 0; i < n; i++) vue[i] = _v[i * _memoire + (col)];
-            Suivre(vue, n);
-        }
-        else
-        {
-            Suivre(spectre, n);
-        }
+        if (_trame++ % SousEchantillon == 0) Memoriser();
+        Suivre();
 
         // Une source ne compte comme vue que quand elle joue. Le maximum sert de reference :
         // une source discrete mais presente doit compter, une source a zero non.
@@ -383,7 +293,53 @@ public sealed class SourceSeparator
             if (_courant[i] / fort > Audible && _vues[i] < Assez) _vues[i]++;
     }
 
-    /// <summary>Fait apprendre sur le fil d'analyse. Pour la mesure comparative seulement.</summary>
+    /// <summary>Range l'image dans la memoire, et lance ce qui doit l'etre.</summary>
+    private void Memoriser()
+    {
+        _spectre.AsSpan().CopyTo(_v.AsSpan(_ecrit * NLog, NLog));
+        _ecrit = (_ecrit + 1) % _memoire;
+        if (_remplies < _memoire) _remplies++;
+
+        // D'ABORD UN PROVISOIRE, VITE ; PUIS LE VRAI, QUAND ON A ENTENDU ASSEZ.
+        //
+        // Les quarante secondes sont le prix d'un apprentissage qui distingue des
+        // instruments. Mais quarante secondes d'ecran noir a chaque disque ne se defendent
+        // pas : on apprend donc une premiere fois tot, a un nombre de sources provisoire, et
+        // l'on remplace tout des que la memoire est pleine.
+        var provisoire = Math.Min(Provisoire, _memoire / 2);
+        if (!_provisoireFait && _remplies >= provisoire)
+        {
+            if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
+                _provisoireFait = true;
+        }
+        else if (_remplies >= _memoire && ++_depuisApprentissage >= _memoire / 2)
+        {
+            // Le CHOIX du nombre de sources se fait une fois par disque, quand la memoire
+            // est pleine pour la premiere fois. Ensuite on reapprend au nombre retenu, en
+            // repartant des gabarits courants : ils restent a leur place.
+            var lance = _choixFait
+                ? _apprentissage.TryStart(_v, _w, Actives, _memoire)
+                : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire, IterationsBalayage);
+            if (lance) _depuisApprentissage = 0;
+        }
+
+        // Les gabarits fraichement appris sont repris ici, entre deux images, sur le fil
+        // d'analyse : c'est le seul instant ou ils changent.
+        if (_apprentissage.TryAdopt(_w, _positionsApprises))
+        {
+            var avant = Actives;
+            Actives = _apprentissage.DernierK;
+            if (_apprentissage.DernierEtaitChoix) _choixFait = true;
+            // Un nombre de sources qui change rend la stabilite par rang sans objet : les
+            // rangs ne designent plus les memes choses. On repart.
+            if (Actives != avant) _profilConnu = false;
+            Ordonner();
+            MesurerStabilite();
+            Pret = true;
+        }
+    }
+
+    /// <summary>Fait apprendre sur le fil d'analyse. Pour la mesure et les tests.</summary>
     public bool ApprentissageEnLigne
     {
         get => _apprentissage.RunInline;
@@ -399,77 +355,82 @@ public sealed class SourceSeparator
     {
         Array.Clear(_v);
         Array.Clear(_vues);
+        Array.Clear(_anneau);
         _profilConnu = false;
         Array.Clear(_stabilite);
-        _remplies = _ecrit = _depuisApprentissage = 0;
+        _remplies = _ecrit = _depuisApprentissage = _trame = 0;
         Pret = false;
         Actives = 0;
         _provisoireFait = false;
         _choixFait = false;
         Array.Clear(_courant);
+        Array.Clear(_hCourant);
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
     }
 
     /// <summary>
-    /// Suit l'image courante, W fige. C'est ce qui rend la methode utilisable en direct :
-    /// quelques milliers d'operations la ou l'apprentissage en demande des millions.
+    /// Suit l'image courante, gabarits figes : pour chaque source, a quelle position et a
+    /// quel niveau elle joue. La regle de Kullback-Leibler, sur une seule colonne.
     /// </summary>
-    private void Suivre(ReadOnlySpan<float> spectre, int n)
+    private void Suivre()
     {
         if (Actives <= 0) return;
-        for (var s = 0; s < Actives; s++) if (_courant[s] <= 0f) _courant[s] = 0.1f;
-        for (var s = Actives; s < Sources; s++) _courant[s] = 0f;
+        // On repart des niveaux de l'image d'avant, planches a un minimum : une position qui
+        // etait a zero doit pouvoir revenir quand la note revient.
+        for (var i = 0; i < Actives * Positions; i++) if (_hCourant[i] < 1e-4f) _hCourant[i] = 1e-4f;
+        Array.Clear(_hCourant, Actives * Positions, (Sources - Actives) * Positions);
 
         for (var it = 0; it < IterationsSuivi; it++)
         {
-            for (var i = 0; i < n; i++)
-            {
-                float wh = 0;
-                for (var s = 0; s < Actives; s++) wh += _w[i * Sources + s] * _courant[s];
-                _wh[i] = wh;
-            }
-
-            Array.Clear(_numer);
-            Array.Clear(_denom);
-
-            for (var i = 0; i < n; i++)
-            {
-                var v = spectre[i];
-                var wh = _wh[i];
-                for (var s = 0; s < Actives; s++)
-                {
-                    var w = _w[i * Sources + s];
-                    _numer[s] += w * v;
-                    _denom[s] += w * wh;
-                }
-            }
-
+            _vh.AsSpan().Fill(Eps);
             for (var s = 0; s < Actives; s++)
-                _courant[s] *= _numer[s] / (_denom[s] + Eps);
+            {
+                var w = _w.AsSpan(s * Longueur, Longueur);
+                for (var p = 0; p < Positions; p++)
+                    ProfileLearner.Ajouter(_vh.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
+            }
+            for (var f = 0; f < NLog; f++) _vh[f] = (_spectre[f] + Eps) / _vh[f];
+            for (var s = 0; s < Actives; s++)
+            {
+                var w = _w.AsSpan(s * Longueur, Longueur);
+                for (var p = 0; p < Positions; p++)
+                    _hCourant[s * Positions + p] *= ProfileLearner.Produit(w, _vh.AsSpan(p, Longueur));
+            }
+        }
+
+        for (var s = 0; s < Sources; s++)
+        {
+            if (s >= Actives) { _courant[s] = 0f; continue; }
+            double niveau = 0, poids = 0;
+            for (var p = 0; p < Positions; p++)
+            {
+                var h = _hCourant[s * Positions + p];
+                niveau += h;
+                poids += h * p;
+            }
+            _courant[s] = (float)niveau;
+            if (niveau > Eps) _positionCourante[s] = (float)(poids / niveau);
         }
     }
 
     /// <summary>
-    /// Range les sources du grave a l'aigu, par le centre de gravite de leur profil.
-    ///
-    /// Sans nom, il faut au moins un ordre stable : sans lui, la source affichee en
-    /// premiere case changerait a chaque apprentissage, et l'oeil ne pourrait rien
-    /// apprendre. La hauteur du timbre est le seul classement que le signal fournisse
-    /// tout seul.
+    /// Range les sources du grave a l'aigu, par la couleur de leur gabarit et la position
+    /// ou il a joue. Sans nom, il faut au moins un ordre stable : sans lui, la source
+    /// affichee en premiere case changerait a chaque apprentissage.
     /// </summary>
     private void Ordonner()
     {
         for (var s = 0; s < Sources; s++)
         {
             double poids = 0, total = 0;
-            for (var i = 0; i < _bins; i++)
+            var w = _w.AsSpan(s * Longueur, Longueur);
+            for (var f = 0; f < Longueur; f++)
             {
-                var w = _w[i * Sources + s];
-                poids += w * i;
-                total += w;
+                poids += w[f] * f;
+                total += w[f];
             }
-
-            _hauteurs[s] = total > Eps ? EnOctaves((float)(poids / total) / _bins, _rate) : 0.5f;
+            _centres[s] = total > Eps ? (float)(poids / total) : Longueur / 2f;
+            _hauteurs[s] = EnOctavesHz(CaseEnHz(_centres[s] + _positionsApprises[s]));
         }
 
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
@@ -479,12 +440,10 @@ public sealed class SourceSeparator
     }
 
     /// <summary>
-    /// Compare les profils fraichement appris a ceux d'avant.
-    ///
-    /// La mesure est un cosinus : deux profils qui pointent dans la meme direction
-    /// decrivent le meme timbre, quelle que soit leur intensite. C'est ce qu'on veut — une
-    /// source peut jouer plus fort sans changer de nature, et une mesure sensible a
-    /// l'amplitude confondrait les deux.
+    /// Compare les gabarits fraichement appris a ceux d'avant, par cosinus : deux gabarits
+    /// qui pointent dans la meme direction decrivent le meme timbre, quelle que soit leur
+    /// intensite. Les colonnes restent a leur place parce que chaque apprentissage repart
+    /// des gabarits courants au lieu de tirer au hasard.
     /// </summary>
     private void MesurerStabilite()
     {
@@ -493,35 +452,20 @@ public sealed class SourceSeparator
             for (var s = 0; s < Sources; s++)
             {
                 double ps = 0, na = 0, nb = 0;
-                for (var i = 0; i < _bins; i++)
+                for (var f = 0; f < Longueur; f++)
                 {
-                    var a = _w[i * Sources + s];
-                    var b = _profilPrecedent[i * Sources + s];
+                    var a = _w[s * Longueur + f];
+                    var b = _profilPrecedent[s * Longueur + f];
                     ps += a * b;
                     na += (double)a * a;
                     nb += (double)b * b;
                 }
-
-                // LES COLONNES RESTENT A LEUR PLACE, ET CE N'EST PAS UN HASARD.
-                //
-                // Rien dans la factorisation n'impose que la source « 2 » d'un
-                // apprentissage soit la source « 2 » du suivant : les colonnes pourraient
-                // permuter, et l'on comparerait alors deux timbres sans rapport. Ce qui les
-                // fixe, c'est l'amorcage — chaque apprentissage repart des profils courants
-                // au lieu de tirer au hasard, donc il les raffine au lieu de les
-                // redistribuer. La mesure le confirme : les stabilites relevees sont entre
-                // 0,85 et 0,99, ce qu'une permutation ferait immediatement chuter.
                 var cos = na > Eps && nb > Eps
                     ? (float)(ps / (Math.Sqrt(na) * Math.Sqrt(nb)))
                     : 0f;
-
-                // Un cosinus entre profils positifs vaut deja 0,5 pour deux timbres sans
-                // rapport : la moitie basse de l'echelle ne distingue rien. On l'etire
-                // pour que la jauge parle de ce qui varie vraiment.
+                // Un cosinus entre gabarits positifs vaut deja 0,5 pour deux timbres sans
+                // rapport : la moitie basse de l'echelle ne distingue rien. On l'etire.
                 var net = Clamp01((cos - 0.55f) / 0.40f);
-
-                // Lissage : un seul apprentissage malchanceux ne doit pas effacer un
-                // verdict construit sur plusieurs.
                 _stabilite[s] += (net - _stabilite[s]) * 0.35f;
             }
         }
@@ -530,52 +474,43 @@ public sealed class SourceSeparator
         _profilConnu = true;
     }
 
-    /// <summary>Activation de la source de rang <paramref name="rang"/>, du grave a l'aigu.</summary>
+    /// <summary>Niveau de la source de rang <paramref name="rang"/>, du grave a l'aigu.</summary>
     public float ActivationOrdonnee(int rang) =>
         rang >= 0 && rang < Actives ? _courant[_ordre[rang]] : 0f;
 
-    /// <summary>Hauteur du timbre de la source de rang donne.</summary>
-    public float HauteurOrdonnee(int rang) =>
-        rang >= 0 && rang < Actives ? _hauteurs[_ordre[rang]] : 0.5f;
+    /// <summary>
+    /// Hauteur de la source de rang donne, EN CE MOMENT : la couleur de son gabarit plus la
+    /// position ou il joue sur cette image. C'est une vraie hauteur de note, ce que le
+    /// profil fige ne pouvait pas donner.
+    /// </summary>
+    public float HauteurOrdonnee(int rang)
+    {
+        if (rang < 0 || rang >= Actives) return 0.5f;
+        var s = _ordre[rang];
+        var position = _courant[s] > Eps ? _positionCourante[s] : _positionsApprises[s];
+        return EnOctavesHz(CaseEnHz(_centres[s] + position));
+    }
+
+    /// <summary>Une case de l'axe logarithmique, en hertz.</summary>
+    public static float CaseEnHz(float caseLog) =>
+        ProfileLearner.F0 * MathF.Pow(2f, caseLog / ProfileLearner.ParOctave);
 
     /// <summary>
     /// Grave et aigu du crate, en hertz. Sept octaves, ce qui couvre du sub au cymbale.
-    ///
-    /// Ce ne sont pas des bornes absolues : ce qui sort en dessous ou au-dessus est
-    /// simplement colle au bord. Elles decrivent la plage ou l'on veut du relief.
     /// </summary>
     private const float GraveHz = 40f, AiguHz = 10_000f;
 
     /// <summary>
-    /// Convertit un centre de gravite spectral, exprime en rang de raie, en une position
-    /// perceptive entre 0 et 1.
-    ///
-    /// LA HAUTEUR S'ENTEND EN OCTAVES, ET ELLE ETAIT RENDUE EN HERTZ.
-    ///
-    /// Le centre de gravite valait <c>rang / nombre_de_raies</c>, c'est-a-dire une fraction
-    /// de la bande analysee — une echelle lineaire en frequence. Mesure a l'ecran, les six
-    /// contours tenaient alors <b>dans les treize pour cent du bas</b> :
-    ///
-    /// <code>
-    ///   source 1  0,007 → 0,025      source 4  0,025 → 0,070
-    ///   source 2  0,010 → 0,029      source 5  0,046 → 0,115
-    ///   source 3  0,012 → 0,048      source 6  0,093 → 0,130
-    /// </code>
-    ///
-    /// L'ordre etait juste, l'etendue non. La raison est que l'oreille compte en rapports
-    /// et non en ecarts : de 200 a 800 Hz il y a deux octaves — un mouvement enorme — et
-    /// seulement 0,027 sur une echelle lineaire allant jusqu'a 22 kHz. Une voix qui monte
-    /// franchement ne deplacait donc presque rien a l'ecran.
-    ///
-    /// Sur la meme mesure, en octaves, la source 3 va de 0,34 a 0,59 : sept fois plus de
-    /// course, dans la partie utile de la case.
-    ///
-    /// LE CLASSEMENT NE BOUGE PAS. La conversion est monotone, donc l'ordre du grave a
-    /// l'aigu — qui est l'autre usage de cette grandeur — reste exactement le meme.
+    /// Convertit un centre de gravite spectral, exprime en fraction de la bande analysee, en
+    /// une position perceptive entre 0 et 1 — en octaves, parce que l'oreille compte en
+    /// rapports et non en ecarts. Mesure a l'ecran, en lineaire les six contours tenaient
+    /// dans les treize pour cent du bas de leur case.
     /// </summary>
-    public static float EnOctaves(float rangMoyen, int sampleRate)
+    public static float EnOctaves(float rangMoyen, int sampleRate) =>
+        EnOctavesHz(rangMoyen * sampleRate * 0.5f);
+
+    public static float EnOctavesHz(float hz)
     {
-        var hz = rangMoyen * sampleRate * 0.5f;
         if (hz <= GraveHz) return 0f;
         var octaves = MathF.Log2(hz / GraveHz) / MathF.Log2(AiguHz / GraveHz);
         return Clamp01(octaves);

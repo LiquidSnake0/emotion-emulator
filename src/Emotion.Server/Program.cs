@@ -135,17 +135,24 @@ app.MapGet("/profils", (IAudioSource source) =>
     // Seules les sources ACTIVES sortent. Les rangs au-dela portent des profils eteints,
     // et les exporter ferait extraire des pistes vides qu'on prendrait pour des sources.
     var actives = separation.Actives;
-    var profils = new float[actives][];
+    var gabarits = new float[actives][];
     for (var r = 0; r < actives; r++)
     {
         separation.ProfilOrdonne(r, profil);
-        profils[r] = (float[])profil.Clone();
+        gabarits[r] = (float[])profil.Clone();
     }
     return Results.Ok(new
     {
         taux = analyseur.Taux,
-        bins,
-        fenetre = SpectrumAnalyzer.Window,
+        // L'axe des gabarits : une transformee de 4096, projetee sur des cases
+        // logarithmiques, et un glissement de deux octaves. L'extraction en a besoin
+        // pour relire les gabarits exactement comme le moteur les a appris.
+        fenetre = SourceSeparator.FenetreLog,
+        cases = ProfileLearner.NLog,
+        parOctave = ProfileLearner.ParOctave,
+        f0 = ProfileLearner.F0,
+        positions = ProfileLearner.Positions,
+        longueur = bins,
         // « pret » dit si quelque chose a ete appris. Faux, les profils ne decrivent que du
         // bruit et les pistes extraites ne voudraient rien dire : l'appelant doit attendre.
         pret = separation.Pret,
@@ -154,7 +161,7 @@ app.MapGet("/profils", (IAudioSource source) =>
         choix = separation.ChoixFait,
         // Ce que le balayage a vu, pour comprendre pourquoi ce nombre-la.
         bilans = separation.Bilans.Select(b => new { b.K, reste = b.Reste, doublon = b.Doublon }),
-        profils,
+        gabarits,
     });
 });
 

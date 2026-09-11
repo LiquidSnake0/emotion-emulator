@@ -106,14 +106,14 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
     if p is None:
         dire("le moteur n'a rien appris : pas de pistes")
         return None
-    nb = len(p["profils"])
+    nb = len(p["gabarits"])
     if nb < 1:
         dire("aucune source active : le moteur n'a pas fini de choisir")
         return None
     sorties = [os.path.join(dossier, f"{base}-{s + 1}.wav") for s in range(nb)]
     dire(f"{nb} sources publiees par le moteur")
 
-    signature = json.dumps(p["profils"], sort_keys=True)[:2000]
+    signature = json.dumps(p["gabarits"], sort_keys=True)[:2000]
     if all(os.path.exists(s) for s in sorties) and os.path.exists(marque):
         with open(marque, encoding="utf-8") as fh:
             if fh.read() == signature:
@@ -125,11 +125,7 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
                 comparer(chemin_morceau, dossier, sorties, dire=dire)
                 return sorties
 
-    wprof = np.array(p["profils"], np.float64).T
     nfft = p["fenetre"]
-    if wprof.shape[0] != nfft // 2:
-        dire(f"profils incoherents : {wprof.shape[0]} bins pour une fenetre de {nfft}")
-        return None
 
     depart = time.time()
     x, taux = extraire.lire_mono(mono48(chemin_morceau, os.path.join(dossier, f"{base}.48k.wav")))
@@ -138,7 +134,7 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
         dire(f"le morceau est a {taux} Hz, les profils ont ete appris a {p['taux']}")
 
     hop = max(1, nfft // extraire.RECOUVREMENT)
-    sons, _, n = extraire.separer(x, wprof, nfft, hop, nb)
+    sons, _, n = extraire.separer_gabarits(x, p, hop, dire=dire)
     if n < 8:
         dire("morceau trop court")
         return None

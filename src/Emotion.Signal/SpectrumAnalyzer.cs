@@ -683,7 +683,7 @@ public sealed class SpectrumAnalyzer
         _voices = new VoiceTracker(sampleRate, Window);
         // La separation apprend sur la duree du cue — quarante secondes par defaut. Les
         // tests, eux, la raccourcissent : ils n'ont pas quarante secondes a donner.
-        _separation = new SourceSeparator(Window / 2, sampleRate,
+        _separation = new SourceSeparator(sampleRate, Window,
             memoire: (int)MathF.Max(1f, memoireSeparationS * sampleRate / Window));
         _etendues = new ContourRange(SourceSeparator.Sources);
         _timbre = new TimbreTracker(sampleRate, Window);
@@ -1137,11 +1137,11 @@ public sealed class SpectrumAnalyzer
         var eventCount = (hits.Kick ? 1 : 0) + (hits.Clap ? 1 : 0) + (hits.Hat ? 1 : 0)
                        + (voices.LowHit ? 1 : 0) + (voices.MidHit ? 1 : 0)
                        + (voices.HighHit ? 1 : 0);
-        // La separation travaille sur le spectre entier : c'est le timbre complet qui
-        // distingue deux instruments, pas sa moitie percussive.
-        // Le suivi seul : l'apprentissage des profils tourne dans un fil de fond et ne
-        // compte pas dans le temps d'une image. C'est tout l'interet de l'avoir sorti.
-        _separation.Feed(full);
+        // La separation prend les ECHANTILLONS, pas le spectre d'analyse : elle a sa propre
+        // transformee, plus longue, et son propre axe. Le suivi seul se fait ici ;
+        // l'apprentissage des gabarits tourne dans un fil de fond et ne compte pas dans le
+        // temps d'une image. C'est tout l'interet de l'avoir sorti.
+        _separation.Feed(samples);
         Etapes.Fin(5);                       // suivi des timbres separes
 
         var timbre = _timbre.Feed(full, eventCount);
