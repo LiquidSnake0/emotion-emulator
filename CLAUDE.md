@@ -2219,9 +2219,32 @@ plancher de hasard à 0,58 (7 classes sur 12) : c'est un indice faible, la menti
 contredite » (< 0,6) est à prendre comme telle. La fenêtre affiche le degré dans le titre de
 la case (I … VII, ·). 224 tests verts, fumée 32 ok.
 
+### Le rendu par gestes, et le coup annoncé avant d'être entendu
+
+Sa demande : « on a réussi à les séparer ; là c'est des formes géométriques qui bougent
+tellement dans tous les sens que l'œil n'arrive pas à suivre si la forme a bougé au bon
+moment ». Et : « une boule qui devient grande quand le boom arrive et un triangle quand
+c'est le tchak ; pour les sons tenus des vagues qui oscillent plus quand le son est là ; ce
+qui est frappé, un truc qui se voit ». La fenêtre dessine maintenant **un geste par
+caractère** (classe `Geste`, `dessiner_geste`), à la place des formes en caractères :
+
+| ce que la source est | le geste |
+|---|---|
+| le reste (dernière case) | une **boule** qui grossit sur le boom (hauteur du reste < 0,33), un **triangle** qui claque sur le tchak |
+| tient (caractère > 0,8) | trois **vagues**, dont la vitesse et l'amplitude suivent le niveau |
+| pincé (0,45–0,8) | une **corde** tendue qui vibre au pincement et s'amortit (0,45 s) |
+| frappe (< 0,45) | un point qui pèse le niveau, et une **onde d'impact** qui s'ouvre (0,35 s) |
+
+**Le retard du bit `frappe` est compensé par le motif.** Le bit arrive 60–80 ms après
+l'attaque ; le motif de la source, lui, est en avance. Quand la mesure entre dans une case
+que le motif allume, le geste part (« annoncé ») ; un bit qui arrive dans les 150 ms ne fait
+que confirmer ; un bit sans annonce déclenche quand même, en retard. Pour le reste, chaque
+case de la mesure retient ce qu'elle a fait entendre (boom ou tchak, par la hauteur au
+moment du bit) : l'annonce à cette case rejoue le bon geste. Les formes en caractères
+(`formes.py`) restent pour les autres panneaux. Captures refaites sur Glyph Chamber.
+
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
-corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
-le motif, qui est en avance).
+corrigé.
 
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 

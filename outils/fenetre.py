@@ -51,9 +51,9 @@ import time
 import traceback
 import wave
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QPointF
 from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QLinearGradient,
-                           QPainter, QPen)
+                           QPainter, QPainterPath, QPen, QPolygonF)
 from PySide6.QtWidgets import QApplication, QWidget
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
@@ -361,6 +361,64 @@ def entre(avant, courant, a):
     return v
 
 
+class Geste:
+    """Ce qu'une source fait voir, selon ce qu'elle est.
+
+    « ON A REUSSI A LES SEPARER ; LA, C'EST DES FORMES GEOMETRIQUES QUI BOUGENT TELLEMENT
+    DANS TOUS LES SENS QUE L'OEIL N'ARRIVE PAS A SUIVRE SI LA FORME A BOUGE AU BON MOMENT. »
+    Un geste par caractere, et un seul, lisible :
+
+      le reste (boom-tchak)   une boule qui grossit sur le boom, un triangle qui claque sur le tchak
+      ce qui tient            des vagues, qui oscillent d'autant plus que le son est la
+      ce qui est pince        une corde qui vibre au pincement et s'amortit
+      ce qui frappe           un impact : une onde qui s'ouvre depuis le centre
+
+    ET LE COUP EST ANNONCE AVANT D'ETRE ENTENDU. Le bit de frappe du moteur arrive soixante
+    a quatre-vingts millisecondes apres l'attaque reelle (la fenetre qui la voit fait 85 ms) :
+    dessine sur le bit, le geste serait toujours en retard. Le motif de la source, lui, est en
+    avance : quand la mesure entre dans une case que le motif allume, le geste part ; le bit
+    qui arrive dans les 150 ms ne fait que confirmer. Un bit sans annonce declenche quand
+    meme, en retard — mieux vaut un geste tardif qu'un geste manque.
+    """
+
+    def __init__(self):
+        self.boule = 0.0          # le boom : grossit d'un coup, retombe en un quart de seconde
+        self.triangle = 0.0       # le tchak : claque, s'eteint vite
+        self.impact = 0.0         # l'onde d'impact, de 0 (rien) a 1 (dissipee)
+        self.corde = 0.0          # amplitude de la corde pincee
+        self.corde_phase = 0.0
+        self.onde_phase = 0.0
+        self.annonce_t = -1.0     # quand le dernier coup a ete annonce
+        self.derniere_case = -1
+        self.type_par_case = {}   # ce que chaque case de la mesure a fait entendre : boom ou tchak
+
+    def frapper(self, genre, force=1.0):
+        force = max(0.0, min(1.0, force))
+        if genre == "boom":
+            self.boule = max(self.boule, force)
+        elif genre == "tchak":
+            self.triangle = max(self.triangle, force)
+        elif genre == "corde":
+            self.corde = max(self.corde, force)
+            self.corde_phase = 0.0
+        else:
+            if self.impact <= 0.0 or self.impact > 0.6:
+                self.impact = 1e-3
+        # une source qui tient reagit aussi a une frappe : sa vague s'agite un peu plus
+        self.onde_phase += 0.4 * force
+
+    def pas(self, dt, niveau):
+        self.boule *= math.exp(-dt / 0.25)
+        self.triangle *= math.exp(-dt / 0.15)
+        self.corde *= math.exp(-dt / 0.45)
+        self.corde_phase += dt * 2 * math.pi * 28.0
+        self.onde_phase += dt * 2 * math.pi * (0.4 + 3.0 * niveau)
+        if self.impact > 0.0:
+            self.impact += dt / 0.35
+            if self.impact >= 1.0:
+                self.impact = 0.0
+
+
 class Pulse:
     """Une impulsion qui décroît.
 
@@ -411,6 +469,7 @@ class Mur(QWidget):
         self.clap = Pulse(4.5)
         self.charley = Pulse(7.0)
         self.coups = [Pulse(4.0) for _ in range(6)]
+        self.gestes = [Geste() for _ in range(6)]
         self.grave = Pulse(3.0)
 
         # L'ANNONCE DE TEMPO NE DURE QU'UNE IMAGE D'ANALYSE. On la tient quatre temps a
@@ -606,11 +665,31 @@ class Mur(QWidget):
                     self.clap.tirer()
                 if p.charley:
                     self.charley.tirer()
+                case_mesure = int(min(0.9999, max(0.0, p.phase)) * 16)
                 for r, s in enumerate(p.sources):
                     # L'impulsion vaut ce que la source a de piquant. Une source qui monte
                     # doucement ne claque pas : son mouvement vient de son niveau.
                     if s["frappe"]:
                         self.coups[r].tirer(0.25 + 0.75 * s["pique"])
+                    if r >= p.actives:
+                        continue
+                    g = self.gestes[r]
+                    reste = r == p.actives - 1
+                    genre_now = (("boom" if s["hauteur"] < 0.33 else "tchak") if reste else
+                                 "corde" if 0.45 <= s["caractere"] <= 0.8 else
+                                 "onde" if s["caractere"] > 0.8 else "impact")
+                    # L'ANNONCE : la mesure entre dans une case que le motif allume.
+                    if case_mesure != g.derniere_case:
+                        g.derniere_case = case_mesure
+                        if s["motif"] >> case_mesure & 1:
+                            genre = g.type_par_case.get(case_mesure, genre_now)
+                            g.frapper(genre, 0.6 + 0.4 * s["niveau"])
+                            g.annonce_t = maintenant
+                    # LA CONFIRMATION, ou le coup en retard s'il n'etait pas annonce.
+                    if s["frappe"]:
+                        g.type_par_case[case_mesure] = genre_now
+                        if maintenant - g.annonce_t > 150.0:
+                            g.frapper(genre_now, 0.25 + 0.75 * s["pique"])
                 if p.coup_grave:
                     self.grave.tirer()
                 if p.nouveaute > 0.5:
@@ -673,6 +752,8 @@ class Mur(QWidget):
         for r, imp in enumerate(self.coups):
             tenue = src[r]["tenue"] if src else 0.0
             imp.pas(dt, chute=0.7 + 8.0 * (1.0 - tenue))
+        for r, g in enumerate(self.gestes):
+            g.pas(dt, src[r]["niveau"] if src else 0.0)
         self.update()
 
     # ------------------------------------------------------------------ dessin
@@ -754,7 +835,8 @@ class Mur(QWidget):
             # demandait au programme, et tant qu'elle reste dans le paquet sans etre
             # affichee, l'ecran montre six cases quoi qu'il arrive.
             n = self.paquet.actives if self.paquet else 0
-            compte = (f"{n} source{'s' if n > 1 else ''} trouvee{'s' if n > 1 else ''}   ·   "
+            compte = (f"{n} source{'s' if n > 1 else ''} trouvee{'s' if n > 1 else ''}"
+                      + ("   ·   verrouille" if p.verrou else "") + "   ·   "
                       if n else "la separation ecoute encore   ·   ")
             d.drawText(x, h - 26,
                        compte + "clic dans une case ou 1-6 : choisir une source   ·   "
@@ -977,48 +1059,86 @@ class Mur(QWidget):
             # calculee en pixels et passee la sortait un tiers trop grande — et chaque
             # ligne debordait d'autant. C'est ce qui faisait se chevaucher les cases.
             utile = larg - FADER_LARGE - 8
-            provisoire = formes.Grille(cx, cy, utile, haut, lignes=9)
-            police = QFont(self.mono)
-            police.setPixelSize(max(6, int(provisoire.taille)))
-
-            # Puis on mesure l'avance reelle de cette police, et l'on recompte les colonnes
-            # avec elle. Mesurer plutot que supposer : c'est la seule chose qui empeche une
-            # ligne de sortir de sa case.
-            avance = QFontMetricsF(police).horizontalAdvance("M")
-            g = formes.Grille(cx, cy, utile, haut, lignes=9, avance=avance)
-            # UNE SOURCE ABSENTE SE DESSINE EN CREUX, A SA PLACE.
-            #
-            # Elle ne joue plus, donc son niveau est nul et la forme s'effondrerait à rien.
-            # Or ce qu'on veut montrer n'est pas son silence, c'est SA PLACE : là où elle
-            # tombait et où elle retombera. On lui prête donc le battement de sa propre
-            # place, et une teinte qui ne peut pas être confondue avec du son présent.
-            if absente:
-                niveau, frappe = 0.30, 0.0
-            else:
-                niveau, frappe = s["niveau"], self.coups[r].valeur
-
-            lignes, force = formes.rendu(nom, g, niveau, s["hauteur"],
-                                         frappe, self.tempo,
-                                         s["pique"], s["tenue"])
-
-            # ET L'ON DECOUPE, PAR-DESSUS TOUT LE RESTE. Les controles servent a comprendre,
-            # le decoupage garantit : ce qui depasse n'est pas dessine, quelle qu'en soit la
-            # cause. Le renderer web a mis trois tentatives a l'admettre.
-            d.save()
-            d.setClipRect(int(cx) + 1, int(cy) + 1, int(utile) - 2, haut - 2)
-            d.setFont(police)
-            teinte = QColor(GRIS_CADRE if absente else VERT)
-            alpha = min(1.0, (0.35 + force * 0.45) if absente
-                        else (0.22 + force * 0.70))
-            teinte.setAlphaF(alpha * 0.30 if eteinte else alpha)
-            d.setPen(teinte)
-            for i, ligne in enumerate(lignes):
-                d.drawText(int(g.x0), int(g.y0 + (i + 1) * g.ch), ligne)
-            d.restore()
-            d.setFont(self.mono)
+            self.dessiner_geste(d, r, s, cx, cy, utile, haut, absente, eteinte,
+                                reste=(r == p.actives - 1))
 
             self.dessiner_fader(d, r, cx, cy, larg, haut)
         return y + rangs * (haut + 12)
+
+    def dessiner_geste(self, d, r, s, cx, cy, utile, haut, absente, eteinte, reste):
+        """Le geste de la source, selon ce qu'elle est. Voir <Geste>."""
+        g = self.gestes[r]
+        niveau = 0.0 if absente else s["niveau"]
+        d.save()
+        d.setClipRect(int(cx) + 1, int(cy) + 20, int(utile) - 2, haut - 36)
+        d.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        x0, y0 = cx + 8, cy + 22
+        w, h = utile - 16, haut - 40
+        xc, yc = x0 + w / 2, y0 + h / 2
+        base = 0.12 if absente else 0.25
+        att = 0.3 if eteinte else 1.0
+
+        def teinte(a):
+            c = QColor(GRIS_CADRE if absente else VERT)
+            c.setAlphaF(max(0.0, min(1.0, a * att)))
+            return c
+
+        if reste:
+            # LA BOULE DU BOOM, LE TRIANGLE DU TCHAK.
+            rb = 7 + 10 * niveau + 22 * g.boule
+            d.setPen(Qt.PenStyle.NoPen)
+            d.setBrush(teinte(base + 0.7 * g.boule))
+            d.drawEllipse(QPointF(x0 + w * 0.3, yc), rb, rb)
+            d.setPen(QPen(teinte(base + 0.15), 1))
+            d.setBrush(Qt.BrushStyle.NoBrush)
+            d.drawEllipse(QPointF(x0 + w * 0.3, yc), 30.0, 30.0)
+            t = 14 + 18 * g.triangle
+            xt = x0 + w * 0.72
+            tri = QPolygonF([QPointF(xt, yc - t), QPointF(xt - t * 0.9, yc + t * 0.7), QPointF(xt + t * 0.9, yc + t * 0.7)])
+            d.setPen(QPen(teinte(base + 0.75 * g.triangle), 2))
+            d.setBrush(teinte(0.05 + 0.6 * g.triangle))
+            d.drawPolygon(tri)
+        elif s["caractere"] > 0.8 and not absente:
+            # LES VAGUES DE CE QUI TIENT : elles oscillent d'autant plus que le son est la.
+            amp = (h / 7) * (0.15 + 0.85 * niveau)
+            for i in range(3):
+                yl = y0 + h * (0.28 + 0.22 * i)
+                chemin = QPainterPath()
+                n = 48
+                for k in range(n + 1):
+                    x = x0 + w * k / n
+                    y = yl + amp * math.sin(2 * math.pi * (1.5 + 0.5 * i) * k / n + g.onde_phase + i * 1.1)
+                    if k == 0: chemin.moveTo(x, y)
+                    else: chemin.lineTo(x, y)
+                d.setPen(QPen(teinte(base + 0.55 * niveau - 0.1 * i), 2))
+                d.drawPath(chemin)
+        elif 0.45 <= s["caractere"] <= 0.8 and not absente:
+            # LA CORDE PINCEE : tendue, elle vibre au pincement et s'amortit.
+            amp = (h / 3) * g.corde * math.sin(g.corde_phase)
+            chemin = QPainterPath()
+            n = 48
+            for k in range(n + 1):
+                x = x0 + w * k / n
+                y = yc + amp * math.sin(math.pi * 3 * k / n)
+                if k == 0: chemin.moveTo(x, y)
+                else: chemin.lineTo(x, y)
+            d.setPen(QPen(teinte(base + 0.55 * niveau + 0.3 * g.corde), 2))
+            d.drawPath(chemin)
+            d.setPen(QPen(teinte(base + 0.2), 1))
+            d.drawLine(QPointF(x0, yc - h * 0.35), QPointF(x0, yc + h * 0.35))
+            d.drawLine(QPointF(x0 + w, yc - h * 0.35), QPointF(x0 + w, yc + h * 0.35))
+        else:
+            # L'IMPACT DE CE QUI FRAPPE : un point qui pese son niveau, une onde qui s'ouvre.
+            d.setPen(Qt.PenStyle.NoPen)
+            d.setBrush(teinte(base + 0.6 * niveau))
+            rp = 5 + 14 * niveau
+            d.drawEllipse(QPointF(xc, yc), rp, rp)
+            if g.impact > 0.0:
+                ri = 8 + (w / 2 - 8) * g.impact
+                d.setPen(QPen(teinte(0.9 * (1.0 - g.impact)), 2))
+                d.setBrush(Qt.BrushStyle.NoBrush)
+                d.drawEllipse(QPointF(xc, yc), ri, ri * 0.6)
+        d.restore()
 
     def dessiner_motif(self, d, motif, cx, cy, larg, haut, eteinte):
         """Seize cases sous la forme : le motif de la source dans la mesure, et ou l'on en est.

@@ -32,12 +32,12 @@ qu'elle contient bien ce qu'elle prétend.
 <table>
 <tr>
 <td width="50%"><img src="docs/images/mur.png" alt="Le mur"><br>
-<sub><b>Le mur</b> · Glyph Chamber, verrouillé : trois sonorités trouvées par le moteur et
-<b>le reste</b> en dernière case ; sous chaque forme, son motif dans la mesure — le morse à
-venir — et le curseur de la mesure</sub></td>
+<sub><b>Le mur</b> · Glyph Chamber, verrouillé : un geste par sonorité — des vagues pour ce
+qui tient, une corde pour ce qui est pincé, la boule du boom et le triangle du tchak pour
+<b>le reste</b> ; sous chacun, son motif dans la mesure et le curseur</sub></td>
 <td width="50%"><img src="docs/images/motif.png" alt="Une source isolée"><br>
-<sub><b>Une source choisie</b> · elle seule s'entend, les autres restent en sourdine ; ses
-seize cases disent où elle monte, mesure après mesure</sub></td>
+<sub><b>Une source choisie</b> · elle seule s'entend, les autres restent en sourdine ; le
+geste part quand la mesure entre dans une case du motif, avant que le son n'arrive</sub></td>
 </tr>
 </table>
 
@@ -59,6 +59,7 @@ de départ sans jamais s'y verrouiller.
 | **la ligne du bas** | « 2 pistes », puis « 3 pistes » : les pistes suivent les sources que le moteur découvre |
 | **espace** | maintenu = présence, tapé = instants — ce que l'oreille marque, confronté au moteur |
 | **le trait sous chaque forme** | le motif de la source : où elle monte dans la mesure, et où l'on en est |
+| **le geste dans la case** | ce que la source est : vagues (tient), corde (pincé), impact (frappe), boule et triangle (le boom-tchak) — annoncé par le motif, confirmé par le moteur |
 
 **Le rendu ne passe par aucun réseau.** Le moteur publie 256 octets dans `/dev/shm`, la
 fenêtre Qt les lit, et l'eGPU les lira sur PCIe ou USB-C — même contrat, sans intermédiaire.
