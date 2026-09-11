@@ -216,6 +216,9 @@ var agree = 0;
 var compared = 0;
 var ruptures = 0;
 var kickAt = new List<long>();
+var fichierChroma = args.FirstOrDefault(a => a.StartsWith("chroma="))?[7..];
+double[]? chromaMoyen = fichierChroma is null ? null : new double[12];
+var chromaImages = 0;
 IReadOnlyList<ProfileLearner.Bilan> bilansVus = [];
 using var journalSources = args.FirstOrDefault(a => a.StartsWith("sources="))?[8..] is { } fichierSources
     ? new StreamWriter(fichierSources) : null;
@@ -346,6 +349,14 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
         Console.WriteLine($"   t={tMs / 1000.0,6:F1} s  bilans  " + string.Join("  ",
             bilansVus.Select(b => $"{b.K}:{100 * b.Reste:F2}%/doublon {b.Doublon:F2}/lien {b.Lien:F2}"))
             + $"  -> {analyzer.Separation.Actives} actives");
+    }
+
+    // « chroma=<fichier> » : le chromagramme moyen du moteur sur la passe, douze classes, pour
+    // confronter la tonalite qu'il entend a la fiche Camelot du crate.
+    if (chromaMoyen is not null && f.Harmony.Chroma is { Length: 12 } ch)
+    {
+        for (var k = 0; k < 12; k++) chromaMoyen[k] += ch[k];
+        chromaImages++;
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));
@@ -853,6 +864,10 @@ if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfi
     Console.WriteLine($"\n{separation.Actives} gabarits ecrits vers {fichierProfils}"
                       + (separation.Pret ? "" : "  — ATTENTION : rien n'a ete appris"));
 }
+
+if (fichierChroma is not null && chromaMoyen is not null && chromaImages > 0)
+    File.WriteAllText(fichierChroma, string.Join(",", chromaMoyen.Select(v =>
+        (v / chromaImages).ToString("G6", System.Globalization.CultureInfo.InvariantCulture))));
 
 if (args.FirstOrDefault(a => a.StartsWith("instants="))?[9..] is { } prefixe)
 {

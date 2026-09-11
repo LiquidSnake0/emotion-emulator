@@ -2143,6 +2143,30 @@ La fenêtre lit l'étiquette « frappé / pincé / tenu » là, plus sur l'image
 montait une fois passait pour frappée). La sonde l'imprime. Passepartout : 0,70 / 0,89 /
 0,93 / reste 0,35 ; Glyph : 0,86 / 0,89 / 0,77 / reste 0,32. Trois tests. 208 verts.
 
+### La tonalité du crate est-elle un prior de confiance ? Mesuré
+
+Sa question : « savoir que c'est 9A de la part du crate peut nous aider, comme le BPM ? ».
+Mesure avant tout. Un premier juge maison (chromagramme naïf + profils de Krumhansl) ne
+retrouvait la fiche que 1 fois sur 10, avec des marges nulles — et a révélé que **quatre
+titres sont désaccordés d'un quart de ton** (−48 cents : Glyph Chamber, Passepartout, Codex
+Sinaiticus, Lost Cultures), ce qui met leurs notes exactement entre deux cases de l'axe
+(24 par octave = 50 cents). Le **chromagramme du moteur** (`Harmony.Chroma`, exporté par la
+sonde avec `chroma=<fichier>`, moyenné sur 150 s) fait mieux :
+
+| | exact | relatif | voisin (quinte) | non |
+|---|---|---|---|---|
+| sur 10 titres avec fiche | 4 | 1 | 1 | 4 |
+
+Exacts : WordBank 2A, Dead Internet Theory 4A, Echoes 11A, Timeline 7A (marges 0,05–0,26).
+Les « non » sont des cas serrés en lo-fi (Passepartout : classes A G D C, la fiche 8A est
+plausible, Krumhansl a pris 10B). **Verdict : la fiche est un prior utilisable, pas une
+certitude** — à employer comme le BPM, en préférence douce et jamais en contrainte, avec
+la contradiction dite quand le chromagramme n'est pas d'accord. Deux suites possibles,
+mesurables : estimer le désaccordage au cue et décaler l'axe log d'autant (sans fiche) ;
+puis une préférence de gamme sur les positions des gabarits et la publication du **degré**
+joué par chaque source (« au boum la tonique, au tchak la quinte »), qui survit aux
+transitions Camelot.
+
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
 corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
 le motif, qui est en avance).
