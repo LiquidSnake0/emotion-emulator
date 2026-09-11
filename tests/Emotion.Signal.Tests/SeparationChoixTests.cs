@@ -37,9 +37,13 @@ public class SeparationChoixTests
     /// Nourrit la separation avec les instruments donnes, jusqu'a ce que le choix ait eu
     /// lieu, apprentissage en ligne pour que tout se passe dans le fil du test.
     /// </summary>
-    private static SourceSeparator Apprendre(IReadOnlyList<Instrument> instruments, int memoire = 300)
+    /// <param name="frappes">Si vrai, un coup bref et large (un kick fabrique) toutes les huit
+    /// images ; les instants sont rendus dans <paramref name="instantsFrappes"/>.</param>
+    private static SourceSeparator Apprendre(IReadOnlyList<Instrument> instruments, int memoire = 300,
+                                             bool frappes = false, List<int>? instantsFrappes = null)
     {
         var sep = new SourceSeparator(Rate, Hop, memoire) { ApprentissageEnLigne = true };
+        var bruit = new Random(7);
         var alea = new Random(4);
         var n = instruments.Count;
         var phases = new double[n][];
@@ -81,6 +85,14 @@ public class SeparationChoixTests
                     }
                     phases[i][k] = ph % (2 * Math.PI);
                 }
+            }
+            if (frappes && t % 8 == 0)
+            {
+                // Un kick fabrique : du bruit large qui meurt en quelques millisecondes. Pas de
+                // hauteur, pas d'harmoniques : rien qu'un gabarit puisse prendre.
+                for (var j = 0; j < Hop; j++)
+                    bloc[j] += 0.6f * MathF.Exp(-j / (0.004f * Rate)) * (float)(bruit.NextDouble() * 2 - 1);
+                instantsFrappes?.Add(t);
             }
             sep.Feed(bloc);
         }
@@ -132,7 +144,8 @@ public class SeparationChoixTests
         var sep = Apprendre([Basse, Piano]);
         Assert.Equal(2, sep.Actives);
 
-        for (var r = sep.Actives; r < SourceSeparator.Sources; r++)
+        // Apres les sources a gabarit vient le reste, puis plus rien.
+        for (var r = sep.Publiees; r < SourceSeparator.Sources; r++)
         {
             Assert.Equal(0f, sep.ActivationOrdonnee(r));
             Assert.Equal(0f, sep.EcouteOrdonnee(r));
@@ -192,5 +205,57 @@ public class SeparationChoixTests
             Assert.True(trois - quatre.Reste < deux - trois,
                 $"une quatrieme source ne devrait plus expliquer autant de neuf : {deux:F4} -> {trois:F4} -> {quatre.Reste:F4}");
         }
+    }
+
+    [Fact]
+    public void Le_reste_est_la_derniere_case_et_il_prend_ce_qui_frappe()
+    {
+        // LE RESTE EST UNE CASE. Le kick n'a pas de gabarit — il n'a pas de hauteur qui
+        // glisse — et le masque le repartissait sur toutes les sources : « le boom-tchak
+        // sur les trois ». Ce que les gabarits n'expliquent pas est publie comme la
+        // derniere case, avec son propre niveau.
+        var instants = new List<int>();
+        var sep = Apprendre([Basse, Piano], frappes: true, instantsFrappes: instants);
+
+        Assert.True(sep.Pret);
+        Assert.Equal(sep.Actives + 1, sep.Publiees);
+        Assert.Equal(sep.Actives, sep.RangReste);
+        Assert.True(sep.ActivationOrdonnee(sep.RangReste) >= 0f);
+        Assert.Equal(1f, sep.StabiliteOrdonnee(sep.RangReste));
+        Assert.Equal(0f, sep.ActivationOrdonnee(sep.RangReste + 1));
+    }
+
+    [Fact]
+    public void Le_reste_monte_quand_ca_frappe()
+    {
+        // On nourrit encore quelques images apres l'apprentissage, en lisant le niveau du
+        // reste image par image : il doit etre plus haut sur les images qui frappent.
+        var sep = Apprendre([Basse, Piano], frappes: true);
+        var rang = sep.RangReste;
+        var alea = new Random(11);
+        var bruit = new Random(5);
+        var bloc = new float[Hop];
+        double surFrappe = 0, horsFrappe = 0; int nSur = 0, nHors = 0;
+        var phase = 0.0;
+        for (var t = 0; t < 64; t++)
+        {
+            Array.Clear(bloc);
+            var pas = 2 * Math.PI * 110.0 / Rate;
+            for (var j = 0; j < Hop; j++) { bloc[j] = 0.1f * (float)Math.Sin(phase); phase += pas; }
+            var frappe = t % 8 == 0;
+            if (frappe)
+                for (var j = 0; j < Hop; j++)
+                    bloc[j] += 0.6f * MathF.Exp(-j / (0.004f * Rate)) * (float)(bruit.NextDouble() * 2 - 1);
+            sep.Feed(bloc);
+            // LA FENETRE VOIT LE COUP AVEC RETARD. La transformee porte sur les 4096 derniers
+            // echantillons sous une fenetre de Hann : le bloc qui vient d'arriver est sous sa
+            // queue, presque a zero. Le coup pese dans l'image deux a cinq blocs plus tard.
+            var depuis = t % 8;
+            if (depuis >= 2 && depuis <= 5) { surFrappe += sep.ActivationOrdonnee(rang); nSur++; }
+            else if (depuis == 7 || depuis == 0) { horsFrappe += sep.ActivationOrdonnee(rang); nHors++; }
+        }
+        surFrappe /= nSur; horsFrappe /= nHors;
+        Assert.True(surFrappe > 2 * horsFrappe,
+            $"le reste devrait monter franchement sur un coup : {surFrappe:F3} sur la frappe, {horsFrappe:F3} a cote");
     }
 }

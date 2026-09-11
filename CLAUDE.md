@@ -2031,6 +2031,46 @@ Apprentissage 2,4 s en moyenne, 4 s au pire, 13 fois sur le morceau.
 > ~2,4 s, et ses marques ne suivent aucun juge automatique. Quand le protocole sera enfin
 > propre (pistes = paquet, dès 80 s), il faut lui demander CE qu'il tape avant de lire.
 
+### Le reste est une case, et c'est le kick
+
+Son oreille sur les trois pistes du moteur : « le boom-tchak, on l'entend sur toutes les
+trois ». Mesuré : le kick n'a pas de gabarit (trois bancs), et le masque au prorata
+répartissait son énergie entre toutes les sources. **Ce que les gabarits n'expliquent pas,
+mis dans une piste à part**, corrèle à **0,77** avec `drums` de Demucs (0,55 au mieux
+avant, collé à la basse), et la basse s'en nettoie (0,76 → 0,83). Il l'a entendu : « on
+entend le boum-tchak sur source 4, c'est très bien ».
+
+| | drums | bass | guitar | piano |
+|---|---|---|---|---|
+| source 1 | 0,40 | **0,83** | 0,11 | 0,03 |
+| source 2 | 0,12 | 0,36 | 0,44 | 0,45 |
+| source 3 | 0,07 | 0,03 | 0,29 | **0,54** |
+| **le reste** | **0,77** | 0,25 | 0,20 | 0,26 |
+
+Dans le moteur : `SourceSeparator.Publiees = Actives + 1`, `RangReste`, niveau = Σ max(V −
+V̂, 0) sur l'image, hauteur = son centre de gravité, frappe par `SourceEnvelope` comme les
+autres, stabilité 1. Le paquet compte le reste dans `SourceActives`. `extraire.py` et
+`stems.py` écrivent une piste de plus (les masques somment toujours à un : 151 dB / 30,8 dB).
+
+**Sans lissage, les gabarits absorbaient le kick en direct.** Six octaves de large sur 49
+positions, ils expliquent un coup plat presque aussi bien qu'une note : la solution KL d'une
+image sautait pour l'avaler (niveau du reste à 0,43 avec la batterie, contre 0,77 hors ligne
+où `lisser` étale les niveaux sur huit trames). Le suivi lisse donc ses niveaux avec la
+constante de temps de la fenêtre (`LissageSuiviS = 85 ms`) : 0,65 en direct, et la case 1
+perd sa batterie (0,31 → 0,13).
+
+**Le morse du reste est en retard de 60 à 80 ms, et il est juste** : décalé de −80 ms, le
+bit `frappe` de la case reste tombe sur une attaque réelle de la batterie à **88 %** (hasard
+22 %) ; sans décalage, 4 %. Le retard vient de la fenêtre de 4096 (centre à −42 ms) et de la
+règle de montée. À compenser côté rendu (la fenêtre a déjà `EMOTION_AVANCE_MS`), pas à
+cacher. La règle de frappe sur le reste supporterait des seuils plus hauts (pente 0,3 sur 3
+images : 96 %, rappel 56 %) — à décider avec le caractère.
+
+> Le test fabriqué du reste a d'abord échoué parce qu'il lisait le niveau **à l'image du
+> coup** : sous la fenêtre de Hann, le bloc qui vient d'arriver pèse presque zéro. Le coup
+> pèse deux à cinq blocs plus tard. Une latence de fenêtre n'est pas un bug, mais elle se
+> mesure avant de juger.
+
 Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
 un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; et le morse du
 piano jugé à l'oreille, avec le protocole corrigé.

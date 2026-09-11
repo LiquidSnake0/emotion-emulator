@@ -242,12 +242,20 @@ def separer_gabarits(x, p, hop, dire=print):
         v[:, i0:i1] = F @ np.abs(spectres).T
     v += EPS
     h = lisser(activer_gabarits(A, v), LISSAGE)
-    total = A @ h + EPS
+    modele = A @ h + EPS
+    # LE RESTE EST UNE PISTE. Ce que les gabarits n'expliquent pas etait reparti au prorata
+    # entre toutes les sources — le kick, qui n'a pas de gabarit, s'entendait sur chacune.
+    # Mis a part, il correle a 0,77 avec la batterie du juge exterieur, et la basse s'en
+    # nettoie (0,76 → 0,83). Les masques somment toujours a un : la somme reste le morceau.
+    reste = np.clip(v - modele, 0, None)
+    total = modele + reste
     parts = []
     for s in range(sources):
         hs = np.zeros_like(h)
         hs[s * positions:(s + 1) * positions] = h[s * positions:(s + 1) * positions]
         parts.append((A @ hs) / total)                         # cases x n, entre 0 et 1
+    parts.append(reste / total)
+    sources += 1
 
     sorties = [np.zeros(len(x) + nfft) for _ in range(sources)]
     brut = np.zeros(len(x) + nfft)
@@ -305,9 +313,9 @@ def extraire(chemin_gabarits, chemin_wav, dossier):
         print(f"le morceau est a {taux} Hz, les gabarits ont ete appris a {p['taux']}")
     nfft = p["fenetre"]
     hop = max(1, nfft // RECOUVREMENT)
-    sources = len(p["gabarits"])
+    sources = len(p["gabarits"]) + 1                          # les gabarits, plus le reste
     print(f"{os.path.basename(chemin_wav)} : {len(x) / taux:.0f} s, "
-          f"recouvrement {100 * (1 - 1 / RECOUVREMENT):.0f} %, {sources} gabarits")
+          f"recouvrement {100 * (1 - 1 / RECOUVREMENT):.0f} %, {sources - 1} gabarits + le reste")
     sons, brut, n = separer_gabarits(x, p, hop)
     if n < 8:
         print("  morceau trop court")
@@ -335,7 +343,8 @@ def extraire(chemin_gabarits, chemin_wav, dossier):
     for s in range(sources):
         chemin = os.path.join(dossier, f"{base}-source{s + 1}.wav")
         ecrire_wav(chemin, sons[s], taux)
-        print(f"  {s + 1:7d} {100 * float(np.sum(sons[s] ** 2)) / total:11.1f} %   {os.path.basename(chemin)}")
+        print(f"  {s + 1:7d} {100 * float(np.sum(sons[s] ** 2)) / total:11.1f} %   {os.path.basename(chemin)}"
+              + ("   (le reste)" if s == sources - 1 else ""))
     return 0
 
 

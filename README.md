@@ -939,6 +939,21 @@ attaques du stem qui le contient, noyé de nappes et de réverb. Pour lui, le ju
 touche espace de la fenêtre : on isole la case, on remet tout, on tape aux touches
 entendues, et le rapport confronte la main au moteur.
 
+### Le reste est une case : le kick n'est pas une sonorité, c'est ce qui reste
+
+À l'oreille, le boom-tchak s'entendait sur les trois sources. Le kick n'a pas de hauteur qui
+glisse — aucun gabarit ne le prend, trois bancs l'ont mesuré — et le masque au prorata
+répartissait alors son énergie entre toutes les sources. **Ce que les gabarits n'expliquent
+pas, mis dans une case à part, c'est la batterie** : 0,77 avec le stem `drums` du juge
+extérieur, le meilleur score batterie du projet, et la basse s'en nettoie (0,76 → 0,83). La
+dernière case publiée est donc **le reste**, avec son niveau, sa hauteur et son morse.
+
+En direct, il a fallu lisser les niveaux suivis sur la durée de la fenêtre : sans cela, des
+gabarits larges de six octaves expliquaient un coup plat presque aussi bien qu'une note et
+l'avalaient dans l'image. Et le morse du reste est **juste mais en retard** : décalé de
+80 ms, 88 % de ses frappes tombent sur une attaque réelle de la batterie (22 % au hasard).
+Le retard est celui de la fenêtre ; il se compense au rendu, il ne se cache pas.
+
 ---
 
 ## Faire monter la stabilité

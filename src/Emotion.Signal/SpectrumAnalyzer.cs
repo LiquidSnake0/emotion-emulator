@@ -958,8 +958,10 @@ public sealed class SpectrumAnalyzer
                 };
             }
 
+            // Les cases publiees comptent le reste : la derniere case, c'est ce que les
+            // gabarits n'expliquent pas — sur ce repertoire, la batterie.
             voices = voices with { Levels = act, Pitches = haut, Lanes = etats,
-                                   Actives = _separation.Actives };
+                                   Actives = _separation.Publiees };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint

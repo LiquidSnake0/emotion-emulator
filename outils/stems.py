@@ -107,8 +107,10 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
     if p is None:
         dire("le moteur n'a rien appris : pas de pistes")
         return None
-    nb = len(p["gabarits"])
-    if nb < 1:
+    # LES GABARITS, PLUS LE RESTE : la derniere piste est ce que les gabarits n'expliquent
+    # pas, et c'est aussi la derniere case du paquet.
+    nb = len(p["gabarits"]) + 1
+    if nb < 2:
         dire("aucune source active : le moteur n'a pas fini de choisir")
         return None
     sorties = [os.path.join(dossier, f"{base}-{s + 1}.wav") for s in range(nb)]

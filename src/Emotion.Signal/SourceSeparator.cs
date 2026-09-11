@@ -75,6 +75,26 @@ public sealed class SourceSeparator
     /// </summary>
     public int Actives { get; private set; }
 
+    /// <summary>
+    /// Combien de cases sont publiees : les sources a gabarit, plus <b>le reste</b>.
+    ///
+    /// LE RESTE EST UNE CASE, ET C'EST LE KICK. Le kick n'a pas de hauteur qui glisse : trois
+    /// bancs ont montre qu'aucun gabarit ne le prend, et le masque repartissait alors son
+    /// energie au prorata entre toutes les sources — le DJ entendait « le boom-tchak sur les
+    /// trois ». Mesure sur Passepartout, ce que les gabarits n'expliquent pas, mis a part,
+    /// correle a 0,77 avec la batterie du juge exterieur (0,55 au mieux avant, colle a la
+    /// basse), et la basse s'en nettoie (0,76 → 0,83). Le kick n'est pas une sonorite qui
+    /// glisse : c'est ce qui reste quand les sonorites ont parle. Il occupe la derniere case.
+    /// </summary>
+    public int Publiees => Pret && Actives < Sources ? Actives + 1 : Actives;
+
+    /// <summary>Le rang du reste, ou -1 s'il n'y a pas de place.</summary>
+    public int RangReste => Pret && Actives < Sources ? Actives : -1;
+
+    private float _reste;                 // energie non expliquee sur l'image courante
+    private float _hauteurReste = 0.5f;   // son centre de gravite, en octaves
+    private int _vuesReste;
+
     /// <summary>Ce que le balayage a mesure, pour la sonde et le diagnostic.</summary>
     public IReadOnlyList<ProfileLearner.Bilan> Bilans => _apprentissage.Bilans;
     public IReadOnlyList<IReadOnlyList<ProfileLearner.Bilan>> Historique => _apprentissage.Historique;
@@ -93,6 +113,19 @@ public sealed class SourceSeparator
     /// <summary>Iterations du suivi, sur la seule image courante.</summary>
     private const int IterationsSuivi = 8;
 
+    /// <summary>
+    /// Constante de temps du lissage des niveaux suivis, en secondes.
+    ///
+    /// SANS LISSAGE, LES GABARITS ABSORBENT LE KICK. Six octaves de large sur quarante-neuf
+    /// positions, ils expliquent un coup bref et plat presque aussi bien qu'une note : la
+    /// solution d'une image saute pour l'avaler, et le reste ne recoit rien. Mesure sur
+    /// Passepartout : le niveau du reste correlait a 0,43 avec la batterie en direct, contre
+    /// 0,77 hors ligne — ou les niveaux sont lisses sur huit trames. Un niveau ne peut pas
+    /// changer plus vite que la fenetre qui l'estime ; le lissage rend au reste ce qui va plus
+    /// vite que 85 ms.
+    /// </summary>
+    private const float LissageSuiviS = 0.085f;
+
     private const float Eps = 1e-9f;
     private const int NLog = ProfileLearner.NLog;
     private const int Positions = ProfileLearner.Positions;
@@ -103,7 +136,9 @@ public sealed class SourceSeparator
     private readonly float[] _w;          // gabarits : Sources x Longueur
     private readonly float[] _v;          // spectrogramme glissant : memoire x NLog
     private readonly float[] _courant;    // niveau de chaque source sur l'image courante
-    private readonly float[] _hCourant;   // niveaux par position, image courante
+    private readonly float[] _hCourant;   // niveaux par position, lisses dans le temps
+    private readonly float[] _hKl;        // la solution brute de l'image, avant lissage
+    private readonly float _lissage;      // part de la solution brute prise a chaque image
     private readonly float[] _vh;         // reconstruction de l'image courante
     private readonly float[] _spectre;    // l'image courante, sur l'axe log
 
@@ -168,9 +203,14 @@ public sealed class SourceSeparator
     private readonly float[] _profilPrecedent;
     private bool _profilConnu;
 
-    /// <summary>Stabilite du gabarit de la source de rang donne, du grave a l'aigu.</summary>
+    /// <summary>
+    /// Stabilite du gabarit de la source de rang donne, du grave a l'aigu. Le reste n'a pas
+    /// de gabarit qui pourrait bouger : il est ce qu'il est, toujours le meme objet.
+    /// </summary>
     public float StabiliteOrdonnee(int rang) =>
-        rang >= 0 && rang < Actives ? _stabilite[_ordre[rang]] : 0f;
+        rang >= 0 && rang < Actives ? _stabilite[_ordre[rang]]
+        : rang == RangReste ? 1f
+        : 0f;
 
     /// <summary>
     /// Combien d'images cette source a passe a jouer. C'est le pendant de la stabilite :
@@ -183,9 +223,9 @@ public sealed class SourceSeparator
     private const float Audible = 0.12f;
 
     public float EcouteOrdonnee(int rang) =>
-        rang >= 0 && rang < Actives
-            ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
-            : 0f;
+        rang >= 0 && rang < Actives ? MathF.Min(1f, _vues[_ordre[rang]] / (float)Assez)
+        : rang == RangReste ? MathF.Min(1f, _vuesReste / (float)Assez)
+        : 0f;
 
     /// <param name="hop">Echantillons entre deux images d'analyse.</param>
     /// <param name="memoire">Images d'analyse gardees pour apprendre ; zero = quarante secondes.</param>
@@ -199,6 +239,8 @@ public sealed class SourceSeparator
         _v = new float[_memoire * NLog];
         _courant = new float[Sources];
         _hCourant = new float[Sources * Positions];
+        _hKl = new float[Sources * Positions];
+        _lissage = 1f - MathF.Exp(-hop / (LissageSuiviS * sampleRate));
         _vh = new float[NLog];
         _spectre = new float[NLog];
         _profilPrecedent = new float[Sources * Longueur];
@@ -290,8 +332,10 @@ public sealed class SourceSeparator
         // une source discrete mais presente doit compter, une source a zero non.
         var fort = 1e-4f;
         for (var i = 0; i < Actives; i++) fort = MathF.Max(fort, _courant[i]);
+        fort = MathF.Max(fort, _reste);
         for (var i = 0; i < Actives; i++)
             if (_courant[i] / fort > Audible && _vues[i] < Assez) _vues[i]++;
+        if (_reste / fort > Audible && _vuesReste < Assez) _vuesReste++;
     }
 
     /// <summary>Range l'image dans la memoire, et lance ce qui doit l'etre.</summary>
@@ -378,6 +422,10 @@ public sealed class SourceSeparator
         _choixFait = false;
         Array.Clear(_courant);
         Array.Clear(_hCourant);
+        Array.Clear(_hKl);
+        _reste = 0f;
+        _hauteurReste = 0.5f;
+        _vuesReste = 0;
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
     }
 
@@ -390,8 +438,9 @@ public sealed class SourceSeparator
         if (Actives <= 0) return;
         // On repart des niveaux de l'image d'avant, planches a un minimum : une position qui
         // etait a zero doit pouvoir revenir quand la note revient.
-        for (var i = 0; i < Actives * Positions; i++) if (_hCourant[i] < 1e-4f) _hCourant[i] = 1e-4f;
-        Array.Clear(_hCourant, Actives * Positions, (Sources - Actives) * Positions);
+        var n = Actives * Positions;
+        for (var i = 0; i < n; i++) _hKl[i] = MathF.Max(1e-4f, _hCourant[i]);
+        Array.Clear(_hCourant, n, (Sources - Actives) * Positions);
 
         for (var it = 0; it < IterationsSuivi; it++)
         {
@@ -400,16 +449,19 @@ public sealed class SourceSeparator
             {
                 var w = _w.AsSpan(s * Longueur, Longueur);
                 for (var p = 0; p < Positions; p++)
-                    ProfileLearner.Ajouter(_vh.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
+                    ProfileLearner.Ajouter(_vh.AsSpan(p, Longueur), w, _hKl[s * Positions + p]);
             }
             for (var f = 0; f < NLog; f++) _vh[f] = (_spectre[f] + Eps) / _vh[f];
             for (var s = 0; s < Actives; s++)
             {
                 var w = _w.AsSpan(s * Longueur, Longueur);
                 for (var p = 0; p < Positions; p++)
-                    _hCourant[s * Positions + p] *= ProfileLearner.Produit(w, _vh.AsSpan(p, Longueur));
+                    _hKl[s * Positions + p] *= ProfileLearner.Produit(w, _vh.AsSpan(p, Longueur));
             }
         }
+        // Le lissage : les niveaux publies suivent la solution brute avec la constante de
+        // temps de la fenetre. Ce que la solution brute a de plus rapide va au reste.
+        for (var i = 0; i < n; i++) _hCourant[i] += (_hKl[i] - _hCourant[i]) * _lissage;
 
         for (var s = 0; s < Sources; s++)
         {
@@ -424,6 +476,26 @@ public sealed class SourceSeparator
             _courant[s] = (float)niveau;
             if (niveau > Eps) _positionCourante[s] = (float)(poids / niveau);
         }
+
+        // LE RESTE : ce que les gabarits n'expliquent pas sur cette image, et ou il vit. Une
+        // reconstruction de plus, sans le rapport, puis la difference positive case par case.
+        _vh.AsSpan().Fill(Eps);
+        for (var s = 0; s < Actives; s++)
+        {
+            var w = _w.AsSpan(s * Longueur, Longueur);
+            for (var p = 0; p < Positions; p++)
+                ProfileLearner.Ajouter(_vh.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
+        }
+        double reste = 0, centre = 0;
+        for (var f = 0; f < NLog; f++)
+        {
+            var d = _spectre[f] - _vh[f];
+            if (d <= 0f) continue;
+            reste += d;
+            centre += d * f;
+        }
+        _reste = (float)reste;
+        if (reste > Eps) _hauteurReste = EnOctavesHz(CaseEnHz((float)(centre / reste)));
     }
 
     /// <summary>
@@ -490,9 +562,11 @@ public sealed class SourceSeparator
         _profilConnu = true;
     }
 
-    /// <summary>Niveau de la source de rang <paramref name="rang"/>, du grave a l'aigu.</summary>
+    /// <summary>Niveau de la source de rang <paramref name="rang"/>, du grave a l'aigu ; le reste en dernier.</summary>
     public float ActivationOrdonnee(int rang) =>
-        rang >= 0 && rang < Actives ? _courant[_ordre[rang]] : 0f;
+        rang >= 0 && rang < Actives ? _courant[_ordre[rang]]
+        : rang == RangReste ? _reste
+        : 0f;
 
     /// <summary>
     /// Hauteur de la source de rang donne, EN CE MOMENT : la couleur de son gabarit plus la
@@ -501,6 +575,7 @@ public sealed class SourceSeparator
     /// </summary>
     public float HauteurOrdonnee(int rang)
     {
+        if (rang == RangReste) return _hauteurReste;
         if (rang < 0 || rang >= Actives) return 0.5f;
         var s = _ordre[rang];
         var position = _courant[s] > Eps ? _positionCourante[s] : _positionsApprises[s];
