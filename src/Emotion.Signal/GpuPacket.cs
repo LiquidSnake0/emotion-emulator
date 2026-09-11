@@ -313,6 +313,9 @@ public struct GpuPacket
     /// <summary>Drapeau d'attaque, dans l'octet de drapeaux d'une source.</summary>
     public const byte SourceHitBit = 1;
 
+    /// <summary>Les bits 1 a 3 du drapeau : la dominance de la source, de 0 a 7.</summary>
+    public const int SourceDominanceShift = 1;
+
     /// <summary>La zone des sources, vue comme des octets bruts.</summary>
     [FieldOffset(SourceOffset)] public SourceBlock Sources;
 
@@ -541,7 +544,12 @@ public struct GpuPacket
         var slot = SourceByte(rank);
         slot[SourceLevel] = Byte255(state.Level);
         slot[SourcePitch] = Byte255(state.Position);
-        slot[SourceFlags] = state.Hit ? SourceHitBit : (byte)0;
+        // Le bit 0 est la frappe ; les bits 1 a 3 portent la DOMINANCE en huit crans : ce
+        // que le rendu peut marquer d'un point (extrait, sur) et ce qu'il teinte autrement
+        // (discret, partage). « Le GPU saura differencier les deux si on met un point a ce
+        // qui est extrait. »
+        var dominance = Math.Clamp((int)(state.Dominance * 7.999f), 0, 7);
+        slot[SourceFlags] = (byte)((state.Hit ? SourceHitBit : 0) | dominance << SourceDominanceShift);
         slot[SourceLabel] = label;
         slot[SourceHeard] = Byte255(state.Heard);
         slot[SourceSharp] = Byte255(state.Sharpness);

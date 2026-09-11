@@ -2243,6 +2243,37 @@ case de la mesure retient ce qu'elle a fait entendre (boom ou tchak, par la haut
 moment du bit) : l'annonce à cette case rejoue le bon geste. Les formes en caractères
 (`formes.py`) restent pour les autres panneaux. Captures refaites sur Glyph Chamber.
 
+### La fuite : ni porte ni binaire — la dominance, en deux couleurs
+
+Son oreille sur les pistes : « il laisse passer en cachette quelques sons à partir d'un
+certain nombre de décibels ; on entend le reste en arrière et ce qu'il y a en avant ». Sa
+proposition : un seuil de volume, « on arrondit, 20 % → 0, 80 % → 100 % ». Mesuré sur
+Passepartout 60–150 s (fuite = corrélation d'une piste avec les stems qui ne sont pas les
+siens) :
+
+| variante | basse (piste 1) | fuite | le reste (piste 4) | fuite |
+|---|---|---|---|---|
+| prorata (le moteur) | 0,78 | 0,43 | 0,41 | 0,13 |
+| porte à 10 / 20 / 35 % de la dominante | 0,75 → 0,69 | **0,45–0,48** | 0,36 | 0,08–0,13 |
+| binaire (dominante seule) | **0,34** | 0,24 | 0,39 | 0,04 |
+
+**Les portes ne changent rien** : la fuite n'est pas dans les raies faibles, elle est dans
+les raies **partagées à parts presque égales** (basse et kick dans les mêmes raies graves).
+**Le binaire coupe la fuite et tue la basse** (0,78 → 0,34) : à chaque kick, le kick gagne
+la raie et la basse disparaît — le « ça s'étouffe » du matin, en pire, avec du grain.
+
+Sa relance : « pourquoi pas afficher dans une autre couleur la partie discrète ? » et « le
+GPU saura différencier les deux si on met un point à ce qui est extrait ». C'est la bonne
+réponse : couper décide à la place de l'œil, colorer lui dit ce qu'on sait. Le séparateur
+mesure par source **la dominance** — la part de son énergie dans des cases dont elle est
+propriétaire (≥ 50 % du total) — et le reste est sa part discrète. Publiée dans les **bits
+1–3 du drapeau** de la case (`SourceDominanceShift`, huit crans ; `LaneState.Dominance`,
+`DominanceOrdonnee`). Passepartout : piano 0,62, synthé 0,94, aigus 0,89, reste 0,65. La
+fenêtre dessine chaque geste **en vert à hauteur de sa dominance, en ambre pour sa part
+discrète** (une sous-couche plus large), et **deux points** en haut de la case : le vert
+grossit avec ce qui est extrait, l'ambre avec ce qui est partagé. Les variantes à porte
+restent dans `variantes/` pour son oreille. 224 tests, fumée 32 ok.
+
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
 corrigé.
 

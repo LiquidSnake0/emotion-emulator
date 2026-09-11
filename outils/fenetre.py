@@ -169,6 +169,7 @@ GRIS_TEXTE = QColor(122, 126, 130)
 GRIS_CLAIR = QColor(198, 202, 206)
 VERT = QColor(64, 196, 122)
 VERT_SOURD = QColor(38, 110, 74)
+AMBRE = QColor(214, 160, 64)      # la part discrete d'une source : partagee, entendue en cachette
 
 
 class Anneau:
@@ -274,6 +275,9 @@ class Paquet:
                 "niveau": mm[o + S_NIVEAU] / 255.0,
                 "hauteur": mm[o + S_HAUTEUR] / 255.0,
                 "frappe": bool(mm[o + S_DRAPEAUX] & 1),
+                # LA DOMINANCE : la part de la source qui est vraiment a elle (8 crans). Le
+                # reste est discret, partage — et se dessine dans une autre couleur.
+                "dominance": (mm[o + S_DRAPEAUX] >> 1 & 7) / 7.0,
                 "nettete": mm[o + S_NETTETE] / 255.0,
                 "entendu": mm[o + S_ENTENDU] / 255.0,
                 "nom": mm[o + S_NOM],
@@ -1077,16 +1081,33 @@ class Mur(QWidget):
         xc, yc = x0 + w / 2, y0 + h / 2
         base = 0.12 if absente else 0.25
         att = 0.3 if eteinte else 1.0
+        dom = 0.0 if absente else s["dominance"]
 
-        def teinte(a):
-            c = QColor(GRIS_CADRE if absente else VERT)
-            c.setAlphaF(max(0.0, min(1.0, a * att)))
+        # DEUX COULEURS, ET UN POINT. Le vert, c'est ce que la source domine — ce qui est
+        # extrait, sur ; l'ambre, c'est sa part discrete, partagee avec d'autres, celle
+        # qu'on entend en cachette derriere une piste. Le geste se dessine en vert a
+        # hauteur de sa dominance, en ambre pour le reste, et un point marque ce qui est
+        # extrait : le GPU saura differencier les deux.
+        def teinte(a, discret=False):
+            c = QColor(GRIS_CADRE if absente else (AMBRE if discret else VERT))
+            part = (1.0 - dom) if discret else dom
+            c.setAlphaF(max(0.0, min(1.0, a * att * (0.15 + 0.85 * part))))
             return c
+
+        # le point de ce qui est extrait, en haut a gauche de la case
+        if not absente:
+            d.setPen(Qt.PenStyle.NoPen)
+            d.setBrush(teinte(1.0))
+            d.drawEllipse(QPointF(x0 + 3, y0 + 3), 2.5 + 2.5 * dom, 2.5 + 2.5 * dom)
+            d.setBrush(teinte(1.0, discret=True))
+            d.drawEllipse(QPointF(x0 + 14, y0 + 3), 2.5 + 2.5 * (1.0 - dom), 2.5 + 2.5 * (1.0 - dom))
 
         if reste:
             # LA BOULE DU BOOM, LE TRIANGLE DU TCHAK.
             rb = 7 + 10 * niveau + 22 * g.boule
             d.setPen(Qt.PenStyle.NoPen)
+            d.setBrush(teinte(base + 0.7 * g.boule, discret=True))
+            d.drawEllipse(QPointF(x0 + w * 0.3, yc), rb + 5, rb + 5)
             d.setBrush(teinte(base + 0.7 * g.boule))
             d.drawEllipse(QPointF(x0 + w * 0.3, yc), rb, rb)
             d.setPen(QPen(teinte(base + 0.15), 1))
@@ -1110,6 +1131,8 @@ class Mur(QWidget):
                     y = yl + amp * math.sin(2 * math.pi * (1.5 + 0.5 * i) * k / n + g.onde_phase + i * 1.1)
                     if k == 0: chemin.moveTo(x, y)
                     else: chemin.lineTo(x, y)
+                d.setPen(QPen(teinte(base + 0.55 * niveau, discret=True), 5))
+                d.drawPath(chemin)
                 d.setPen(QPen(teinte(base + 0.55 * niveau - 0.1 * i), 2))
                 d.drawPath(chemin)
         elif 0.45 <= s["caractere"] <= 0.8 and not absente:
@@ -1122,6 +1145,8 @@ class Mur(QWidget):
                 y = yc + amp * math.sin(math.pi * 3 * k / n)
                 if k == 0: chemin.moveTo(x, y)
                 else: chemin.lineTo(x, y)
+            d.setPen(QPen(teinte(base + 0.55 * niveau + 0.3 * g.corde, discret=True), 5))
+            d.drawPath(chemin)
             d.setPen(QPen(teinte(base + 0.55 * niveau + 0.3 * g.corde), 2))
             d.drawPath(chemin)
             d.setPen(QPen(teinte(base + 0.2), 1))
@@ -1132,6 +1157,9 @@ class Mur(QWidget):
             d.setPen(Qt.PenStyle.NoPen)
             d.setBrush(teinte(base + 0.6 * niveau))
             rp = 5 + 14 * niveau
+            d.setBrush(teinte(base + 0.6 * niveau, discret=True))
+            d.drawEllipse(QPointF(xc, yc), rp + 5, rp + 5)
+            d.setBrush(teinte(base + 0.6 * niveau))
             d.drawEllipse(QPointF(xc, yc), rp, rp)
             if g.impact > 0.0:
                 ri = 8 + (w / 2 - 8) * g.impact

@@ -137,6 +137,7 @@ de santé de la grille.
 | pique · tenue · retrait | frappe-t-elle, tient-elle, s'est-elle tue — sur l'image | l'enveloppe par source |
 | **caractère** (4 bits) | ce qu'elle *est* : 0 frappe, 15 tient — sur la durée | la tenue moyennée sur vingt secondes : batterie 0,3, nappes 0,9, pincé entre les deux |
 | **degré** (4 bits) | ce qu'elle joue dans la gamme de la fiche : I … VII, · hors gamme, ou inconnu | sa reconstruction repliée en chromagramme là où l'axe résout le demi-ton, avec une marge — le grave s'abstient plutôt que de se tromper |
+| **dominance** (3 bits) | la part d'elle qui est vraiment à elle, contre sa part discrète, partagée | les cases dont elle tient plus de la moitié ; le rendu la dessine en vert, et l'ambre pour ce qui est partagé — couper déciderait à la place de l'œil |
 | motif (16 bits) | où elle monte dans la mesure | seize mesures de montées, sur la grille |
 | **la dernière case** | **le reste** : ce que les gabarits n'expliquent pas | sur ce répertoire, la batterie |
 | verrou | le morceau est su | deux motifs tenus sur seize mesures |

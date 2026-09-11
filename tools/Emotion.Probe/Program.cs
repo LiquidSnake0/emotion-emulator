@@ -1129,7 +1129,7 @@ Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "
         foreach (var v in motif) dessin.Append(v >= 0.66f ? '#' : v >= 0.33f ? '+' : '.');
         var caractere = analyzer.Derniere.Voices.Caracteres is { } cs && r < cs.Length ? cs[r] : 0.5f;
         var degre = analyzer.Derniere.Voices.Degres is { } ds && r < ds.Length ? ds[r] : Gamme.Inconnu;
-        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures   caractere {caractere:F2} ({(caractere < 0.45f ? "frappe" : caractere > 0.8f ? "tient" : "pince")})" + (degre != Gamme.Inconnu ? $"   degre {Gamme.Nom(degre)}" : ""));
+        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures   caractere {caractere:F2} ({(caractere < 0.45f ? "frappe" : caractere > 0.8f ? "tient" : "pince")})   dominance {sep.DominanceOrdonnee(r):F2}" + (degre != Gamme.Inconnu ? $"   degre {Gamme.Nom(degre)}" : ""));
     }
 }
 foreach (var b in sep.Bilans)

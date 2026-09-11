@@ -255,7 +255,25 @@ public sealed class SourceSeparator
     public const float MargeClasse = 1.3f;
 
     private readonly int[] _classeCourante = new int[Sources];
-    private readonly float[] _recSource = new float[NLog];
+
+    /// <summary>
+    /// LA PART DOMINANTE D'UNE SOURCE : la fraction de son energie qui vit dans des cases
+    /// dont elle est proprietaire (plus de la moitie), contre la part discrete, dans des
+    /// cases partagees ou elle n'est que minoritaire — ce qu'on entend « en cachette »
+    /// derriere une piste. « Pourquoi pas afficher dans une autre couleur la partie
+    /// discrete ? » Couper, c'est decider a la place de l'oeil ; colorer, c'est lui dire
+    /// ce qu'on sait et ce qu'on ne sait pas. Mesure : la basse et le kick partagent leurs
+    /// raies graves a parts presque egales, une porte n'y change rien (fuite 0,43 → 0,45)
+    /// et le binaire tue la basse (0,78 → 0,34). On publie donc la dominance, on ne coupe pas.
+    /// </summary>
+    private readonly float[] _dominance = new float[Sources];
+    private readonly float[][] _recParSource = Enumerable.Range(0, Sources).Select(_ => new float[NLog]).ToArray();
+    private float _dominanceReste;
+
+    public float DominanceOrdonnee(int rang) =>
+        rang >= 0 && rang < Actives ? _dominance[_ordre[rang]]
+        : rang == RangReste ? _dominanceReste
+        : 0f;
 
     /// <summary>La classe de hauteur (do = 0) que joue la source de rang donne, ou -1. Diagnostic.</summary>
     public int ClasseOrdonnee(int rang) => rang >= 0 && rang < Actives ? _classeCourante[_ordre[rang]] : -1;
@@ -636,20 +654,32 @@ public sealed class SourceSeparator
         for (var s = 0; s < Actives; s++)
         {
             var w = _w.AsSpan(s * Longueur, Longueur);
-            _recSource.AsSpan().Clear();
+            var rec = _recParSource[s].AsSpan();
+            rec.Clear();
             for (var p = 0; p < Positions; p++)
-                ProfileLearner.Ajouter(_recSource.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
-            _classeCourante[s] = ClasseDeReconstruction(_recSource);
-            for (var f = 0; f < NLog; f++) _vh[f] += _recSource[f];
+                ProfileLearner.Ajouter(rec.Slice(p, Longueur), w, _hCourant[s * Positions + p]);
+            _classeCourante[s] = ClasseDeReconstruction(rec);
+            for (var f = 0; f < NLog; f++) _vh[f] += rec[f];
         }
-        double reste = 0, centre = 0;
+        double reste = 0, centre = 0, resteDominant = 0;
+        Span<double> dominant = stackalloc double[Sources];
+        Span<double> energie = stackalloc double[Sources];
         for (var f = 0; f < NLog; f++)
         {
             var d = _spectre[f] - _vh[f];
-            if (d <= 0f) continue;
-            reste += d;
-            centre += d * f;
+            var r = d > 0f ? d : 0f;
+            var total = _vh[f] + r;
+            if (d > 0f) { reste += d; centre += d * f; if (r >= 0.5f * total) resteDominant += r; }
+            for (var s = 0; s < Actives; s++)
+            {
+                var v = _recParSource[s][f];
+                energie[s] += v;
+                if (v >= 0.5f * total) dominant[s] += v;
+            }
         }
+        for (var s = 0; s < Sources; s++)
+            _dominance[s] = s < Actives && energie[s] > Eps ? (float)(dominant[s] / energie[s]) : 0f;
+        _dominanceReste = reste > Eps ? (float)(resteDominant / reste) : 0f;
         _reste = (float)reste;
         if (reste > Eps) _hauteurReste = EnOctavesHz(CaseEnHz((float)(centre / reste)));
     }

@@ -75,7 +75,10 @@ public readonly record struct LaneState(
     float Level, float Position, bool Hit,
     float Heard = 0f, float Sharpness = 0f,
     float Brightness = 0.5f, float Texture = 0.5f,
-    float Pique = 0f, float Tenue = 0f, float Retrait = 0f)
+    float Pique = 0f, float Tenue = 0f, float Retrait = 0f,
+    // LA PART DOMINANTE : la fraction de l'energie de la source qui vit dans des cases
+    // dont elle est proprietaire. Le reste est discret — partage, entendu en cachette.
+    float Dominance = 0f)
 {
     public static LaneState Silent => new(0f, 0.5f, false);
 
