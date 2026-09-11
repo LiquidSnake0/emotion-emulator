@@ -23,7 +23,10 @@ public readonly record struct Voices(
     ushort[]? Motifs = null, bool Verrou = false,
     // LE CARACTERE de chaque source, sur la duree : 0 frappe, 1 tient. C'est l'octet qui
     // dit au rendu quel geste donner a quelle source.
-    float[]? Caracteres = null)
+    float[]? Caracteres = null,
+    // LE DEGRE que joue chaque source dans la gamme de la fiche : 0 tonique … 6, 7 hors
+    // gamme, 15 inconnu. Et l'accord du chromagramme avec cette gamme, 0 a 1.
+    int[]? Degres = null, float AccordGamme = 0f)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.

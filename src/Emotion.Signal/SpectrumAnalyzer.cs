@@ -727,6 +727,19 @@ public sealed class SpectrumAnalyzer
     private readonly MotifSources _motifs;
     private readonly ushort[][] _motifPool = [new ushort[SourceSeparator.Sources], new ushort[SourceSeparator.Sources]];
     private readonly float[][] _caracterePool = [new float[SourceSeparator.Sources], new float[SourceSeparator.Sources]];
+    private readonly int[][] _degrePool = [new int[SourceSeparator.Sources], new int[SourceSeparator.Sources]];
+    private bool[]? _gamme;
+    private float _accordGamme;
+
+    /// <summary>La fiche Camelot du disque : la gamme devient un prior doux et les degres se publient.</summary>
+    public void Gamme(string? camelot)
+    {
+        _gamme = Emotion.Signal.Gamme.Classes(camelot);
+        _separation.Gamme(camelot);
+        _accordGamme = 0f;
+    }
+    public float AccordGamme => _accordGamme;
+    public string? Camelot => _separation.Camelot;
 
     /// <summary>Le motif de chaque source et sa stabilite, pour la sonde.</summary>
     public MotifSources Motifs => _motifs;
@@ -977,16 +990,26 @@ public sealed class SpectrumAnalyzer
             for (var i = 0; i < publiees; i++) _motifs.Feed(i, act[i], phaseMotif);
             var masques = _motifPool[_sepTurn];
             var caracteres = _caracterePool[_sepTurn];
+            var degres = _degrePool[_sepTurn];
             for (var i = 0; i < SourceSeparator.Sources; i++)
             {
                 masques[i] = i < publiees ? _motifs.Masque(i) : (ushort)0;
                 caracteres[i] = i < publiees ? _enveloppes.Caractere(i) : 0.5f;
+                degres[i] = i < publiees ? _separation.DegreOrdonne(i) : Emotion.Signal.Gamme.Inconnu;
+            }
+            // L'ACCORD DE LA FICHE AVEC CE QU'ON ENTEND : la part du chromagramme dans la
+            // gamme, moyennee sur vingt secondes. Une fiche fausse se voit ici.
+            if (_gamme is { } gm && harmony.Chroma is { Length: 12 } chroma)
+            {
+                float dedans = 0, tout = 0;
+                for (var k = 0; k < 12; k++) { tout += chroma[k]; if (gm[k]) dedans += chroma[k]; }
+                if (tout > 1e-6f) _accordGamme += (dedans / tout - _accordGamme) * (1f - MathF.Exp(-_frameSeconds / 20f));
             }
             if (!_separation.Verrou && _motifs.Verrouille(publiees)) _separation.Verrouiller();
 
             voices = voices with { Levels = act, Pitches = haut, Lanes = etats,
                                    Actives = publiees, Motifs = masques, Verrou = _separation.Verrou,
-                                   Caracteres = caracteres };
+                                   Caracteres = caracteres, Degres = degres, AccordGamme = _accordGamme };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint

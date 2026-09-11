@@ -152,6 +152,8 @@ app.MapGet("/profils", (IAudioSource source) =>
         parOctave = ProfileLearner.ParOctave,
         f0 = separation.F0,
         accordageCents = separation.AccordageCents,
+        gamme = analyseur.Camelot,
+        accordGamme = analyseur.AccordGamme,
         positions = ProfileLearner.Positions,
         longueur = bins,
         // « pret » dit si quelque chose a ete appris. Faux, les profils ne decrivent que du
@@ -308,6 +310,12 @@ static IAudioSource SourceDuSignal(IServiceProvider sp)
     {
         amorcable.Amorcer(bpmFiche);
         Dire($"fiche : {bpmFiche:0.##} BPM");
+    }
+    // La tonalite de la fiche, en Camelot (Signal__Camelot=9A) : facultative, comme le BPM.
+    if (master.Analyzer is { } analyseurCle && Gamme.Lire(cfg["Signal:Camelot"]) is not null)
+    {
+        analyseurCle.Gamme(cfg["Signal:Camelot"]);
+        Dire($"fiche : gamme {cfg["Signal:Camelot"]!.Trim().ToUpperInvariant()}");
     }
 
     // Seconde entree facultative : la sortie casque de la table. Sans elle, le systeme

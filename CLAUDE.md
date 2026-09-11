@@ -2191,6 +2191,34 @@ batterie 0,77 → 0,80 (mélodique 0,72 → 0,65), Codex **5 → 3 sources** (la
 coupée en trois, 0,51 → 0,52), WordBank inchangé (axe standard). Motifs inchangés. **Gain
 modeste, aucune régression** — gardé. `AccordageTests` (4). 212 verts, fumée 32 ok.
 
+### La gamme de la fiche : le prior n'apporte rien, le degré se publie
+
+(b) après la mesure de tonalité. `Gamme.cs` : Camelot → tonique, mode, sept classes ; degré
+d'une classe (0 tonique … 6, 7 hors gamme, 15 inconnu). Plomberie : `Signal__Camelot` côté
+serveur, `cle=9A` côté sonde, `voir.sh` lit `key` dans le crate, `/profils` publie `gamme` et
+`accordGamme`.
+
+**Le prior doux sur les positions (0,7 hors gamme) a été mesuré et retiré** : juge Demucs et
+motifs identiques à la décimale sur cinq titres. Une position reste libre.
+
+**Le degré par source** (paquet : un quartet à **209–211**, même rangement que les
+caractères ; accord de la fiche à **215**) se lit sur la **reconstruction de chaque source**
+sur l'axe log, repliée en chromagramme, **seulement là où l'axe résout le demi-ton** (au-
+dessus de ~200 Hz à 48 kHz : dans le grave une raie de 11,7 Hz étale un la jusqu'au la#), et
+avec une **marge** : la classe gagnante doit peser 1,3 fois la suivante, sinon « inconnu ».
+Trois versions ont été jetées avant : lire le fondamental du gabarit (faux dans le grave),
+replier le gabarit puis décaler d'une position moyenne arrondie (glisse d'un demi-ton). Test
+`DegreParSourceTests` : trois instruments fabriqués qui parcourent la mineur puis se posent
+sur la, do, mi → le piano rend III et le clair V ; la basse, sous la résolution, a le droit
+de s'abstenir, jamais de se tromper (forcée, elle tombait un demi-ton à côté).
+
+**Ce qu'il faut dire** : sur les titres réels, au dernier instant de la passe, la plupart des
+cases rendent « inconnu » ou « · » (hors gamme) ; la fiabilité des degrés n'est établie que
+sur le signal fabriqué. L'accord du chromagramme avec la gamme vaut 0,59–0,84 pour un
+plancher de hasard à 0,58 (7 classes sur 12) : c'est un indice faible, la mention « fiche
+contredite » (< 0,6) est à prendre comme telle. La fenêtre affiche le degré dans le titre de
+la case (I … VII, ·). 224 tests verts, fumée 32 ok.
+
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
 corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
 le motif, qui est en avance).

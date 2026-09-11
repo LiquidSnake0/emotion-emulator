@@ -31,7 +31,7 @@ for pid in $(ss -lptnH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut
   [[ "$(ps -p "$pid" -o comm= 2>/dev/null)" == *Emotion.Server* ]] && kill "$pid" 2>/dev/null
 done
 
-PISTE=""; TITRE="direct"; BPM=""
+PISTE=""; TITRE="direct"; BPM=""; CLE=""
 if [[ "${1:-}" != "--direct" ]]; then
   if [[ ! -d "$ALBUM" ]]; then
     echo "album introuvable : $ALBUM" >&2
@@ -69,24 +69,26 @@ rang, titre = decoupe(choix)
 # LA FICHE SE PREND DANS LE CRATE, jamais devinee. On apparie sur le titre, et sur le rang
 # seulement si l'album est identifie — un numero de piste seul ne designe rien.
 bpm = ""
+cle = ""
 try:
     with open(os.environ["CRATE"], encoding="utf-8") as fh:
         faces = json.load(fh)
     exact = [f for f in faces if (f.get("title") or "").lower() == titre.lower()]
     if exact:
         bpm = f"{exact[0]['bpm']}"
+        cle = exact[0].get("key") or ""
 except (OSError, ValueError, KeyError):
     pass
 
-print(f"{choix}\t{rang:02d} {titre}\t{bpm}")
+print(f"{choix}\t{rang:02d} {titre}\t{bpm}\t{cle}")
 PYEOF
 )
   [[ -z "$LIGNE" ]] && { echo "aucune piste jouable dans $ALBUM" >&2; exit 1; }
-  IFS=$'\t' read -r PISTE TITRE BPM <<< "$LIGNE"
+  IFS=$'\t' read -r PISTE TITRE BPM CLE <<< "$LIGNE"
 fi
 
 if [[ -n "$PISTE" ]]; then
-  echo "morceau — $TITRE${BPM:+   fiche $BPM BPM}"
+  echo "morceau — $TITRE${BPM:+   fiche $BPM BPM}${CLE:+ · $CLE}"
   [[ -z "$BPM" ]] && echo "         (aucune fiche au crate pour ce titre : le moteur cherchera seul)"
 else
   echo "moteur — il ecoute $(pactl get-default-sink).monitor, joue ce que tu veux"
@@ -105,7 +107,7 @@ if [[ -n "$PISTE" ]]; then
     ffmpeg -v error -y -i "$PISTE" -ac 1 -ar 48000 "$WAV" || exit 1
   fi
   export EMOTION_MORCEAU="$WAV" EMOTION_CACHE="$CACHE/stems"
-  ./run.sh fichier "$WAV" "$BPM" > /tmp/emotion-moteur.log 2>&1 &
+  Signal__Camelot="$CLE" ./run.sh fichier "$WAV" "$BPM" > /tmp/emotion-moteur.log 2>&1 &
 else
   # UNE VARIABLE VIDE N'EST PAS UNE VARIABLE ABSENTE, et le moteur ne demarrait plus.
   # `Signal__Bpm=""` fait echouer la conversion en Single au demarrage : le mode direct et

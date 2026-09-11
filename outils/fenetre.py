@@ -109,6 +109,9 @@ P_RETRAITS = 232
 # COMBIEN DE SOURCES SONT ACTIVES : le moteur le decouvre par disque, il ne l'impose plus.
 P_SOURCES_ACTIVES = 120
 P_CARACTERES = 201     # un quartet par source : 0 frappe, 15 tient, mesure sur la duree
+P_DEGRES = 209         # un quartet par source : le degre joue dans la gamme de la fiche, 7 hors gamme, 15 inconnu
+P_ACCORD_GAMME = 215   # l'accord du chromagramme avec la gamme de la fiche, 0 a 255
+DEGRES = ["I", "II", "III", "IV", "V", "VI", "VII", "·"]
 P_MOTIFS = 243         # six mots de seize bits : le motif de chaque source, une case par double croche
 P_VERROU = 255         # 1 quand le morceau est su et que le moteur ne retouche plus
 
@@ -263,6 +266,7 @@ class Paquet:
         self.bandes = [mm[base + P_BANDES + i] / 255.0 for i in range(12)]
         self.actives = mm[base + P_SOURCES_ACTIVES]
         self.verrou = bool(mm[base + P_VERROU])
+        self.accord_gamme = mm[base + P_ACCORD_GAMME] / 255.0
         self.sources = []
         for r in range(6):
             o = base + P_SOURCES + r * SOURCE_PAS
@@ -286,6 +290,8 @@ class Paquet:
                 "motif": struct.unpack_from("<H", mm, base + P_MOTIFS + 2 * r)[0],
                 # LE CARACTERE, sur la duree : ce que le rendu lit pour choisir son geste.
                 "caractere": (mm[base + P_CARACTERES + r // 2] >> (4 * (r % 2)) & 0xF) / 15.0,
+                # LE DEGRE : ce que la source joue dans la gamme de la fiche, quand il y en a une.
+                "degre": mm[base + P_DEGRES + r // 2] >> (4 * (r % 2)) & 0xF,
             })
 
 
@@ -914,7 +920,10 @@ class Mur(QWidget):
                       "tenu" if s["caractere"] > 0.8 else
                       "pincé")
             gauche = f"{r + 1}·{s['nom']}" if s["nom"] else f"{r + 1}"
-            titre = "  ".join(x for x in (gauche, nom, nature) if x)
+            # LE DEGRE JOUE, quand la fiche donne la gamme : I la tonique, V la quinte, · hors
+            # gamme. C'est ce qui survit a une transition Camelot.
+            degre = DEGRES[s["degre"]] if s["degre"] < len(DEGRES) else ""
+            titre = "  ".join(x for x in (gauche, nom, nature, degre) if x)
 
             # UNE SOURCE RETIREE SE DIT, ELLE NE DISPARAIT PAS.
             # « Quand le kick est en retrait pendant un moment, on est censé le savoir. »

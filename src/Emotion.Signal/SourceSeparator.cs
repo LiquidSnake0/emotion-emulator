@@ -213,6 +213,69 @@ public sealed class SourceSeparator
 
     private readonly float[] _hauteurs = new float[Sources];
     private readonly float[] _centres = new float[Sources];         // couleur du gabarit, en cases
+
+    /// <summary>
+    /// LA GAMME DE LA FICHE, POUR LES DEGRES. Une preference douce sur les positions a ete
+    /// essayee (0,7 hors gamme) : juge Demucs et motifs identiques a la decimale sur cinq
+    /// titres — retiree, une position reste libre. Ce que la gamme rapporte, c'est le degre.
+    /// </summary>
+    private string? _camelot;
+    private int _caseResolue;   // la premiere case de l'axe ou une raie fait moins d'un demi-ton
+    public void Gamme(string? camelot) => _camelot = Emotion.Signal.Gamme.Classes(camelot) is null ? null : camelot;
+    public string? Camelot => _camelot;
+
+    /// <summary>
+    /// La classe de hauteur d'un gabarit : son chromagramme replie — chaque case va a sa
+    /// classe, les octaves se retrouvent, le fondamental et ses octaves l'emportent. Lire le
+    /// fondamental directement echouait dans le grave : a 55 Hz une raie de 11,7 Hz fait plus
+    /// de trois demi-tons, et la premiere bosse du gabarit tombait a cote.
+    /// </summary>
+    /// <summary>
+    /// La classe de hauteur d'un spectre sur l'axe log, replie en chromagramme — et
+    /// SEULEMENT LA OU L'AXE RESOUT LE DEMI-TON. Dans le grave, une raie de la transformee
+    /// couvre plusieurs cases : la projection y etale un la1 jusqu'au la#, et le repli votait
+    /// pour la mauvaise classe. On ne compte que les cases dont la raie fait moins d'un demi-
+    /// ton — au-dessus de 200 Hz a 48 kHz — ou les octaves du fondamental votent juste.
+    /// </summary>
+    private int ClasseDeReconstruction(ReadOnlySpan<float> spectreLog)
+    {
+        Span<float> chroma = stackalloc float[12];
+        for (var c = _caseResolue; c < spectreLog.Length; c++) chroma[(int)MathF.Round(c / 2f) % 12] += spectreLog[c];
+        var meilleur = 0; var second = 0f;
+        for (var k = 1; k < 12; k++) if (chroma[k] > chroma[meilleur]) meilleur = k;
+        for (var k = 0; k < 12; k++) if (k != meilleur && chroma[k] > second) second = chroma[k];
+        // UN VOTE SERRE N'EST PAS UNE NOTE. Une basse dont seules les harmoniques resolues
+        // votent, ou une nappe qui etale son energie, donnent deux classes a egalite : on
+        // rend « inconnu » plutot qu'un degre faux — mesure, la basse fabriquee tombait un
+        // demi-ton a cote quand on la forcait.
+        return chroma[meilleur] >= MargeClasse * second ? meilleur : -1;
+    }
+
+    /// <summary>La classe gagnante doit peser au moins ce facteur de plus que la suivante.</summary>
+    public const float MargeClasse = 1.3f;
+
+    private readonly int[] _classeCourante = new int[Sources];
+    private readonly float[] _recSource = new float[NLog];
+
+    /// <summary>La classe de hauteur (do = 0) que joue la source de rang donne, ou -1. Diagnostic.</summary>
+    public int ClasseOrdonnee(int rang) => rang >= 0 && rang < Actives ? _classeCourante[_ordre[rang]] : -1;
+
+    /// <summary>La position courante (en cases) et le centre du gabarit, pour le diagnostic.</summary>
+    public (float Position, float Centre) PositionOrdonnee(int rang) =>
+        rang >= 0 && rang < Actives ? (_positionCourante[_ordre[rang]], _centres[_ordre[rang]]) : (0f, 0f);
+
+    /// <summary>
+    /// Le degre que joue la source de rang donne, en ce moment : 0 la tonique … 6, 7 hors
+    /// gamme, 15 sans gamme ou sans note. Le reste n'a pas de degre.
+    /// </summary>
+    public int DegreOrdonne(int rang)
+    {
+        if (_camelot is null || rang < 0 || rang >= Actives) return Emotion.Signal.Gamme.Inconnu;
+        var s = _ordre[rang];
+        if (_courant[s] <= Eps) return Emotion.Signal.Gamme.Inconnu;
+        var classe = _classeCourante[s];
+        return classe < 0 ? Emotion.Signal.Gamme.Inconnu : Emotion.Signal.Gamme.Degre(_camelot, classe);
+    }
     private readonly float[] _positionsApprises = new float[Sources];
     private readonly float[] _positionCourante = new float[Sources];
     private readonly int[] _ordre = new int[Sources];
@@ -270,6 +333,9 @@ public sealed class SourceSeparator
 
         for (var i = 0; i < _w.Length; i++) _w[i] = 0.1f + (float)_alea.NextDouble() * 0.9f;
         for (var s = 0; s < Sources; s++) _ordre[s] = s;
+        var raieHz = sampleRate / (float)FenetreLog;
+        var hzResolu = raieHz / (MathF.Pow(2f, 1f / 12f) - 1f);
+        _caseResolue = Math.Clamp((int)MathF.Ceiling(ProfileLearner.ParOctave * MathF.Log2(hzResolu / ProfileLearner.F0)), 0, Longueur - 1);
         ConstruireProjection();
 
         _apprentissage = new ProfileLearner(Sources, _memoire, IterationsApprentissage);
@@ -563,12 +629,18 @@ public sealed class SourceSeparator
 
         // LE RESTE : ce que les gabarits n'expliquent pas sur cette image, et ou il vit. Une
         // reconstruction de plus, sans le rapport, puis la difference positive case par case.
+        // Au passage, la reconstruction de CHAQUE source, dont on lit la classe de hauteur
+        // qu'elle joue : le gabarit a toutes ses positions, pese par ses niveaux — pas une
+        // position moyenne arrondie, qui glissait d'un demi-ton.
         _vh.AsSpan().Fill(Eps);
         for (var s = 0; s < Actives; s++)
         {
             var w = _w.AsSpan(s * Longueur, Longueur);
+            _recSource.AsSpan().Clear();
             for (var p = 0; p < Positions; p++)
-                ProfileLearner.Ajouter(_vh.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
+                ProfileLearner.Ajouter(_recSource.AsSpan(p, Longueur), w, _hCourant[s * Positions + p]);
+            _classeCourante[s] = ClasseDeReconstruction(_recSource);
+            for (var f = 0; f < NLog; f++) _vh[f] += _recSource[f];
         }
         double reste = 0, centre = 0;
         for (var f = 0; f < NLog; f++)

@@ -442,6 +442,19 @@ public struct GpuPacket
     [FieldOffset(CaracteresOffset + 1)] public byte Caracteres1;
     [FieldOffset(CaracteresOffset + 2)] public byte Caracteres2;
 
+    /// <summary>
+    /// Le degre que joue chaque source dans la gamme de la fiche, un quartet par source a
+    /// partir de 209 (meme rangement que les caracteres) : 0 tonique … 6, 7 hors gamme, 15
+    /// inconnu. Et a 215, l'accord du chromagramme avec la gamme, 0 a 255 : bas, la fiche
+    /// est contredite.
+    /// </summary>
+    public const int DegresOffset = 209;
+    [FieldOffset(DegresOffset)] public byte Degres0;
+    [FieldOffset(DegresOffset + 1)] public byte Degres1;
+    [FieldOffset(DegresOffset + 2)] public byte Degres2;
+    public const int AccordGammeOffset = 215;
+    [FieldOffset(AccordGammeOffset)] public byte AccordGamme;
+
     /// <summary>Le verrou : 1 quand le morceau est su et que le moteur ne retouche plus.</summary>
     public const int VerrouOffset = 255;
     [FieldOffset(VerrouOffset)] public byte Verrou;
@@ -679,6 +692,14 @@ public struct GpuPacket
             p.Caracteres1 = (byte)(Q(2) | Q(3) << 4);
             p.Caracteres2 = (byte)(Q(4) | Q(5) << 4);
         }
+        if (f.Voices.Degres is { } degres)
+        {
+            byte D(int i) => (byte)(i < degres.Length ? Math.Clamp(degres[i], 0, 15) : 15);
+            p.Degres0 = (byte)(D(0) | D(1) << 4);
+            p.Degres1 = (byte)(D(2) | D(3) << 4);
+            p.Degres2 = (byte)(D(4) | D(5) << 4);
+        }
+        p.AccordGamme = Byte255(f.Voices.AccordGamme);
         if (f.Voices.Motifs is { } motifs)
         {
             ushort M(int i) => i < motifs.Length ? motifs[i] : (ushort)0;

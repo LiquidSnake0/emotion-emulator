@@ -105,10 +105,15 @@ if (args.Contains("lisse")) analyzer.LissageKick = true;
 // SpectrumAnalyzer.Reprendre quand la memoire de piste rend ce qu'elle savait du disque.
 // C'est une amorce, jamais un verrou : l'autocorrelation continue de chercher.
 foreach (var a2 in args)
+{
+    // « cle=9A » : la tonalite de la fiche du crate, en Camelot — un prior doux sur les
+    // positions des gabarits, et les degres publies.
+    if (a2.StartsWith("cle=")) analyzer.Gamme(a2[4..]);
     if (a2.StartsWith("fiche=") && float.TryParse(a2[6..],
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var fb))
         analyzer.Amorcer(fb);
+}
 
 // « repli=0 » : coupe le repli d'energie qui donne sa phase a la grille, pour comparer.
 // « memrepli=X » : memoire du repli, en temps.
@@ -1110,6 +1115,8 @@ Console.WriteLine($"apprentissage NMF   {sep.Apprentissages} fois · moyenne {se
 // COMBIEN DE SOURCES, ET POURQUOI. Le nombre n'est plus impose : on montre ce que le
 // balayage a mesure a chaque pas, pour que « 4 » se lise comme un coude et non un caprice.
 Console.WriteLine($"accordage           {sep.AccordageCents:+0;-0} cents" + (MathF.Abs(sep.AccordageCents) < 1f ? "  (axe standard)" : "  (axe decale d'autant)"));
+if (analyzer.Camelot is { } camelot)
+    Console.WriteLine($"gamme               {camelot}   accord du chromagramme {analyzer.AccordGamme:F2}" + (analyzer.AccordGamme < 0.6f ? "   FICHE CONTREDITE" : ""));
 Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "  (provisoire, le balayage n'a pas encore eu lieu)")
                   + (sep.Verrou ? "   VERROUILLE : le morceau est su, plus de reapprentissage" : ""));
 // LE MOTIF DE CHAQUE CASE : seize cases de la mesure, # la ou la source monte franchement.
@@ -1121,7 +1128,8 @@ Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "
         var dessin = new System.Text.StringBuilder();
         foreach (var v in motif) dessin.Append(v >= 0.66f ? '#' : v >= 0.33f ? '+' : '.');
         var caractere = analyzer.Derniere.Voices.Caracteres is { } cs && r < cs.Length ? cs[r] : 0.5f;
-        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures   caractere {caractere:F2} ({(caractere < 0.45f ? "frappe" : caractere > 0.8f ? "tient" : "pince")})");
+        var degre = analyzer.Derniere.Voices.Degres is { } ds && r < ds.Length ? ds[r] : Gamme.Inconnu;
+        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures   caractere {caractere:F2} ({(caractere < 0.45f ? "frappe" : caractere > 0.8f ? "tient" : "pince")})" + (degre != Gamme.Inconnu ? $"   degre {Gamme.Nom(degre)}" : ""));
     }
 }
 foreach (var b in sep.Bilans)
