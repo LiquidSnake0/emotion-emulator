@@ -158,11 +158,15 @@ def lisser(h, largeur):
     """
     if largeur < 2:
         return h
-    f = hann_periodique(2 * largeur + 1)[1:]
+    # UN FILTRE DE LONGUEUR IMPAIRE, CENTRE. La version paire rendait une colonne de trop
+    # (n + 1) et decalait tout d'une demi-trame ; l'ancien decoupage par blocs le masquait.
+    f = hann_periodique(2 * largeur + 1)[1:2 * largeur]
     f /= f.sum()
-    marge = len(f) // 2
+    marge = largeur - 1
     etendu = np.pad(h, ((0, 0), (marge, marge)), mode="edge")
-    return np.stack([np.convolve(ligne, f, mode="valid") for ligne in etendu])
+    lisse = np.stack([np.convolve(ligne, f, mode="valid") for ligne in etendu])
+    assert lisse.shape == h.shape, (lisse.shape, h.shape)
+    return lisse
 
 
 
