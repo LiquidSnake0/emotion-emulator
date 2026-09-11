@@ -44,11 +44,18 @@ MOTEUR = "http://localhost:5099"
 # Combien de temps on laisse la separation apprendre avant d'abandonner. Elle se declare
 # prete apres deux cents images ou la source joue, soit quelques secondes de musique reelle
 # — mais un morceau qui demarre par du silence peut en demander bien plus.
-ATTENTE_MAX_S = 90.0
+ATTENTE_MAX_S = 150.0   # le choix tombe vers 45 s ; large, pour une machine chargee
 
 
 def profils(url=MOTEUR, attente=ATTENTE_MAX_S, dire=print):
-    """Les six profils de la session, une fois que le moteur a appris quelque chose."""
+    """Les gabarits de la session, une fois que le moteur a CHOISI ses sources.
+
+    PAS AU PROVISOIRE. Le moteur publie un premier jeu de sources des cinq secondes, pour que
+    l'ecran ne reste pas noir, puis le remplace quand il a choisi (quarante secondes plus
+    tard). Extraire au provisoire donnait des pistes qui ne correspondaient plus aux cases :
+    le DJ isolait la case 1, entendait une piste provisoire (du piano), et le paquet, lui,
+    publiait la basse dans cette case-la. Ses marques n'ont pu etre confrontees a rien.
+    """
     debut = time.time()
     annonce = False
     while time.time() - debut < attente:
@@ -58,10 +65,10 @@ def profils(url=MOTEUR, attente=ATTENTE_MAX_S, dire=print):
         except (urllib.error.URLError, OSError, ValueError):
             time.sleep(1.0)
             continue
-        if d.get("pret"):
+        if d.get("pret") and d.get("choix"):
             return d
         if not annonce:
-            dire("la separation apprend encore…")
+            dire("la separation choisit encore ses sources (quarante secondes de cue)…")
             annonce = True
         time.sleep(1.0)
     return None
