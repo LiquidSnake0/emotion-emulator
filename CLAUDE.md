@@ -1949,6 +1949,48 @@ bass 0,76, source2 bass 0,79, source3 **other (piano) 0,68**, guitare 0,33 max.
 > gabarits : 0,78 contre 0,98 / 1,00. Avant de régler un seuil, regarder si la mesure a la
 > résolution de le porter.
 
+## Étape 3 : le morse de chaque source, et ce que le GPU en fait
+
+Ce qu'il a dit du produit final, à garder tel quel : le GPU « n'a que faire de si c'est un
+piano ou un xylophone ou un synthé ou un tambour, il a besoin d'information pour
+modifier/générer des formes géométriques ». Le BPM fait tourner le cube ; **le morse d'une
+source** (`.- -. .-.`) change sa couleur ou le spectre d'une vidéo ; un souffle étire ses
+coins. Par source, il faut donc : **quand ça frappe, comment ça tient, comment ça enfle** —
+jamais un nom. Le son ne passe **jamais** par le moteur : platine → Xone:92 → sono ; le
+moteur écoute et publie des données. (J'avais proposé des faders audio dans le moteur :
+faux, retiré ; les pistes WAV extraites restent un outil de vérification, pas le produit.)
+
+### La mesure qui a ouvert l'étape
+
+Sonde avec `sources=<tsv>` (nouveau : niveau, frappe, pique, tenue par source et par
+image). Juge : les attaques des stems Demucs (montée de 6 dB en 30 ms de l'enveloppe à 5 ms,
+100 ms d'écart). Sur Passepartout après le choix (59–278 s), **les trois sources rendaient
+trois morses quasi identiques** — 815, 893, 878 frappes — au niveau du hasard : drums 28 /
+32 / 28 % (hasard 25), bass 49 / 45 / 47 (hasard 44), other 25 / 26 / 26 (hasard 23). Cause
+dans le code : `etats[i] = brut with { Level, Position, Heard, … }` où `brut =
+_voices.EtatDe(i)` — **le bit `Hit` restait celui du registre de fréquence de même rang**,
+le seul champ que la séparation ne remplaçait pas.
+
+### La frappe tirée du niveau de la source
+
+Prototypée en Python sur le niveau publié (déjà rapporté à sa crête) : frappe = montée ≥
+0,15 en une image, niveau ≥ 0,35, repos de 4 images. Basse : **83 % des frappes sur une
+attaque réelle**, contre 44 % au hasard (le décalage a été balayé de −80 à +100 ms : le
+maximum est à 0 / −20 ms, pas de retard à corriger). Portée dans `SourceEnvelope.Frappe`
+(`SeuilFrappe`, `PlancherFrappe`, `ReposFrappe`), branchée dans `SpectrumAnalyzer` (`Hit =
+_enveloppes.Frappe(i)`). Après : source 1 → bass 83 % (drums 1 %), source 2 → bass 65 %,
+source 3 → other 29 % (hasard 21). Tests `SourceEnvelopeFrappeTests` (4). 198 verts.
+
+> **Le piano n'a pas de juge automatique.** Même `moteur-3.wav`, validé piano à l'oreille,
+> ne s'accorde qu'à 34 % avec les attaques de `other` (hasard 23) — le stem contient des
+> nappes et le piano lo-fi est noyé de réverb. Restreindre à 200–2000 Hz ne change rien.
+> **C'est la touche espace qui juge** : isoler la case du piano, remettre tout, taper aux
+> touches entendues, Échap → `~/Documents/emotion-sources/rapports/<morceau>-<date>.json`
+> (marques + journal du moteur, dont `frappe` par image). À lire et à confronter.
+
+Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
+un octet du paquet) pour que le GPU sache quel geste donner à quelle source.
+
 ## Le contrôle de fumée, et pourquoi il a fallu l'écrire
 
 ```sh

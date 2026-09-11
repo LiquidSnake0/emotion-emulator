@@ -942,10 +942,14 @@ public sealed class SpectrumAnalyzer
                 _enveloppes.Tempo(_tempo.Bpm);
                 _enveloppes.Feed(i, act[i]);
 
+                // LA FRAPPE AUSSI VIENT DE LA SOURCE. Elle restait celle du registre de
+                // meme rang — le seul champ de la case que la separation ne remplacait pas,
+                // et le morse publie etait celui d'une bande de frequence, pas d'une source.
                 etats[i] = brut with
                 {
                     Level = act[i],
                     Position = haut[i],
+                    Hit = _enveloppes.Frappe(i),
                     Heard = _separation.EcouteOrdonnee(i),
                     Sharpness = _separation.StabiliteOrdonnee(i),
                     Pique = _enveloppes.Pique(i),

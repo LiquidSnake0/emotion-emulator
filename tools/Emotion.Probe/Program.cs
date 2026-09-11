@@ -216,6 +216,8 @@ var agree = 0;
 var compared = 0;
 var ruptures = 0;
 var kickAt = new List<long>();
+using var journalSources = args.FirstOrDefault(a => a.StartsWith("sources="))?[8..] is { } fichierSources
+    ? new StreamWriter(fichierSources) : null;
 var syncErr = new List<float>();
 var offsets = new List<float>();
 var gridMs = new List<float>();
@@ -314,6 +316,23 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
         // Quand la source a ete assez ecoutee — independamment de savoir si sa bande est
         // nette. Les deux sont differents et etaient confondus dans une seule grandeur.
         if (assezAt[r] < 0 && f.Voices.LaneAt(r).Heard >= 0.99f) assezAt[r] = tMs;
+    }
+
+    // « sources=<fichier> » : ce que chaque source publie, image par image — niveau, frappe,
+    // pique, tenue — pour confronter son morse aux attaques reelles d'un juge exterieur.
+    if (journalSources is not null && f.Voices.Actives > 0)
+    {
+        var ligne = new System.Text.StringBuilder();
+        ligne.Append((tMs / 1000.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
+        for (var r = 0; r < f.Voices.Actives; r++)
+        {
+            var l = f.Voices.LaneAt(r);
+            ligne.Append('\t').Append(l.Level.ToString("F3", System.Globalization.CultureInfo.InvariantCulture))
+                 .Append('\t').Append(l.Hit ? '1' : '0')
+                 .Append('\t').Append(l.Pique.ToString("F3", System.Globalization.CultureInfo.InvariantCulture))
+                 .Append('\t').Append(l.Tenue.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        journalSources.WriteLine(ligne.ToString());
     }
 
     if (f.TempoAnnounce) annonces.Add((tMs, f.AnnouncedBpm));

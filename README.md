@@ -911,6 +911,24 @@ fabriqués qui changent de note — trois, parce que le quatrième gabarit est u
 une basse seule qui parcourt son octave — une source, et non une par note. L'apprentissage
 coûte une seconde et demie en moyenne et quatre au pire, dans un fil de fond, pour quarante secondes de cue.
 
+### Le morse de chaque source, et il était celui d'une bande
+
+Ce que le rendu attend d'une source, ce n'est pas son nom, c'est son **geste** : quand elle
+frappe, comment elle tient, comment elle enfle. Le BPM fait tourner une forme ; le morse
+d'une source lui change sa couleur ; un souffle l'étire. Mesuré sur Passepartout avec les
+attaques des stems Demucs comme juge, **les trois sources publiaient trois morses quasi
+identiques** — 815, 893, 878 frappes, au niveau du hasard. Le bit de frappe de la case 3
+venait de la bande de fréquence de rang 3, le seul champ que la séparation ne remplaçait
+pas : le rendu aurait reçu « la source 3 frappe » quand *la bande 3* frappait.
+
+La frappe vient maintenant du niveau de la source elle-même — une montée d'au moins 15 % de
+sa crête en une image. Sur la basse, **83 % des frappes tombent sur une attaque réelle**,
+contre 44 % au hasard, et plus aucune sur la batterie (1 %, contre 28 % avant). Le piano n'a
+pas de juge automatique : même sa piste validée à l'oreille ne s'accorde qu'à 34 % avec les
+attaques du stem qui le contient, noyé de nappes et de réverb. Pour lui, le juge est la
+touche espace de la fenêtre : on isole la case, on remet tout, on tape aux touches
+entendues, et le rapport confronte la main au moteur.
+
 ---
 
 ## Faire monter la stabilité

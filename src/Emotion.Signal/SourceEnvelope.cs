@@ -58,6 +58,8 @@ public sealed class SourceEnvelope
     private readonly float[] _precedent;
     private readonly float[] _pique;
     private readonly float[] _muet;      // depuis combien de secondes la source se tait
+    private readonly bool[] _frappe;     // la source vient-elle de frapper, sur cette image
+    private readonly int[] _depuisFrappe;
 
     // L'ETAT AU MOMENT OU LE SILENCE COMMENCE.
     //
@@ -81,6 +83,8 @@ public sealed class SourceEnvelope
         _precedent = new float[sources];
         _pique = new float[sources];
         _muet = new float[sources];
+        _frappe = new bool[sources];
+        _depuisFrappe = new int[sources];
         _creteGardee = new float[sources];
         _moyenneGardee = new float[sources];
         _piqueGarde = new float[sources];
@@ -162,10 +166,34 @@ public sealed class SourceEnvelope
     }
 
     /// <summary>Une fenetre d'analyse, pour une source.</summary>
+    /// <summary>
+    /// LA FRAPPE DE LA SOURCE, TIREE DE SON PROPRE NIVEAU.
+    ///
+    /// Le bit de frappe publie par source venait des registres de frequence, rang par rang :
+    /// mesure sur Passepartout, les trois sources rendaient trois morses quasi identiques
+    /// (815, 893, 878 frappes) au niveau du hasard contre les attaques reelles de chaque
+    /// stem. Le GPU aurait recu « la source 3 frappe » quand la bande 3 frappait.
+    ///
+    /// Ici la frappe est une montee franche du niveau de la source elle-meme : au moins
+    /// <see cref="SeuilFrappe"/> de sa crete en une image, au-dessus de
+    /// <see cref="PlancherFrappe"/>, et pas deux en moins de <see cref="ReposFrappe"/>
+    /// images. Mesure sur la basse de Passepartout, contre les attaques du stem : 83 % des
+    /// frappes tombent sur une attaque reelle, contre 44 % au hasard. Le piano, lui, n'a pas
+    /// de juge automatique fiable — meme le stem extrait a l'oreille ne s'accorde qu'a 34 %
+    /// avec les attaques de `other` — c'est la touche espace qui le juge.
+    /// </summary>
+    public const float SeuilFrappe = 0.15f;
+    public const float PlancherFrappe = 0.35f;
+    public const int ReposFrappe = 4;
+
+    public bool Frappe(int rang) => (uint)rang < (uint)_frappe.Length && _frappe[rang];
+
     public void Feed(int rang, float niveau)
     {
         if ((uint)rang >= (uint)_crete.Length) return;
         niveau = Math.Clamp(niveau, 0f, 1f);
+        _frappe[rang] = false;
+        _depuisFrappe[rang]++;
 
         // UNE ABSENCE N'EST PAS UN CHANGEMENT, ET LES CONFONDRE FAIT OUBLIER CE QU'ON SAIT.
         //
@@ -226,6 +254,11 @@ public sealed class SourceEnvelope
         // demi. Au-dela de MonteeMaxS on ne parle plus d'attaque.
         var pente = niveau - _precedent[rang];
         _precedent[rang] = niveau;
+        if (pente >= SeuilFrappe && niveau >= PlancherFrappe && _depuisFrappe[rang] > ReposFrappe)
+        {
+            _frappe[rang] = true;
+            _depuisFrappe[rang] = 0;
+        }
         if (pente > 0f && _crete[rang] > 1e-3f)
         {
             var parFenetre = pente / _crete[rang];
@@ -264,6 +297,8 @@ public sealed class SourceEnvelope
         Array.Clear(_precedent);
         Array.Clear(_pique);
         Array.Clear(_muet);
+        Array.Clear(_frappe);
+        Array.Clear(_depuisFrappe);
         Array.Clear(_creteGardee);
         Array.Clear(_moyenneGardee);
         Array.Clear(_piqueGarde);
