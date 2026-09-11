@@ -306,6 +306,11 @@ class Lecteur:
         return ecart
 
     @property
+    def sauts(self):
+        """Combien de fois le lecteur a saute pour rattraper le moteur. Diagnostic."""
+        return self._saut
+
+    @property
     def retard_ms(self):
         """Le retard constant de la chaine audio, une fois mesure. Zero avant."""
         return 1000.0 * self._retard

@@ -122,6 +122,26 @@ S_NIVEAU, S_HAUTEUR, S_DRAPEAUX, S_NOM, S_ENTENDU, S_NETTETE, S_FORME = 0, 1, 2,
 # donc sur la largeur restante — la case ne change pas, son contenu se serre.
 FADER_LARGE = 9
 
+JOURNAL_FENETRE = os.path.join(os.environ.get("EMOTION_CACHE") and os.path.dirname(os.environ["EMOTION_CACHE"])
+                               or os.path.expanduser("~/.cache/emotion-emulator"), "fenetre.log")
+
+
+def journal_fenetre(message):
+    """Une ligne datee dans le journal de la fenetre.
+
+    « JE TE LOGG LES CHOSES ET T'IRAS LIRE MON RAPPORT. » Ce que la fenetre imprimait
+    partait dans son terminal et s'y perdait ; « a des moments ca bug et ca se perd » ne
+    pouvait etre confronte a rien. Les evenements qui comptent — lecteur ouvert ou remplace,
+    retard mesure, saut de calage, trou de paquets, changement d'etat des pistes — vont ici,
+    dates a la milliseconde, pour etre relus apres coup.
+    """
+    try:
+        with open(JOURNAL_FENETRE, "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%H:%M:%S')}.{int(time.time() * 1000) % 1000:03d}  {message}\n")
+    except OSError:
+        pass
+
+
 def reglage(nom, defaut, conv=float):
     """Un reglage lu dans l'environnement, qui ne fait jamais tomber le programme.
 
@@ -533,6 +553,9 @@ class Mur(QWidget):
             # côté écran, donc chaque frappe lue deux à trois fois — et le recalage
             # rappelé sur la même frappe, ce qui épinglait la phase.
             if p.sequence != self.derniere_sequence:
+                if self.derniere_sequence >= 0 and p.sequence - self.derniere_sequence > 3:
+                    journal_fenetre(f"trou de paquets : {p.sequence - self.derniere_sequence - 1} image(s) manquee(s) "
+                                    f"vers {p.temps / 1000.0:.2f} s")
                 self.derniere_sequence = p.sequence
                 self.entre_images.pousser(p, maintenant)
                 self.journaliser(p)
@@ -544,7 +567,14 @@ class Mur(QWidget):
                 # s'entend ; corriger en continu chuinterait pour rattraper ce que personne
                 # ne remarque.
                 if self.lecteur is not None and p.sequence % 24 == 0:
+                    sauts_avant = self.lecteur.sauts
+                    mesure_avant = self.lecteur.retard_mesure
                     self.ecart_horloge = self.lecteur.caler(p.temps / 1000.0)
+                    if self.lecteur.sauts != sauts_avant:
+                        journal_fenetre(f"saut du lecteur : ecart {1000 * self.ecart_horloge:+.0f} ms, "
+                                        f"moteur a {p.temps / 1000.0:.2f} s, {self.lecteur.sauts} saut(s) en tout")
+                    if self.lecteur.retard_mesure and not mesure_avant:
+                        journal_fenetre(f"retard de la chaine audio mesure : {self.lecteur.retard_ms:.0f} ms")
 
                 # L'HORLOGE SE CALE SUR LA GRILLE DU MOTEUR, PLUS SUR LES FRAPPES.
                 #
@@ -1201,6 +1231,8 @@ class Mur(QWidget):
         for r, g in enumerate(self.gains[:len(chemins)]):
             self.lecteur.gain(r, g)
         self.lecteur.demarrer(position)
+        journal_fenetre(f"lecteur {'remplace' if ancien is not None else 'ouvert'} : {len(chemins)} piste(s), "
+                        f"position {position:.2f} s, moteur a {self.paquet.temps / 1000.0 if self.paquet else 0.0:.2f} s")
 
     @staticmethod
     def _pistes_externes(prefixe):
@@ -1285,6 +1317,7 @@ class Mur(QWidget):
                 # rien nulle part ne disait pourquoi.
                 self.etat_stems = dernier
                 print(f"stems : {dernier}", flush=True)
+                journal_fenetre(f"stems : {dernier}")
         p.wait()
 
         attendus = [c for c in attendus if os.path.exists(c)]
@@ -1448,6 +1481,7 @@ class Mur(QWidget):
                 "moteur": self.journal,
             }, fh, ensure_ascii=False)
         print(f"{len(self.marques)} marques et {len(self.journal)} images dans {chemin}")
+        journal_fenetre(f"rapport ecrit : {chemin}")
 
     # ------------------------------------------------------------------ souris
     def mousePressEvent(self, e):

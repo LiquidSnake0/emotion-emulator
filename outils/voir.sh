@@ -125,4 +125,6 @@ for _ in $(seq 1 60); do
 done
 
 echo "fenetre — clic dans une case pour isoler, bord droit pour doser, espace pour marquer"
-python3 outils/fenetre.py "$TITRE"
+# La sortie de la fenetre va aussi dans son journal : une erreur Python qui tue la fenetre
+# doit pouvoir se relire apres coup, pas seulement s'entrevoir dans le terminal.
+python3 outils/fenetre.py "$TITRE" 2>&1 | tee -a "$CACHE/fenetre.log"
