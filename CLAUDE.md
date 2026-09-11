@@ -2071,6 +2071,32 @@ images : 96 %, rappel 56 %) — à décider avec le caractère.
 > pèse deux à cinq blocs plus tard. Une latence de fenêtre n'est pas un bug, mais elle se
 > mesure avant de juger.
 
+### Validation croisée : les onze titres de l'album, le moteur seul
+
+Tout avait été calé sur Passepartout ; le risque était de l'avoir appris par cœur. Banc : le
+moteur apprend seul sur chaque titre décodé (choix à 40 s, croissance, reste), la sonde
+exporte ses gabarits, `extraire.py` écrit les pistes, et l'on prend la **meilleure
+corrélation d'une piste avec chaque stem Demucs** (mélodique = tout sauf drums et bass).
+
+| titre | pistes | basse | batterie | mélodique |
+|---|---|---|---|---|
+| Interactive WordBank | 4 | 0,86 | 0,78 | 0,91 |
+| ThinkMap Module | 4 | 0,67 | 0,73 | 0,75 |
+| Glyph Chamber | 4 | **0,96** | 0,60 | 0,80 |
+| Dead Internet Theory | 4 | 0,92 | 0,69 | 0,77 |
+| Passepartout | 4 | 0,83 | 0,77 | 0,72 |
+| Echoes of the Ancients | 4 | 0,83 | 0,80 | 0,80 |
+| Timeline Explorer | 4 | 0,71 | 0,80 | 0,83 |
+| Codex Sinaiticus | 5 | **0,51** | 0,78 | 0,82 |
+| HyperText Odyssey | 4 | 0,86 | 0,54 | 0,90 |
+
+Neuf titres jugés (NeoAtlas et Lost Cultures n'ont pas de référence Demucs en cache). Sur
+**sept sur neuf, la batterie est la dernière piste — le reste** ; Codex Sinaiticus et
+HyperText Odyssey la mettent dans un gabarit. Basse médiane 0,83, batterie 0,77, mélodique
+0,80 : **Passepartout n'était pas un cas heureux, c'est le régime de l'album.** Le plus
+faible est la basse de Codex Sinaiticus (0,51, cinq sources) — à écouter. Pistes livrées
+pour l'oreille : `~/Documents/emotion-sources/{glyph-chamber,codex-sinaiticus,timeline-explorer}/`.
+
 Reste de l'étape 3, pas fait : le **caractère** par source (frappe / tient, sur la durée,
 un octet du paquet) pour que le GPU sache quel geste donner à quelle source ; et le morse du
 piano jugé à l'oreille, avec le protocole corrigé.

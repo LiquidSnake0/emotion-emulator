@@ -954,6 +954,11 @@ l'avalaient dans l'image. Et le morse du reste est **juste mais en retard** : d�
 80 ms, 88 % de ses frappes tombent sur une attaque réelle de la batterie (22 % au hasard).
 Le retard est celui de la fenêtre ; il se compense au rendu, il ne se cache pas.
 
+**Et ça tient sur l'album, pas seulement sur le morceau qui a servi à régler.** Le moteur
+apprend seul sur chacun des titres ; jugé contre Demucs, la meilleure piste corrèle en
+médiane à 0,83 avec la basse, 0,77 avec la batterie, 0,80 avec le mélodique, sur neuf titres.
+Sur sept d'entre eux, la batterie est bien la dernière case — le reste.
+
 ---
 
 ## Faire monter la stabilité
