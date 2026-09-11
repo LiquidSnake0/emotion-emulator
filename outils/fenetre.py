@@ -476,7 +476,8 @@ class Mur(QWidget):
         self.gains = [1.0] * 8
         self.fader = None                # (rang, en train de tirer)
         self.solo = False                # la source choisie s'entend-elle SEULE
-        self.stems = None                # les six chemins, quand ils existent
+        self.stems = None                # les chemins des pistes, quand elles existent
+        self._pistes_pretes = []
         self.etat_stems = ""
         # CE QU'UN JUGE EXTERIEUR DIT DE CHAQUE SOURCE, quand le pre-calcul a ete fait.
         # « Je voulais que tu analyses un son de bout en bout et que la fenetre du temps reel
@@ -1216,7 +1217,36 @@ class Mur(QWidget):
         return pistes
 
     def _preparer_stems(self):
-        """Extrait les six pistes DANS UN AUTRE PROCESSUS, avec les profils de cette session.
+        """Extrait les pistes, puis LES REFAIT quand le moteur change de sources.
+
+        LA SEPARATION GRANDIT : deux sources a quarante secondes, une troisieme quand la
+        guitare entre. Extraire une fois au choix laissait la case 3 sans piste, et le son
+        en solo ne designait plus ce que le paquet publiait — la faute qui a rendu trois
+        rapports de marques illisibles. On reextrait donc a chaque fois que les gabarits
+        publies changent ; entre deux, `stems.py` rend le cache en une seconde.
+        """
+        base = os.path.splitext(os.path.basename(self.morceau_wav))[0]
+        marque = os.path.join(self.cache_stems, f"{base}.gabarits.json")
+        signature = None
+        while True:
+            if self._extraire_une_fois():
+                try:
+                    with open(marque, encoding="utf-8") as fh:
+                        actuelle = fh.read()
+                except OSError:
+                    actuelle = str(time.time())
+                if actuelle != signature:
+                    signature = actuelle
+                    # ON NE BASCULE PAS ICI. Remplacer le lecteur depuis ce fil-ci pendant
+                    # que le fil de dessin le lit produirait la course qu'on a deja payee
+                    # dans l'anneau. `battre` fait l'echange, entre deux images.
+                    self.stems = self._pistes_pretes
+                    self.etat_stems = ""
+            time.sleep(20.0)
+
+    def _extraire_une_fois(self):
+        """Extrait les pistes DANS UN AUTRE PROCESSUS, avec les gabarits de cette session.
+        Rend vrai si des pistes sont pretes.
 
         POURQUOI UN PROCESSUS ET NON UN SIMPLE FIL. La premiere version tournait dans un fil
         de cette fenetre : mesure, l'extraction passait de dix-sept secondes en ligne de
@@ -1244,7 +1274,7 @@ class Mur(QWidget):
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         except OSError as e:
             self.etat_stems = f"extraction impossible : {e}"
-            return
+            return False
 
         dernier = ""
         for ligne in p.stdout:
@@ -1267,13 +1297,10 @@ class Mur(QWidget):
             except (OSError, ValueError):
                 pass
         if p.returncode == 0 and len(attendus) > 1:
-            # ON NE BASCULE PAS ICI. Remplacer le lecteur depuis ce fil-ci pendant que le
-            # fil de dessin le lit produirait exactement la course qu'on a deja payee dans
-            # l'anneau — et une deuxieme fois dans ce lecteur le meme jour.
-            self.stems = attendus
-            self.etat_stems = ""
-        else:
-            self.etat_stems = dernier or "pas de pistes : le moteur n'a rien appris"
+            self._pistes_pretes = attendus
+            return True
+        self.etat_stems = dernier or "pas de pistes : le moteur n'a rien appris"
+        return False
 
     def _fader_rect(self, cx, cy, larg, haut):
         """La bande où l'on attrape le niveau, sur le bord droit de la case."""

@@ -114,7 +114,11 @@ def stems(chemin_morceau, dossier, url=MOTEUR, dire=print):
     sorties = [os.path.join(dossier, f"{base}-{s + 1}.wav") for s in range(nb)]
     dire(f"{nb} sources publiees par le moteur")
 
-    signature = json.dumps(p["gabarits"], sort_keys=True)[:2000]
+    # LA SIGNATURE, C'EST LE NOMBRE DE SOURCES, PAS LEURS VALEURS. Les gabarits bougent un
+    # peu a chaque reapprentissage (toutes les vingt secondes) : signer sur leurs valeurs
+    # faisait reextraire cinquante secondes de pistes toutes les vingt secondes, sans fin.
+    # Ce qui change ce que les pistes designent, c'est une source qui entre.
+    signature = f"{nb} sources"
     if all(os.path.exists(s) for s in sorties) and os.path.exists(marque):
         with open(marque, encoding="utf-8") as fh:
             if fh.read() == signature:
