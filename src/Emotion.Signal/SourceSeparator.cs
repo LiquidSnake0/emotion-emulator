@@ -160,6 +160,21 @@ public sealed class SourceSeparator
     private readonly int[] _fbDebut = new int[NLog];
     private readonly float[][] _fbPoids = new float[NLog][];
 
+    /// <summary>
+    /// L'ACCORDAGE DU DISQUE, ESTIME AU CUE. Quatre titres de l'album sont desaccordes d'un
+    /// quart de ton (−48 cents : du lo-fi echantillonne sur un vinyle ralenti), et l'axe a
+    /// vingt-quatre cases par octave — cinquante cents. Sur ces disques, chaque note tombait
+    /// pile entre deux cases. On releve donc, pendant les premieres secondes, ou tombent les
+    /// pics du spectre a l'interieur du demi-ton, et l'on decale l'axe d'autant avant
+    /// d'apprendre quoi que ce soit. Aucune fiche n'est necessaire : c'est le disque qui le dit.
+    /// </summary>
+    public float AccordageCents { get; private set; }
+    public float F0 => _f0;
+    private float _f0 = ProfileLearner.F0;
+    private readonly double[] _histoCents = new double[20];   // cinq cents par case, de -50 a +50
+    private bool _accordageFait;
+    private const float AccordageMin = 15f;                   // en dessous, l'axe est deja bon
+
     private int _ecrit;
     private int _remplies;
     private int _trame;
@@ -268,14 +283,16 @@ public sealed class SourceSeparator
     /// sont plus espacees que les cases, chaque case interpole entre ses deux raies ; dans
     /// l'aigu, ou elles sont plus serrees, chaque case en moyenne plusieurs.
     /// </summary>
-    private void ConstruireProjection()
+    private void ConstruireProjection(float cents = 0f)
     {
+        _f0 = ProfileLearner.F0 * MathF.Pow(2f, cents / 1200f);
+        AccordageCents = cents;
         var raieHz = _rate / (float)FenetreLog;
         var raies = FenetreLog / 2 + 1;
         var ratio = MathF.Pow(2f, 1f / ProfileLearner.ParOctave) - 1f;
         for (var l = 0; l < NLog; l++)
         {
-            var fc = ProfileLearner.F0 * MathF.Pow(2f, l / (float)ProfileLearner.ParOctave);
+            var fc = _f0 * MathF.Pow(2f, l / (float)ProfileLearner.ParOctave);
             var demi = MathF.Max(fc * ratio, raieHz);
             var debut = Math.Max(0, (int)MathF.Ceiling((fc - demi) / raieHz));
             var fin = Math.Min(raies - 1, (int)MathF.Floor((fc + demi) / raieHz));
@@ -324,6 +341,7 @@ public sealed class SourceSeparator
         var raies = FenetreLog / 2 + 1;
         // La magnitude, reutilisee en place dans _re.
         for (var b = 0; b < raies; b++) _re[b] = MathF.Sqrt(_re[b] * _re[b] + _im[b] * _im[b]);
+        if (!_accordageFait) RelevierAccordage(raies);
         for (var l = 0; l < NLog; l++)
         {
             var poids = _fbPoids[l];
@@ -346,6 +364,43 @@ public sealed class SourceSeparator
         if (_reste / fort > Audible && _vuesReste < Assez) _vuesReste++;
     }
 
+    /// <summary>
+    /// Les pics du spectre entre 80 et 2000 Hz, et ou ils tombent dans le demi-ton : un
+    /// histogramme pondere par leur niveau, dont le maximum est l'accordage du disque.
+    /// </summary>
+    private void RelevierAccordage(int raies)
+    {
+        var raieHz = _rate / (float)FenetreLog;
+        var debut = Math.Max(2, (int)(80f / raieHz));
+        var fin = Math.Min(raies - 2, (int)(2000f / raieHz));
+        for (var b = debut; b <= fin; b++)
+        {
+            var m = _re[b];
+            if (m <= _re[b - 1] || m <= _re[b + 1] || m < 1e-4f) continue;
+            var cents = 1200.0 * Math.Log2(b * raieHz / 440.0);
+            var reste = ((cents % 100) + 150) % 100 - 50;              // de -50 a +50
+            var k = Math.Clamp((int)((reste + 50) / 5), 0, 19);
+            _histoCents[k] += m;
+        }
+    }
+
+    /// <summary>
+    /// A la fin du releve, l'axe se decale de l'accordage trouve, et la memoire repart :
+    /// ce qu'elle contenait etait projete sur un axe qui n'etait pas celui du disque.
+    /// </summary>
+    private void Accorder()
+    {
+        _accordageFait = true;
+        var meilleur = 0; double total = 0;
+        for (var k = 0; k < 20; k++) { total += _histoCents[k]; if (_histoCents[k] > _histoCents[meilleur]) meilleur = k; }
+        if (total <= 0) return;
+        var cents = (meilleur + 0.5f) * 5f - 50f;
+        if (MathF.Abs(cents) < AccordageMin) return;
+        ConstruireProjection(cents);
+        Array.Clear(_v);
+        _remplies = _ecrit = 0;
+    }
+
     /// <summary>Range l'image dans la memoire, et lance ce qui doit l'etre.</summary>
     private void Memoriser()
     {
@@ -360,6 +415,12 @@ public sealed class SourceSeparator
         // pas : on apprend donc une premiere fois tot, a un nombre de sources provisoire, et
         // l'on remplace tout des que la memoire est pleine.
         var provisoire = Math.Min(Provisoire, _memoire / 2);
+        if (!_accordageFait && _remplies >= provisoire)
+        {
+            // L'accordage se decide sur les premieres secondes, avant tout apprentissage.
+            Accorder();
+            if (_remplies < provisoire) return;
+        }
         if (!_provisoireFait && _remplies >= provisoire)
         {
             if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
@@ -434,6 +495,9 @@ public sealed class SourceSeparator
         _provisoireFait = false;
         _choixFait = false;
         Verrou = false;
+        _accordageFait = false;
+        Array.Clear(_histoCents);
+        ConstruireProjection(0f);
         Array.Clear(_courant);
         Array.Clear(_hCourant);
         Array.Clear(_hKl);

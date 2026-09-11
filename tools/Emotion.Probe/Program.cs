@@ -844,7 +844,8 @@ if (args.FirstOrDefault(a => a.StartsWith("profils="))?[8..] is { } fichierProfi
         $"  \"fenetre\": {SourceSeparator.FenetreLog},",
         $"  \"cases\": {ProfileLearner.NLog},",
         $"  \"parOctave\": {ProfileLearner.ParOctave},",
-        $"  \"f0\": {ProfileLearner.F0.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)},",
+        $"  \"f0\": {separation.F0.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)},",
+        $"  \"accordageCents\": {separation.AccordageCents.ToString("G6", System.Globalization.CultureInfo.InvariantCulture)},",
         $"  \"positions\": {ProfileLearner.Positions},",
         $"  \"longueur\": {bins},",
         $"  \"pret\": {(separation.Pret ? "true" : "false")},",
@@ -1108,6 +1109,7 @@ Console.WriteLine($"apprentissage NMF   {sep.Apprentissages} fois · moyenne {se
                   $"pire {sep.ApprentissagePireMs:F1} ms  (une image dure 21 ms)");
 // COMBIEN DE SOURCES, ET POURQUOI. Le nombre n'est plus impose : on montre ce que le
 // balayage a mesure a chaque pas, pour que « 4 » se lise comme un coude et non un caprice.
+Console.WriteLine($"accordage           {sep.AccordageCents:+0;-0} cents" + (MathF.Abs(sep.AccordageCents) < 1f ? "  (axe standard)" : "  (axe decale d'autant)"));
 Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "  (provisoire, le balayage n'a pas encore eu lieu)")
                   + (sep.Verrou ? "   VERROUILLE : le morceau est su, plus de reapprentissage" : ""));
 // LE MOTIF DE CHAQUE CASE : seize cases de la mesure, # la ou la source monte franchement.

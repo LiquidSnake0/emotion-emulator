@@ -2167,6 +2167,24 @@ puis une préférence de gamme sur les positions des gabarits et la publication 
 joué par chaque source (« au boum la tonique, au tchak la quinte »), qui survit aux
 transitions Camelot.
 
+### L'accordage du disque, relevé au cue
+
+Quatre titres sont désaccordés d'un quart de ton et l'axe a 50 cents par case. Le
+séparateur relève donc, sur les premières secondes (le provisoire, 5,5 s), où tombent les
+pics du spectre (80–2000 Hz) à l'intérieur du demi-ton — histogramme pondéré par 5 cents —
+et **décale son axe log d'autant** avant d'apprendre (`RelevierAccordage`, `Accorder`,
+`ConstruireProjection(cents)`, `AccordageCents`, `F0`), en vidant la mémoire projetée sur le
+mauvais axe. Sous 15 cents, rien ne bouge. Export : `f0` (décalé) et `accordageCents` dans
+`/profils` et la sonde, pour qu'`extraire.py` rebâtisse le même axe.
+
+Mesuré sur cinq titres, avant → après : Glyph mélodique 0,80 → **0,87**, Passepartout
+batterie 0,77 → 0,80 (mélodique 0,72 → 0,69), Codex **5 → 3 sources** (la basse n'est plus
+coupée en trois, 0,51 → 0,52), WordBank inchangé (axe standard). Motifs inchangés. **Gain
+modeste, aucune régression** — gardé. Point ouvert et dit : l'estimateur du moteur (5,5 s,
+fenêtre 4096) ne rend pas les mêmes cents que le juge hors ligne (150 s, fenêtre 8192) sur
+trois titres sur quatre (+23 contre −48 sur Passepartout) ; les deux fenêtres n'écoutent
+pas la même chose, et seul Codex tombe pareil (−48). `AccordageTests` (4). 212 verts.
+
 Reste de l'étape 3, pas fait : le morse du piano jugé à l'oreille, avec le protocole
 corrigé ; et le retard de 60–80 ms du bit `frappe` à compenser au rendu (ou à remplacer par
 le motif, qui est en avance).

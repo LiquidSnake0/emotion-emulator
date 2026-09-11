@@ -150,7 +150,8 @@ app.MapGet("/profils", (IAudioSource source) =>
         fenetre = SourceSeparator.FenetreLog,
         cases = ProfileLearner.NLog,
         parOctave = ProfileLearner.ParOctave,
-        f0 = ProfileLearner.F0,
+        f0 = separation.F0,
+        accordageCents = separation.AccordageCents,
         positions = ProfileLearner.Positions,
         longueur = bins,
         // « pret » dit si quelque chose a ete appris. Faux, les profils ne decrivent que du
