@@ -67,6 +67,14 @@ public sealed class SourceSeparator
     private bool _choixFait;
 
     /// <summary>
+    /// Le verrou : le morceau est su, on ne reapprend plus. « Ne plus chercher a le
+    /// retoucher une fois qu'on a capte le boom-tchak. » Pose par l'analyseur quand les
+    /// motifs tiennent ; leve par <see cref="Reset"/>, c'est-a-dire par un nouveau disque.
+    /// </summary>
+    public bool Verrou { get; private set; }
+    public void Verrouiller() => Verrou = true;
+
+    /// <summary>
     /// Combien de sources la separation publie EN CE MOMENT — decouvert, pas impose.
     ///
     /// « Des fois on en a 2, des fois 8, c'est justement ce que le programme est cense me
@@ -357,13 +365,18 @@ public sealed class SourceSeparator
             if (_apprentissage.TryStart(_v, _w, SourcesProvisoires, provisoire))
                 _provisoireFait = true;
         }
-        else if (_remplies >= _memoire && (!_choixFait || ++_depuisApprentissage >= _memoire / 2))
+        else if (!Verrou && _remplies >= _memoire && (!_choixFait || ++_depuisApprentissage >= _memoire / 2))
         {
             // Le CHOIX du nombre de sources se fait une fois par disque, DES QUE la memoire
             // est pleine : il attendait encore une demi-memoire de plus, et les pistes en
             // solo n'arrivaient qu'a deux minutes vingt — le DJ fermait la fenetre avant,
             // deux fois de suite. Ensuite on reapprend au nombre retenu, une fois par
             // demi-memoire, en repartant des gabarits courants : ils restent a leur place.
+            // SOUS LE VERROU, rien de tout cela ne tourne plus : le morceau est su. Figer les
+            // gabarits en laissant la croissance continuer a ete essaye — sans adaptation,
+            // « du neuf » apparaissait a chaque essai et Glyph Chamber montait a cinq
+            // sources. Le verrou est strict, et il attend seize mesures de motif tenu pour
+            // laisser aux instruments qui entrent le temps d'avoir leur case.
             var lance = _choixFait
                 ? _apprentissage.TryStartCroissance(_v, _w, Actives, _memoire)
                 : _apprentissage.TryStartChoix(_v, 2, Sources, _memoire, IterationsBalayage);
@@ -420,6 +433,7 @@ public sealed class SourceSeparator
         Actives = 0;
         _provisoireFait = false;
         _choixFait = false;
+        Verrou = false;
         Array.Clear(_courant);
         Array.Clear(_hCourant);
         Array.Clear(_hKl);

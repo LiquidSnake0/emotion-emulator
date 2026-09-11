@@ -685,6 +685,7 @@ public sealed class SpectrumAnalyzer
         // tests, eux, la raccourcissent : ils n'ont pas quarante secondes a donner.
         _separation = new SourceSeparator(sampleRate, Window,
             memoire: (int)MathF.Max(1f, memoireSeparationS * sampleRate / Window));
+        _motifs = new MotifSources(SourceSeparator.Sources);
         _etendues = new ContourRange(SourceSeparator.Sources);
         _timbre = new TimbreTracker(sampleRate, Window);
         // Trois fenetres et non sept : le retard tombe de 64 a 21 ms. La separation est
@@ -723,10 +724,17 @@ public sealed class SpectrumAnalyzer
     /// precedent servaient de point de depart au suivant. Sur quarante secondes de memoire,
     /// cela aurait voulu dire quarante secondes a decrire le mauvais disque.
     /// </summary>
+    private readonly MotifSources _motifs;
+    private readonly ushort[][] _motifPool = [new ushort[SourceSeparator.Sources], new ushort[SourceSeparator.Sources]];
+
+    /// <summary>Le motif de chaque source et sa stabilite, pour la sonde.</summary>
+    public MotifSources Motifs => _motifs;
+
     public void NewTrack()
     {
         _gate.Reset();
         _separation.Reset();
+        _motifs.Reset();
     }
 
     /// <summary>Derniere rupture de continuite constatee, pour le journal.</summary>
@@ -960,8 +968,18 @@ public sealed class SpectrumAnalyzer
 
             // Les cases publiees comptent le reste : la derniere case, c'est ce que les
             // gabarits n'expliquent pas — sur ce repertoire, la batterie.
+            // LE MOTIF DE CHAQUE SOURCE, ET LE VERROU. La position dans la mesure vient de
+            // la grille ; chaque source y range ses montees. Quand deux sources tiennent leur
+            // motif sur huit mesures, le morceau est su : la separation ne reapprend plus.
+            var publiees = _separation.Publiees;
+            var phaseMotif = _grid.Beat < 0 ? (float?)null : (_grid.Beat + _grid.Phase) / 4f;
+            for (var i = 0; i < publiees; i++) _motifs.Feed(i, act[i], phaseMotif);
+            var masques = _motifPool[_sepTurn];
+            for (var i = 0; i < SourceSeparator.Sources; i++) masques[i] = i < publiees ? _motifs.Masque(i) : (ushort)0;
+            if (!_separation.Verrou && _motifs.Verrouille(publiees)) _separation.Verrouiller();
+
             voices = voices with { Levels = act, Pitches = haut, Lanes = etats,
-                                   Actives = _separation.Publiees };
+                                   Actives = publiees, Motifs = masques, Verrou = _separation.Verrou };
         }
 
         // Flux spectral positif : on ne compte que ce qui monte. Une note qui s'eteint

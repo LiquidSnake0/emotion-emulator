@@ -17,7 +17,10 @@ public readonly record struct Voices(
     LaneState[]? Lanes = null, int[]? Labels = null,
     // COMBIEN DE SOURCES SONT REELLEMENT PUBLIEES. Zero tant que la separation n'a rien
     // appris ; ensuite le nombre qu'elle a decouvert, jamais plus que les rangs du paquet.
-    int Actives = 0)
+    int Actives = 0,
+    // LE MOTIF DE CHAQUE SOURCE : un bit par case de la mesure, la ou elle monte — le morse
+    // a venir, pas le morse passe. Et le verrou : le morceau est su, on ne retouche plus.
+    ushort[]? Motifs = null, bool Verrou = false)
 {
     /// <summary>
     /// Nombre de registres tonals suivis separement.

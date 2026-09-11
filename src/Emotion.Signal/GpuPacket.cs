@@ -418,6 +418,24 @@ public struct GpuPacket
     /// deja paye une valeur par defaut qui avait l'air juste : un suivi rendait « huit
     /// mesures, cent pour cent du temps » sans avoir rien decide.
     /// </summary>
+    /// <summary>
+    /// Le motif de chaque source, six mots de seize bits a partir de 243 : un bit par case
+    /// de la mesure (seize par mesure, la double croche), a un la ou la source monte
+    /// franchement. C'est le morse A VENIR : le renderer peut allumer une case avant que
+    /// le son n'arrive, et n'a plus a subir le retard de la fenetre.
+    /// </summary>
+    public const int MotifSourcesOffset = 243;
+    [FieldOffset(MotifSourcesOffset)] public ushort MotifSource0;
+    [FieldOffset(MotifSourcesOffset + 2)] public ushort MotifSource1;
+    [FieldOffset(MotifSourcesOffset + 4)] public ushort MotifSource2;
+    [FieldOffset(MotifSourcesOffset + 6)] public ushort MotifSource3;
+    [FieldOffset(MotifSourcesOffset + 8)] public ushort MotifSource4;
+    [FieldOffset(MotifSourcesOffset + 10)] public ushort MotifSource5;
+
+    /// <summary>Le verrou : 1 quand le morceau est su et que le moteur ne retouche plus.</summary>
+    public const int VerrouOffset = 255;
+    [FieldOffset(VerrouOffset)] public byte Verrou;
+
     [FieldOffset(240)] public byte MotifPeriode;
 
     [FieldOffset(241)] public byte MotifCertitude;
@@ -643,6 +661,13 @@ public struct GpuPacket
         p.GridSure = (byte)Math.Clamp(f.Structure.Confidence * 255f, 0f, 255f);
         p.GridAgreement = (byte)Math.Clamp(f.GridAgreement * 255f, 0f, 255f);
         p.SourceActives = (byte)Math.Clamp(f.Voices.Actives, 0, SourceSlots);
+        p.Verrou = f.Voices.Verrou ? (byte)1 : (byte)0;
+        if (f.Voices.Motifs is { } motifs)
+        {
+            ushort M(int i) => i < motifs.Length ? motifs[i] : (ushort)0;
+            p.MotifSource0 = M(0); p.MotifSource1 = M(1); p.MotifSource2 = M(2);
+            p.MotifSource3 = M(3); p.MotifSource4 = M(4); p.MotifSource5 = M(5);
+        }
         p.Sides = (byte)track.Sides;
         p.Minor = track.Minor ? (byte)1 : (byte)0;
         p.LowPitch = (byte)Math.Clamp(f.Voices.LowPitch * 255f, 0f, 255f);

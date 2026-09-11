@@ -325,6 +325,9 @@ for (var i = 0; i + hop <= mono.Length; i += hop)
     {
         var ligne = new System.Text.StringBuilder();
         ligne.Append((tMs / 1000.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
+        // La position dans la mesure, de 0 a 1 (ou -1 sans grille) : pour ranger les frappes
+        // de chaque source sur les seize cases de la mesure.
+        ligne.Append('\t').Append((f.Phase ?? -1f).ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
         for (var r = 0; r < f.Voices.Actives; r++)
         {
             var l = f.Voices.LaneAt(r);
@@ -1090,7 +1093,19 @@ Console.WriteLine($"apprentissage NMF   {sep.Apprentissages} fois · moyenne {se
                   $"pire {sep.ApprentissagePireMs:F1} ms  (une image dure 21 ms)");
 // COMBIEN DE SOURCES, ET POURQUOI. Le nombre n'est plus impose : on montre ce que le
 // balayage a mesure a chaque pas, pour que « 4 » se lise comme un coude et non un caprice.
-Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "  (provisoire, le balayage n'a pas encore eu lieu)"));
+Console.WriteLine($"sources retenues    {sep.Actives}" + (sep.ChoixFait ? "" : "  (provisoire, le balayage n'a pas encore eu lieu)")
+                  + (sep.Verrou ? "   VERROUILLE : le morceau est su, plus de reapprentissage" : ""));
+// LE MOTIF DE CHAQUE CASE : seize cases de la mesure, # la ou la source monte franchement.
+{
+    Span<float> motif = stackalloc float[MotifSources.Cases];
+    for (var r = 0; r < sep.Publiees; r++)
+    {
+        analyzer.Motifs.Motif(r, motif);
+        var dessin = new System.Text.StringBuilder();
+        foreach (var v in motif) dessin.Append(v >= 0.66f ? '#' : v >= 0.33f ? '+' : '.');
+        Console.WriteLine($"   case {r + 1}{(r == sep.RangReste ? " (reste)" : "")}  motif [{dessin}]  stabilite {analyzer.Motifs.Stabilite(r):F2}  sur {analyzer.Motifs.MesuresVues(r)} mesures");
+    }
+}
 foreach (var b in sep.Bilans)
     Console.WriteLine($"   {b.K} sources  inexplique {100 * b.Reste,5:F1} %   pire doublon {b.Doublon:F2}");
 Console.WriteLine($"ruptures            {drops.Count}" +

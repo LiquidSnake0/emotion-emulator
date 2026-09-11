@@ -108,6 +108,8 @@ ENVELOPPE_PAS = 2
 P_RETRAITS = 232
 # COMBIEN DE SOURCES SONT ACTIVES : le moteur le decouvre par disque, il ne l'impose plus.
 P_SOURCES_ACTIVES = 120
+P_MOTIFS = 243         # six mots de seize bits : le motif de chaque source, une case par double croche
+P_VERROU = 255         # 1 quand le morceau est su et que le moteur ne retouche plus
 
 # Ce qui se repete, et tous les combien. Trois octets : periode en mesures, certitude,
 # bande. Une periode nulle veut dire « on ne sait pas », et c'est une reponse.
@@ -259,6 +261,7 @@ class Paquet:
         self.coup_grave = bool(coups & 1)
         self.bandes = [mm[base + P_BANDES + i] / 255.0 for i in range(12)]
         self.actives = mm[base + P_SOURCES_ACTIVES]
+        self.verrou = bool(mm[base + P_VERROU])
         self.sources = []
         for r in range(6):
             o = base + P_SOURCES + r * SOURCE_PAS
@@ -278,6 +281,8 @@ class Paquet:
                 # DEPUIS COMBIEN DE TEMPS ELLE S'EST TUE.
                 # « Quand le kick est en retrait pendant un moment, on est censé le savoir. »
                 "retrait": mm[base + P_RETRAITS + r] / 16.0,
+                # LE MOTIF : ou, dans la mesure, cette source monte. Le morse a venir.
+                "motif": struct.unpack_from("<H", mm, base + P_MOTIFS + 2 * r)[0],
             })
 
 
@@ -890,6 +895,7 @@ class Mur(QWidget):
 
             d.setPen(QPen(VERT if choisie else GRIS_CADRE, 1))
             d.drawRect(int(cx), int(cy), int(larg), haut)
+            self.dessiner_motif(d, s["motif"], cx, cy, larg, haut, eteinte)
 
             nom = formes.NOMS.get(s["forme"], formes.NOMS[(r % 6) + 1])
             d.setPen(GRIS_TEXTE)
@@ -998,6 +1004,29 @@ class Mur(QWidget):
 
             self.dessiner_fader(d, r, cx, cy, larg, haut)
         return y + rangs * (haut + 12)
+
+    def dessiner_motif(self, d, motif, cx, cy, larg, haut, eteinte):
+        """Seize cases sous la forme : le motif de la source dans la mesure, et ou l'on en est.
+
+        C'EST LE MORSE A VENIR. Les cases allumees sont celles ou le moteur a vu cette source
+        monter, mesure apres mesure ; le curseur est la position courante dans la mesure. Une
+        case allumee devant le curseur, c'est une note annoncee avant qu'elle ne sonne.
+        """
+        n = 16
+        pas = (larg - 20) / n
+        y0 = cy + haut - 10
+        courante = int(min(0.9999, max(0.0, self.paquet.phase)) * n) if self.paquet else -1
+        for c in range(n):
+            allume = bool(motif >> c & 1)
+            x0 = cx + 6 + c * pas
+            if allume:
+                teinte = QColor(VERT)
+                teinte.setAlphaF(0.25 if eteinte else (1.0 if c == courante else 0.6))
+                d.fillRect(int(x0), int(y0 - 3), int(pas - 2), 6, teinte)
+            elif c == courante:
+                d.fillRect(int(x0), int(y0 - 1), int(pas - 2), 2, GRIS_CLAIR)
+            else:
+                d.fillRect(int(x0), int(y0 - 1), int(pas - 2), 2, QColor(34, 36, 38))
 
     def dessiner_fader(self, d, r, cx, cy, larg, haut):
         """Le niveau de la piste, sur le bord droit de sa case.
